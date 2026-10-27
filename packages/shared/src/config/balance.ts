@@ -92,13 +92,37 @@ export const HOME_ACTIONS = {
   },
 } as const;
 
+/** En-cas vendus par les marchands ambulants (maïs grillé, marrons chauds). */
+export const STREET_FOOD = {
+  corn: {
+    label: 'Maïs grillé',
+    icon: '🌽',
+    costCents: 2 * CENTS_PER_EURO,
+    effects: { hunger: 20 },
+  },
+  chestnut: {
+    label: 'Cornet de marrons',
+    icon: '🌰',
+    costCents: 3 * CENTS_PER_EURO,
+    effects: { hunger: 25 },
+  },
+} as const;
+
 export const MOVEMENT = {
   /** Vitesse de marche, en cases par seconde. */
   walkTilesPerSecond: 4,
   /** Distance max (en cases) à la porte pour agir « chez soi ». */
   homeInteractionRange: 1.5,
+  /** Distance max (en cases) à un marchand ambulant pour lui acheter à manger. */
+  vendorInteractionRange: 1.6,
   /** Longueur max d'un trajet demandé, pour borner le coût de l'A*. */
   maxPathLength: 600,
+  /** Bloqué par quelqu'un sur la case suivante : on cherche un autre chemin au bout de… (ms). */
+  blockedRepathMs: 500,
+  /** … et on abandonne le trajet si l'on est encore bloqué au bout de (ms). */
+  blockedGiveUpMs: 3000,
+  /** Rayon (cases) de recherche d'une case libre quand la destination est occupée. */
+  freeTileSearchRadius: 4,
 } as const;
 
 export const SERVER = {

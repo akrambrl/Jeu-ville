@@ -1,11 +1,13 @@
 import {
   HOME_ACTIONS,
+  STREET_FOOD,
   HOME_ACTION_IDS,
   computeHappiness,
   decayGauges,
   isCritical,
   type CharacterSelf,
   type HomeActionId,
+  type StreetVendor,
   type TilePoint,
 } from '@jeu-ville/shared';
 import { el, formatMoney, showToast } from './dom.js';
@@ -33,6 +35,7 @@ export interface HudCallbacks {
   onGoHome: () => void;
   onGoTo: (point: TilePoint) => void;
   onHomeAction: (action: HomeActionId) => void;
+  onBuyStreetFood: (vendorId: string) => void;
   onRecenter: () => void;
 }
 
@@ -46,6 +49,8 @@ export class Hud {
   private readonly moneyEl = el('div', { class: 'money' });
   private readonly bars = new Map<string, HTMLElement>();
   private readonly homePanel: HTMLElement;
+  private readonly vendorButton: HTMLButtonElement;
+  private vendorId: string | null = null;
   private readonly goToButton: HTMLButtonElement;
   private readonly destinationsPanel: HTMLElement;
   private readonly timer: number;
@@ -78,13 +83,16 @@ export class Hud {
       this.homePanel.append(b);
     }
     this.homePanel.hidden = true;
+    this.vendorButton = el('button', { class: 'primary vendor-buy' });
+    this.vendorButton.hidden = true;
+    this.vendorButton.addEventListener('click', () => this.vendorId && callbacks.onBuyStreetFood(this.vendorId));
 
     this.root = el('div', {}, [
       el('div', { class: 'hud-top' }, [
         el('div', { class: 'hud-card identity' }, [this.nameEl, this.metaEl, this.moneyEl]),
         gauges,
       ]),
-      el('div', { class: 'hud-bottom' }, [this.homePanel, this.goToButton, recenter]),
+      el('div', { class: 'hud-bottom' }, [this.homePanel, this.vendorButton, this.goToButton, recenter]),
       this.destinationsPanel,
       el('div', { class: 'attribution' }),
     ]);
@@ -112,6 +120,18 @@ export class Hud {
   setNearHome(near: boolean): void {
     if (this.homePanel.hidden === !near) return;
     this.homePanel.hidden = !near;
+  }
+
+  /** Bouton d'achat quand le perso est à côté d'un marchand ambulant (null : aucun). */
+  setNearVendor(vendor: StreetVendor | null): void {
+    const id = vendor?.id ?? null;
+    if (id === this.vendorId) return;
+    this.vendorId = id;
+    this.vendorButton.hidden = !vendor;
+    if (vendor) {
+      const food = STREET_FOOD[vendor.kind];
+      this.vendorButton.textContent = `${food.icon} ${food.label} (${formatMoney(food.costCents)})`;
+    }
   }
 
   private buildDestinations(): HTMLElement {

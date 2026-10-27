@@ -9,7 +9,7 @@ import { TILE, type DistrictMap } from '@jeu-ville/shared';
 import { DISTRICTS, mapFileName, osmFileName, type DistrictSource } from './districts.js';
 import { parseOsm, type OsmData, type OsmWay, type Tags } from './osm.js';
 import { assembleRings, fillRings, makeProjection, strokeLine, type Pt } from './raster.js';
-import { schematize, type RawPoi } from './schematize.js';
+import { schematize, type RawBusRoute, type RawBusStop, type RawPoi } from './schematize.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, '..', '..', 'packages', 'shared', 'maps');
@@ -224,13 +224,15 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (kind === 'station' && !/gare/i.test(name)) name = `Gare de ${name}`;
     if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) return;
     if (pois.some((q) => q.kind === kind && q.name === name)) return;
-    pois.push({ kind, name, x: p.x, y: p.y, brand: tags.brand, cuisine: tags.cuisine });
+    pois.push({ kind, name, x: p.x, y: p.y, brand: tags.brand, cuisine: tags.cuisine, school: tags['school:FR'] });
   };
   const poiKind = (t: Tags): RawPoi['kind'] | null => {
     if (t.amenity === 'townhall') return 'townhall';
     if (t.railway === 'station' || (t.public_transport === 'station' && t.train === 'yes')) return 'station';
     if (t.leisure === 'park') return 'park';
     if (t.amenity === 'school') return 'school';
+    if (t.leisure === 'sports_centre' || t.leisure === 'stadium' || t.building === 'sports_hall') return 'gym';
+    if (t.place === 'quarter') return 'quarter';
     if (t.amenity === 'place_of_worship') return 'worship';
     if (t.amenity === 'marketplace') return 'market';
     if (t.shop === 'bakery') return 'bakery';
@@ -241,11 +243,49 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (t.shop === 'supermarket') return 'supermarket';
     return null;
   };
+  const defaultName: Partial<Record<RawPoi['kind'], string>> = { bakery: 'Boulangerie', market: 'Place du marché' };
   for (const n of osm.nodes.values()) {
     const k = poiKind(n.tags);
-    // Une boulangerie sans nom reste une boulangerie.
-    if (k) addPoi(k, n.tags.name ?? (k === 'bakery' ? 'Boulangerie' : undefined), project(n.lat, n.lon), n.tags);
+    // Une boulangerie sans nom reste une boulangerie ; un marché sans nom, la place du marché.
+    if (k) addPoi(k, d.renames?.[n.tags.name ?? ''] ?? n.tags.name ?? defaultName[k], project(n.lat, n.lon), n.tags);
   }
+  // Places piétonnes (« Place Jeanne d'Arc »…), souvent de simples chemins : centre de leurs points.
+  for (const w of osm.ways.values()) {
+    if (w.tags.highway !== 'pedestrian' || !/^Place /.test(w.tags.name ?? '')) continue;
+    const ptsW = wayPoints(w);
+    if (ptsW.length === 0) continue;
+    addPoi('square', w.tags.name, { x: ptsW.reduce((s, p) => s + p.x, 0) / ptsW.length, y: ptsW.reduce((s, p) => s + p.y, 0) / ptsW.length });
+  }
+
+  // 5. Bus : arrêts nommés, et lignes régulières (une direction par numéro).
+  const busStops: RawBusStop[] = [];
+  for (const n of osm.nodes.values()) {
+    if (n.tags.highway !== 'bus_stop' || !n.tags.name) continue;
+    const p = project(n.lat, n.lon);
+    if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) continue;
+    busStops.push({ name: n.tags.name, x: p.x, y: p.y });
+  }
+  const busRoutes: RawBusRoute[] = [];
+  for (const r of osm.relations) {
+    const ref = r.tags.ref ?? '';
+    if (r.tags.route !== 'bus' || !/^\d+$/.test(ref)) continue;
+    const stopNames: string[] = [];
+    for (const m of r.members) {
+      if (!/^(platform|stop)/.test(m.role)) continue;
+      const name = (m.type === 'node' ? osm.nodes.get(m.ref)?.tags.name : osm.ways.get(m.ref)?.tags.name) ?? null;
+      if (name && stopNames.at(-1) !== name) stopNames.push(name);
+    }
+    // Une seule direction par ligne : celle dont on connaît le plus d'arrêts.
+    const known = busRoutes.findIndex((b) => b.ref === ref);
+    if (stopNames.length < 2) continue;
+    if (known < 0) busRoutes.push({ ref, stopNames });
+    else if (busRoutes[known]!.stopNames.length < stopNames.length) busRoutes[known] = { ref, stopNames };
+  }
+
+  // 6. Pistes et bandes cyclables.
+  const bikeWays = [...osm.ways.values()]
+    .filter((w) => w.tags.highway === 'cycleway' || Object.entries(w.tags).some(([k, v]) => /^cycleway(:|$)/.test(k) && /lane|track/.test(v)))
+    .map(wayPoints);
   for (const a of areas) {
     const k = poiKind(a.tags);
     const ring = a.rings[0];
@@ -266,6 +306,9 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
       .filter((w) => w.tags.railway === 'tram' && !w.tags.service)
       .map((w) => ({ name: w.tags.name ?? 'Tram', pts: wayPoints(w) })),
     pois,
+    busStops,
+    busRoutes,
+    bikeWays,
   });
 }
 

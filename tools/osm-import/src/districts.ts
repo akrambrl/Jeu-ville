@@ -5,6 +5,10 @@ export interface DistrictSource {
   districtId: string;
   districtName: string;
   bbox: [number, number, number, number];
+  /** Noms affichés à la place des noms OSM (ex. quartier → nom d'usage). */
+  renames?: Record<string, string>;
+  /** Cités (grands ensembles) : leurs îlots sont bâtis en barres et en tours. bbox comme ci-dessus. */
+  estates?: { name: string; bbox: [number, number, number, number] }[];
 }
 
 export const DISTRICTS: DistrictSource[] = [
@@ -14,8 +18,12 @@ export const DISTRICTS: DistrictSource[] = [
     districtId: 'centre-ville-mairie',
     districtName: 'Centre-Ville - Mairie',
     // Quartier OSM « Centre-Ville - Mairie » (relation 12593925), étendu au nord
-    // jusqu'à la gare RER E et au terminus du tram T1.
-    bbox: [2.447, 48.887, 2.464, 48.899],
+    // jusqu'à la gare RER E et au terminus du tram T1, à l'ouest jusqu'à la rue
+    // du Parc et au sud-est jusqu'à la cité du Londeau.
+    bbox: [2.443, 48.883, 2.471, 48.899],
+    renames: { Londeau: 'Cité du Londeau' },
+    // Limites OSM du quartier Londeau (relation 12593930).
+    estates: [{ name: 'Cité du Londeau', bbox: [2.4648, 48.8838, 2.4703, 48.8873] }],
   },
 ];
 

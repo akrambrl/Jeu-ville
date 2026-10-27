@@ -10,17 +10,20 @@ import {
   SERVER,
   STARTING_GAUGES,
   TIME,
-  advance,
   ageAt,
-  findPath,
+  TileOccupancy,
+  nearestFreeTile,
+  pathAvoiding,
+  stepWalker,
   resolveHomeAction,
+  resolveStreetFood,
   snapshotGauges,
   type CharacterLook,
   type CharacterSelf,
   type CreateCharacterRequest,
   type DistrictMap,
   type HomeActionId,
-  type Mover,
+  type Walker,
   type Notice,
   type StoredGauges,
   type TilePoint,
@@ -29,7 +32,9 @@ import type { DistrictLink, PlayerHandlers, PlayerView } from '../net/link.js';
 
 const SAVE_KEY = 'jeu-ville.demo.save';
 const SELF_ID = 'moi';
-const PASSERBY_COUNT = 14;
+const PASSERBY_COUNT = 30;
+/** Longueur max (cases) du trajet d'un passant. */
+const PASSERBY_MAX_PATH = 80;
 /** Les passants marchent un peu moins vite que le joueur. */
 const PASSERBY_SPEED_FACTOR = 0.6;
 const SAVE_INTERVAL_MS = 5_000;
@@ -94,7 +99,11 @@ export function createDemoSave(map: DistrictMap, name: string, input: CreateChar
  * on réattribue alors un appart de départ, devant lequel le perso réapparaît.
  */
 export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
-  if (map.starterBuildings.some((b) => b.id === save.buildingId)) return save;
+  const home = map.starterBuildings.find((b) => b.id === save.buildingId);
+  if (home) {
+    // Carte agrandie : l'ancienne position peut tomber dans un bâtiment.
+    return new MapGrid(map).isWalkable(Math.round(save.pos.x), Math.round(save.pos.y)) ? save : { ...save, pos: home.door };
+  }
   const building = map.starterBuildings[Math.floor(Math.random() * map.starterBuildings.length)]!;
   return { ...save, buildingId: building.id, pos: building.door };
 }
@@ -116,7 +125,7 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
   };
 }
 
-interface Walker extends Mover {
+interface DemoWalker extends Walker {
   view: PlayerView;
   speed: number;
   /** Instant (ms) où un passant à l'arrêt repart. */
@@ -126,7 +135,9 @@ interface Walker extends Mover {
 export class LocalDistrict implements DistrictLink {
   readonly sessionId = SELF_ID;
   private readonly grid: MapGrid;
-  private readonly walkers = new Map<string, Walker>();
+  private readonly walkers = new Map<string, DemoWalker>();
+  /** Une case = une personne, comme sur le serveur. */
+  private readonly occupancy = new TileOccupancy();
   private readonly walkable: TilePoint[] = [];
   private handlers: PlayerHandlers | null = null;
   private selfCb: (self: CharacterSelf) => void = () => {};
@@ -154,12 +165,18 @@ export class LocalDistrict implements DistrictLink {
       }
     }
 
-    const start = this.grid.nearestWalkable(save.pos) ?? map.spawn;
+    for (const v of map.vendors) this.occupancy.block(v.x, v.y);
+    const wanted = this.grid.nearestWalkable(save.pos) ?? map.spawn;
+    const start = nearestFreeTile(this.grid, this.occupancy, wanted, SELF_ID) ?? wanted;
+    this.occupancy.tryHold(SELF_ID, start.x, start.y);
     this.walkers.set(SELF_ID, {
+      id: SELF_ID,
       x: start.x,
       y: start.y,
       dir: 2,
       path: [],
+      tile: { ...start },
+      blockedMs: 0,
       speed: MOVEMENT.walkTilesPerSecond,
       restUntil: 0,
       view: { id: SELF_ID, name: save.name, x: start.x, y: start.y, dir: 2, moving: false, ...save.look },
@@ -180,10 +197,12 @@ export class LocalDistrict implements DistrictLink {
 
   move(to: TilePoint): void {
     const me = this.walkers.get(SELF_ID)!;
-    const start = this.grid.nearestWalkable({ x: me.x, y: me.y });
-    const path = start ? findPath(this.grid, start, to, MOVEMENT.maxPathLength) : null;
+    // Case déjà prise par quelqu'un : on s'arrête sur la case libre la plus proche.
+    const target = this.grid.isWalkable(to.x, to.y) ? nearestFreeTile(this.grid, this.occupancy, to, SELF_ID) : null;
+    const path = target ? pathAvoiding(this.grid, this.occupancy, me, target) : null;
     if (!path) return this.noticeCb({ level: 'error', text: 'Impossible d’aller là.' });
-    me.path = start && (start.x !== me.x || start.y !== me.y) ? [start, ...path] : path;
+    me.path = path;
+    me.blockedMs = 0;
   }
 
   homeAction(action: HomeActionId): void {
@@ -194,6 +213,22 @@ export class LocalDistrict implements DistrictLink {
     }
     const now = Date.now();
     const result = resolveHomeAction(action, this.save.gauges, this.save.gaugesUpdatedAt, this.save.moneyCents, now);
+    if (!result.ok) return this.noticeCb({ level: 'error', text: result.error });
+    this.save.gauges = result.gauges;
+    this.save.gaugesUpdatedAt = now;
+    this.save.moneyCents += result.moneyDeltaCents;
+    this.persist();
+    this.selfCb(this.self());
+  }
+
+  buyStreetFood(vendorId: string): void {
+    const me = this.walkers.get(SELF_ID)!;
+    const vendor = this.map.vendors.find((v) => v.id === vendorId);
+    if (!vendor || Math.hypot(me.x - vendor.x, me.y - vendor.y) > MOVEMENT.vendorInteractionRange) {
+      return this.noticeCb({ level: 'error', text: 'Approche-toi du marchand.' });
+    }
+    const now = Date.now();
+    const result = resolveStreetFood(vendor, this.save.gauges, this.save.gaugesUpdatedAt, this.save.moneyCents, now);
     if (!result.ok) return this.noticeCb({ level: 'error', text: result.error });
     this.save.gauges = result.gauges;
     this.save.gaugesUpdatedAt = now;
@@ -226,13 +261,17 @@ export class LocalDistrict implements DistrictLink {
   }
 
   private addPasserby(i: number): void {
-    const p = this.randomWalkable();
     const id = `passant-${i}`;
+    let p = this.randomWalkable();
+    while (!this.occupancy.tryHold(id, p.x, p.y)) p = this.randomWalkable();
     this.walkers.set(id, {
+      id,
       x: p.x,
       y: p.y,
       dir: 2,
       path: [],
+      tile: { ...p },
+      blockedMs: 0,
       speed: MOVEMENT.walkTilesPerSecond * PASSERBY_SPEED_FACTOR,
       restUntil: Date.now() + Math.random() * 4000,
       view: {
@@ -257,13 +296,13 @@ export class LocalDistrict implements DistrictLink {
       if (id !== SELF_ID && w.path.length === 0 && now >= w.restUntil) {
         // Un passant choisit une destination pas trop loin.
         const target = this.randomWalkable();
-        const path = findPath(this.grid, { x: Math.round(w.x), y: Math.round(w.y) }, target, 80);
+        const path = this.occupancy.isFree(target.x, target.y, id) ? pathAvoiding(this.grid, this.occupancy, w, target, PASSERBY_MAX_PATH) : null;
         if (path) w.path = path;
         w.restUntil = now + 2000 + Math.random() * 6000;
       }
       const wasMoving = w.view.moving;
-      if (w.path.length > 0) advance(w, (w.speed * dtMs) / 1000);
-      const moving = w.path.length > 0;
+      if (w.path.length > 0) stepWalker(this.grid, this.occupancy, w, (w.speed * dtMs) / 1000, dtMs);
+      const moving = w.path.length > 0 && w.blockedMs === 0;
       if (moving || wasMoving) {
         Object.assign(w.view, { x: w.x, y: w.y, dir: w.dir, moving });
         this.handlers?.changed(id, w.view);

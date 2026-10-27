@@ -83,6 +83,10 @@ export class Character3D {
     }
   }
 
+  get isMoving(): boolean {
+    return this.moving;
+  }
+
   get tileX(): number {
     return this.x;
   }

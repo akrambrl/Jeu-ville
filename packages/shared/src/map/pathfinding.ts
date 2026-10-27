@@ -74,8 +74,11 @@ export function findPath(
   start: TilePoint,
   goal: TilePoint,
   maxLength = Infinity,
+  /** Cases praticables mais à éviter (occupées par quelqu'un). */
+  blocked?: (x: number, y: number) => boolean,
 ): TilePoint[] | null {
   if (!grid.isWalkable(start.x, start.y) || !grid.isWalkable(goal.x, goal.y)) return null;
+  if (blocked?.(goal.x, goal.y)) return null;
   if (start.x === goal.x && start.y === goal.y) return [];
 
   const w = grid.width;
@@ -106,7 +109,7 @@ export function findPath(
     for (const [dx, dy, cost] of NEIGHBOURS) {
       const nx = cx + dx;
       const ny = cy + dy;
-      if (!grid.isWalkable(nx, ny)) continue;
+      if (!grid.isWalkable(nx, ny) || blocked?.(nx, ny)) continue;
       // Pas de diagonale qui frôle un obstacle.
       if (dx !== 0 && dy !== 0 && (!grid.isWalkable(cx + dx, cy) || !grid.isWalkable(cx, cy + dy))) {
         continue;

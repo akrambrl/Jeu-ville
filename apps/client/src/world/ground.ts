@@ -144,7 +144,38 @@ function buildMarkings(grid: MapGrid): THREE.Group {
       }
     }
   }
+  addCycleways(b, grid);
   return b.build();
+}
+
+const BIKE_GREEN = 0x3fae5a;
+
+/** Bandes cyclables vertes le long des deux bords de la chaussée, avec pictogramme vélo. */
+function addCycleways(b: FlatBatch, grid: MapGrid): void {
+  for (const c of grid.map.cycleways) {
+    // On s'arrête avant les passages piétons des extrémités.
+    const from = (c.axis === 'x' ? c.x : c.y) + 0.5;
+    const len = c.length - 2;
+    const mid = from + len / 2;
+    for (const edge of [-0.5 + 0.14, 1.5 - 0.14]) {
+      const across = (c.axis === 'x' ? c.y : c.x) + edge;
+      const top = groundTop(grid.tileAt(c.axis === 'x' ? Math.round(mid) : c.x, c.axis === 'x' ? c.y : Math.round(mid)));
+      if (c.axis === 'x') b.add(BIKE_GREEN, mid, top, across, len, 0.24, 0.014);
+      else b.add(BIKE_GREEN, across, top, mid, 0.24, len, 0.014);
+      // Pictogramme : deux roues et un cadre, tous les 3 cases.
+      for (let k = from + 1; k < from + len - 0.5; k += 3) {
+        const parts: [number, number, number, number][] = [
+          [-0.07, 0, 0.07, 0.07],
+          [0.07, 0, 0.07, 0.07],
+          [0, 0, 0.12, 0.02],
+        ];
+        for (const [da, dc, wa, wc] of parts) {
+          if (c.axis === 'x') b.add(WHITE, k + da, top + 0.002, across + dc, wa, wc, 0.016);
+          else b.add(WHITE, across + dc, top + 0.002, k + da, wc, wa, 0.016);
+        }
+      }
+    }
+  }
 }
 
 const TRAM: Record<string, ['x' | 'y', 'a' | 'b'][]> = {

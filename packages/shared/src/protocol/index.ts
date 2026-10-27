@@ -93,6 +93,7 @@ export type DistrictJoinOptions = z.infer<typeof districtJoinSchema>;
 export const ClientMessage = {
   move: 'move',
   homeAction: 'homeAction',
+  buyStreetFood: 'buyStreetFood',
 } as const;
 
 export const moveSchema = z.object({
@@ -107,6 +108,12 @@ export const homeActionSchema = z.object({
   action: z.enum(HOME_ACTION_IDS as [HomeActionId, ...HomeActionId[]]),
 });
 export type HomeActionMessage = z.infer<typeof homeActionSchema>;
+
+/** Acheter à manger au marchand ambulant `vendorId` (le serveur vérifie qu'on est à côté). */
+export const buyStreetFoodSchema = z.object({
+  vendorId: z.string().min(1).max(64),
+});
+export type BuyStreetFoodMessage = z.infer<typeof buyStreetFoodSchema>;
 
 export const ServerMessage = {
   /** Vue privée du personnage (CharacterSelf). */

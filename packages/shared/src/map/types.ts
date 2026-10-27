@@ -64,6 +64,16 @@ export const DECOR = {
   hopscotch: 'm',
   /** Voies ferrées qui traversent une rue (passage à niveau). */
   railCrossing: 'x',
+  /** Poteau d'arrêt de bus (détails dans `transit.busStops`). */
+  busStop: 'u',
+  /** Étal de marché (bâche colorée). */
+  marketStall: 'q',
+  /** Statue sur socle (place). */
+  statue: 'j',
+  /** Fontaine. */
+  fountain: 'o',
+  /** But de foot / cage (terrain de sport). */
+  goal: 'g',
   /**
    * Rails de tram sur la chaussée. Rail selon x près du bord +y (1) ou -y (2),
    * rail selon y près du bord +x (3) ou -x (4), et leurs combinaisons aux carrefours.
@@ -157,7 +167,10 @@ export interface MapPoi {
     | 'pharmacy'
     | 'fastfood'
     | 'police'
-    | 'supermarket';
+    | 'supermarket'
+    | 'gym'
+    | 'square'
+    | 'quarter';
   name: string;
   /** Centre du lieu (pour l'étiquette). */
   x: number;
@@ -171,6 +184,51 @@ export interface Transit {
   tram: { name: string; path: TilePoint[]; stops: { name: string; at: number }[] } | null;
   /** Voies ferrées : ordonnée (y) de chaque voie, parcourue selon x ; gare (x) où les trains s'arrêtent. */
   rail: { tracks: number[]; stationX: number | null; name: string } | null;
+  /** Lignes de bus : tracé sur les rues (centre de chaussée) et arrêts desservis. */
+  bus: BusLine[];
+  /** Arrêts de bus : poteau posé sur le trottoir (case `x`,`y`), au bord de la chaussée. */
+  busStops: BusStop[];
+}
+
+export interface BusLine {
+  /** Numéro de ligne (« 105 »). */
+  ref: string;
+  path: TilePoint[];
+  stops: { name: string; at: number }[];
+}
+
+export interface BusStop {
+  name: string;
+  x: number;
+  y: number;
+  /** Point de la chaussée où le bus s'arrête. */
+  curb: TilePoint;
+  lines: string[];
+}
+
+/** Piste ou bande cyclable le long d'une rue, de (x,y) sur `length` cases selon `axis`. */
+export interface Cycleway {
+  x: number;
+  y: number;
+  axis: 'x' | 'y';
+  length: number;
+}
+
+/** Marchand ambulant (maïs grillé, marrons chauds) : on lui achète à manger à côté de lui. */
+export interface StreetVendor {
+  id: string;
+  kind: 'corn' | 'chestnut';
+  x: number;
+  y: number;
+  /** Case vers laquelle il est tourné (le passage). */
+  facing: TilePoint;
+}
+
+/** Texte d'enseigne de façade (SHAPE.schoolSign / facadeSign) quand il diffère du texte par défaut. */
+export interface FacadeSign {
+  x: number;
+  y: number;
+  text: string;
 }
 
 /** Devanture d'un commerce au rez-de-chaussée d'un immeuble. */
@@ -210,6 +268,9 @@ export interface DistrictMap {
   storefronts: Storefront[];
   /** Lignes de transport animées (purement visuelles pour l'instant). */
   transit: Transit;
+  cycleways: Cycleway[];
+  vendors: StreetVendor[];
+  signs: FacadeSign[];
   starterBuildings: StarterBuilding[];
   pois: MapPoi[];
   streets: StreetLabel[];

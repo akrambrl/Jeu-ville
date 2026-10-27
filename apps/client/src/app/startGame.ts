@@ -1,4 +1,4 @@
-import { MOVEMENT, getDistrictMap, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
+import { MOVEMENT, getDistrictMap, vendorInReach, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -31,6 +31,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
     onLocalPosition: (x, y) => {
       const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
       hud.setNearHome(near);
+      hud.setNearVendor(vendorInReach(map, x, y));
     },
   });
 
@@ -40,6 +41,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       onGoHome: () => homeDoor && view.requestMove(homeDoor),
       onGoTo: (point) => view.requestMove(point),
       onHomeAction: (action) => link.homeAction(action),
+      onBuyStreetFood: (vendorId) => link.buyStreetFood(vendorId),
       onRecenter: () => view.recenter(),
     },
     destinationsOf(map),
@@ -76,6 +78,9 @@ const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; order: numb
   park: { icon: '🌳', kind: 'Square', order: 9 },
   worship: { icon: '⛪', kind: 'Lieu de culte', order: 10 },
   school: { icon: '🏫', kind: 'École', order: 11 },
+  square: { icon: '⛲', kind: 'Place', order: 12 },
+  gym: { icon: '🏟️', kind: 'Sport', order: 13 },
+  quarter: { icon: '🏘️', kind: 'Quartier', order: 14 },
 };
 
 /** Lieux du quartier proposés dans « Aller à… ». */

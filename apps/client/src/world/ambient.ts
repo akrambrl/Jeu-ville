@@ -1,13 +1,17 @@
 /**
- * Vie de quartier décorative : tram T1, RER, enfants dans les cours d'école.
- * Rien de tout cela n'est de l'état de jeu (les transports deviendront
- * exploitables en phase 7).
+ * Vie de quartier décorative : tram T1, RER, bus, voyageurs, enfants dans les
+ * cours d'école, marchands ambulants. Rien de tout cela n'est de l'état de jeu
+ * (les transports deviendront exploitables en phase 7) ; seul l'achat chez un
+ * marchand passe par le serveur.
  */
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { DECOR, TILE, type MapGrid, type MapPoi, type TilePoint, type Transit } from '@jeu-ville/shared';
+import { DECOR, TILE, type DistrictMap, type MapGrid, type StreetVendor, type TilePoint } from '@jeu-ville/shared';
 import { Character3D } from './characters.js';
 import { groundTop } from './ground.js';
+import { TransitRiders, type RiderStop } from './riders.js';
+import { signTexture } from './textures.js';
+import { PathRunner, carMesh } from './vehicles.js';
 
 const TRAM_SPEED = 1.6;
 const TRAM_DWELL = 4;
@@ -19,121 +23,110 @@ const TRAIN_DWELL = 3.5;
 const TRAIN_CARS = 5;
 const TRAIN_CAR_LEN = 1.6;
 const TRAIN_GAP: [number, number] = [6, 20];
-const KIDS_PER_YARD = 6;
-/** Vendeurs ambulants : quoi, près de quel lieu, combien. */
-type VendorKind = 'corn' | 'chestnut';
-const VENDORS: { kind: VendorKind; near: MapPoi['kind']; count: number }[] = [
-  { kind: 'corn', near: 'station', count: 2 },
-  { kind: 'corn', near: 'tram', count: 1 },
-  { kind: 'chestnut', near: 'station', count: 1 },
-  { kind: 'chestnut', near: 'tram', count: 1 },
-  { kind: 'chestnut', near: 'townhall', count: 1 },
-];
-const VENDOR_SEARCH_RADIUS = 6;
+const BUS_SPEED = 2.2;
+const BUS_DWELL = 3;
+const BUS_LEN = 1.3;
+/** Un bus de plus par tranche de cette longueur de ligne (cases). */
+const BUS_SPACING = 45;
+/** Côté droit de la chaussée (décalage depuis l'axe, en cases). */
+const LANE_OFFSET = 0.5;
+const KIDS_PER_YARD = 5;
+/** Les enfants d'une cour n'apparaissent que si la caméra regarde à moins de cette distance. */
+const KIDS_ACTIVE_RADIUS = 26;
+const KIDS_RELEASE_RADIUS = 34;
 const VENDOR_CALL_EVERY: [number, number] = [5, 11];
 const VENDOR_CALL_DURATION = 2.5;
+type VendorKind = StreetVendor['kind'];
 
-function carMesh(length: number, width: number, height: number, body: number, band: number, doubleDeck: boolean): THREE.Group {
-  const g = new THREE.Group();
-  const mat = (c: number) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 });
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(length, height, width), mat(body));
-  shell.position.y = height / 2 + 0.06;
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(length + 0.01, height * 0.12, width + 0.01), mat(band));
-  stripe.position.y = 0.06 + height * 0.18;
-  const windows = new THREE.Mesh(new THREE.BoxGeometry(length * 0.92, height * (doubleDeck ? 0.18 : 0.32), width + 0.012), mat(0x2c3b4d));
-  windows.position.y = 0.06 + height * (doubleDeck ? 0.72 : 0.62);
-  g.add(shell, stripe, windows);
-  if (doubleDeck) {
-    const low = windows.clone();
-    low.position.y = 0.06 + height * 0.42;
-    g.add(low);
-  }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(length * 0.4, 0.05, width * 0.4), mat(0x8d939c));
-  roof.position.y = height + 0.09;
-  g.add(roof);
-  g.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) o.castShadow = true;
-  });
-  return g;
+interface Yard {
+  tiles: TilePoint[];
+  center: TilePoint;
+  kids: { c: Character3D; target: TilePoint; wait: number; run: boolean }[];
 }
 
 export class Ambient {
   readonly group = new THREE.Group();
-  private tram: {
-    cars: THREE.Group[];
-    path: TilePoint[];
-    cum: number[];
-    length: number;
-    pos: number;
-    dir: 1 | -1;
-    stops: number[];
-    dwell: number;
-  } | null = null;
+  private tram: { runner: PathRunner; cars: THREE.Group[]; stopNames: Map<number, string> } | null = null;
   private trains: { cars: THREE.Group[]; y: number; x: number; dir: 1 | -1; stopped: boolean; dwell: number }[] = [];
   private nextTrain = 2;
-  private kids: { c: Character3D; yard: TilePoint[]; target: TilePoint; wait: number; run: boolean }[] = [];
+  private buses: { runner: PathRunner; mesh: THREE.Group; stopNames: Map<number, string> }[] = [];
+  private readonly yards: Yard[];
+  private readonly riders: TransitRiders;
+  /** Quai voyageurs (ordonnée) le plus proche de chaque voie desservie. */
+  private readonly platformOf = new Map<number, number>();
   private vendors: { c: Character3D; bubble: CSS2DObject; nextCall: number; calling: number }[] = [];
   private smoke: { mesh: THREE.Mesh; base: THREE.Vector3; t: number }[] = [];
 
   constructor(
     private readonly grid: MapGrid,
-    private readonly transit: Transit,
+    map: DistrictMap,
   ) {
+    const transit = map.transit;
+    const riderStops: RiderStop[] = [];
+
     const t = transit.tram;
     if (t && t.path.length >= 2) {
-      const cum = [0];
-      for (let k = 1; k < t.path.length; k++) cum.push(cum[k - 1]! + Math.hypot(t.path[k]!.x - t.path[k - 1]!.x, t.path[k]!.y - t.path[k - 1]!.y));
-      const length = cum.at(-1)!;
       const cars = Array.from({ length: TRAM_CARS }, () => carMesh(TRAM_CAR_LEN * 0.96, 0.55, 0.55, 0xf4f5f2, 0x2f6fb5, false));
       cars.forEach((c) => this.group.add(c));
-      this.tram = { cars, path: t.path, cum, length, pos: TRAM_CARS * TRAM_CAR_LEN, dir: 1, stops: [0, ...t.stops.map((s) => s.at), length], dwell: 0 };
-    }
-  }
-
-  async spawnKids(): Promise<void> {
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
-    let n = 0;
-    for (const yard of findYards(this.grid)) {
-      for (let k = 0; k < Math.min(KIDS_PER_YARD, yard.length); k++) {
-        const start = yard[Math.floor(Math.random() * yard.length)]!;
-        const c = new Character3D((x, y) => this.grid.tileAt(x, y), start.x, start.y, 0.5);
-        await c.load(`character-${n % 2 ? 'female' : 'male'}-${letters[n % 6]}`);
-        n++;
-        this.group.add(c.root);
-        this.kids.push({ c, yard, target: start, wait: Math.random() * 2, run: false });
+      const runner = new PathRunner(t.path, t.stops.map((s) => s.at), TRAM_SPEED, TRAM_DWELL, TRAM_CARS * TRAM_CAR_LEN);
+      this.tram = { runner, cars, stopNames: new Map(t.stops.map((s) => [s.at, s.name])) };
+      for (const s of t.stops) {
+        const p = runner.pointAt(s.at);
+        riderStops.push({ id: `tram:${s.name}`, wait: this.shelterNear(p) ?? { x: Math.round(p.x), y: Math.round(p.y) }, axis: 'x', spread: 0.4 });
       }
     }
-  }
 
-  /** Vendeurs de maïs chaud et de marrons chauds autour de la gare, du tram et de la mairie. */
-  async spawnVendors(pois: MapPoi[]): Promise<void> {
-    const taken: TilePoint[] = [];
-    for (const { kind, near, count } of VENDORS) {
-      const poi = pois.find((p) => p.kind === near);
-      if (!poi) continue;
-      const spots = this.freeSidewalkNear(poi.entrance, taken).slice(0, count);
-      for (const spot of spots) {
-        taken.push(spot);
-        await this.addVendor(kind, spot, poi.entrance);
+    for (const line of transit.bus) {
+      if (line.path.length < 2) continue;
+      const stopNames = new Map(line.stops.map((s) => [s.at, s.name]));
+      const total = line.path.reduce((acc, p, k) => (k ? acc + Math.hypot(p.x - line.path[k - 1]!.x, p.y - line.path[k - 1]!.y) : 0), 0);
+      const count = 1 + Math.floor(total / BUS_SPACING);
+      for (let k = 0; k < count; k++) {
+        const runner = new PathRunner(line.path, line.stops.map((s) => s.at), BUS_SPEED, BUS_DWELL, (total * (k + 0.5)) / count, k % 2 ? -1 : 1);
+        const mesh = busMesh(line.ref);
+        this.group.add(mesh);
+        this.buses.push({ runner, mesh, stopNames });
       }
     }
-  }
+    for (const st of transit.busStops) {
+      riderStops.push({ id: `bus:${st.name}`, wait: { x: st.x, y: st.y }, axis: st.curb.x === st.x ? 'x' : 'y', spread: 0.35 });
+    }
 
-  /** Cases de trottoir libres (sans arbre, banc…) près d'un point, des plus proches aux plus lointaines. */
-  private freeSidewalkNear(center: TilePoint, taken: TilePoint[]): TilePoint[] {
-    const out: { p: TilePoint; d: number }[] = [];
-    const r = VENDOR_SEARCH_RADIUS;
-    for (let y = center.y - r; y <= center.y + r; y++) {
-      for (let x = center.x - r; x <= center.x + r; x++) {
-        if (this.grid.tileAt(x, y) !== TILE.pedestrian || this.grid.decorAt(x, y) !== DECOR.none) continue;
-        const d = Math.hypot(x - center.x, y - center.y);
-        // Pas devant la porte, et pas collés les uns aux autres.
-        if (d < 2 || taken.some((t) => Math.hypot(t.x - x, t.y - y) < 3)) continue;
-        if (out.some((o) => Math.hypot(o.p.x - x, o.p.y - y) < 3)) continue;
-        out.push({ p: { x, y }, d });
+    const rail = transit.rail;
+    if (rail?.stationX != null) {
+      // Les quais sont entre les voies 2 et 3, et 4 et 5 (voir schematize).
+      const platforms = [rail.tracks[1]! + 1, rail.tracks[3]! + 1];
+      for (const y of platforms) {
+        riderStops.push({ id: `rail:${y}`, wait: { x: rail.stationX, y }, axis: 'x', spread: 2.5 });
+        for (const track of rail.tracks) if (Math.abs(track - y) === 1) this.platformOf.set(track, y);
       }
     }
-    return out.sort((a, b) => a.d - b.d).map((o) => o.p);
+    this.riders = new TransitRiders(grid, this.group, riderStops);
+    this.yards = findYards(grid).map((tiles) => ({
+      tiles,
+      center: {
+        x: tiles.reduce((s, p) => s + p.x, 0) / tiles.length,
+        y: tiles.reduce((s, p) => s + p.y, 0) / tiles.length,
+      },
+      kids: [],
+    }));
+  }
+
+  /** Abri de tram le plus proche d'un point de la voie. */
+  private shelterNear(p: { x: number; y: number }): TilePoint | null {
+    let best: TilePoint | null = null;
+    for (let y = Math.round(p.y) - 3; y <= Math.round(p.y) + 3; y++) {
+      for (let x = Math.round(p.x) - 3; x <= Math.round(p.x) + 3; x++) {
+        if (this.grid.decorAt(x, y) !== DECOR.shelter) continue;
+        if (!best || Math.hypot(x - p.x, y - p.y) < Math.hypot(best.x - p.x, best.y - p.y)) best = { x, y };
+      }
+    }
+    return best;
+  }
+
+  /** Marchands ambulants (maïs chaud, marrons chauds) placés par la carte. */
+  async spawnVendors(vendors: StreetVendor[]): Promise<void> {
+    for (const v of vendors) await this.addVendor(v.kind, { x: v.x, y: v.y }, v.facing);
   }
 
   private async addVendor(kind: VendorKind, spot: TilePoint, lookAt: TilePoint): Promise<void> {
@@ -190,64 +183,88 @@ export class Ambient {
     }
   }
 
-  private tramPoint(d: number): { x: number; y: number; angle: number } {
-    const t = this.tram!;
-    const pos = THREE.MathUtils.clamp(d, 0, t.length);
-    let k = 0;
-    while (k < t.path.length - 2 && t.cum[k + 1]! < pos) k++;
-    const a = t.path[k]!;
-    const b = t.path[k + 1]!;
-    const u = (pos - t.cum[k]!) / (t.cum[k + 1]! - t.cum[k]! || 1);
-    return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, angle: Math.atan2(b.y - a.y, b.x - a.x) };
-  }
-
-  update(dt: number): void {
+  /** `focus` : point regardé par la caméra (les figurants n'existent qu'autour). */
+  update(dt: number, focus: TilePoint): void {
     this.updateTram(dt);
     this.updateTrains(dt);
+    this.updateBuses(dt);
     this.updateVendors(dt);
-    for (const kid of this.kids) {
-      const dx = kid.target.x - kid.c.tileX;
-      const dy = kid.target.y - kid.c.tileY;
-      const dist = Math.hypot(dx, dy);
-      if (kid.wait > 0) {
-        kid.wait -= dt;
-        kid.c.setTarget(kid.c.tileX, kid.c.tileY, false);
-      } else if (dist < 0.08) {
-        kid.target = kid.yard[Math.floor(Math.random() * kid.yard.length)]!;
-        kid.run = Math.random() < 0.6;
-        kid.wait = 0.3 + Math.random() * 2;
-      } else {
-        const step = Math.min(dist, (kid.run ? 2.2 : 1) * dt);
-        kid.c.setTarget(kid.c.tileX + (dx / dist) * step, kid.c.tileY + (dy / dist) * step, true);
+    this.riders.update(dt, focus);
+    this.updateKids(dt, focus);
+  }
+
+  private updateKids(dt: number, focus: TilePoint): void {
+    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (const yard of this.yards) {
+      const d = Math.hypot(yard.center.x - focus.x, yard.center.y - focus.y);
+      if (yard.kids.length === 0 && d < KIDS_ACTIVE_RADIUS) {
+        for (let k = 0; k < Math.min(KIDS_PER_YARD, yard.tiles.length); k++) {
+          const start = yard.tiles[Math.floor(Math.random() * yard.tiles.length)]!;
+          const c = new Character3D((x, y) => this.grid.tileAt(x, y), start.x, start.y, 0.5);
+          void c.load(`character-${k % 2 ? 'female' : 'male'}-${letters[Math.floor(Math.random() * 6)]}`);
+          this.group.add(c.root);
+          yard.kids.push({ c, target: start, wait: Math.random() * 2, run: false });
+        }
+      } else if (yard.kids.length > 0 && d > KIDS_RELEASE_RADIUS) {
+        for (const kid of yard.kids) kid.c.dispose();
+        yard.kids = [];
       }
-      kid.c.update(dt, kid.run ? 'sprint' : 'walk');
+      for (const kid of yard.kids) {
+        const dx = kid.target.x - kid.c.tileX;
+        const dy = kid.target.y - kid.c.tileY;
+        const dist = Math.hypot(dx, dy);
+        if (kid.wait > 0) {
+          kid.wait -= dt;
+          kid.c.setTarget(kid.c.tileX, kid.c.tileY, false);
+        } else if (dist < 0.08) {
+          kid.target = yard.tiles[Math.floor(Math.random() * yard.tiles.length)]!;
+          kid.run = Math.random() < 0.6;
+          kid.wait = 0.3 + Math.random() * 2;
+        } else {
+          const step = Math.min(dist, (kid.run ? 2.2 : 1) * dt);
+          kid.c.setTarget(kid.c.tileX + (dx / dist) * step, kid.c.tileY + (dy / dist) * step, true);
+        }
+        kid.c.update(dt, kid.run ? 'sprint' : 'walk');
+      }
     }
   }
 
   private updateTram(dt: number): void {
     const t = this.tram;
     if (!t) return;
-    if (t.dwell > 0) t.dwell -= dt;
-    else {
-      const before = t.pos;
-      t.pos += t.dir * TRAM_SPEED * dt;
-      const passed = t.stops.find((s) => (t.dir > 0 ? before < s && t.pos >= s : before > s && t.pos <= s));
-      if (passed !== undefined) {
-        t.pos = passed;
-        t.dwell = TRAM_DWELL;
-        if (passed <= 0 || passed >= t.length) t.dir = t.dir > 0 ? -1 : 1;
-      }
+    const at = t.runner.update(dt);
+    if (at !== null) {
+      const name = t.stopNames.get(at);
+      const p = t.runner.pointAt(at - t.runner.dir * TRAM_CAR_LEN);
+      if (name) this.riders.vehicleArrived(`tram:${name}`, p);
     }
-    const head = THREE.MathUtils.clamp(t.pos, (TRAM_CARS - 1) * TRAM_CAR_LEN, t.length);
+    const head = THREE.MathUtils.clamp(t.runner.pos, (TRAM_CARS - 1) * TRAM_CAR_LEN, t.runner.length);
     t.cars.forEach((car, k) => {
-      const p = this.tramPoint(head - k * TRAM_CAR_LEN - TRAM_CAR_LEN / 2);
+      const p = t.runner.pointAt(head - k * TRAM_CAR_LEN - TRAM_CAR_LEN / 2);
       car.position.set(p.x, 0, p.y);
       car.rotation.y = -p.angle;
     });
   }
 
+  private updateBuses(dt: number): void {
+    for (const b of this.buses) {
+      const at = b.runner.update(dt);
+      const p = b.runner.pointAt(b.runner.pos);
+      // Conduite à droite : décalage perpendiculaire au sens de marche.
+      const angle = b.runner.dir > 0 ? p.angle : p.angle + Math.PI;
+      const ox = -Math.sin(angle) * LANE_OFFSET;
+      const oy = Math.cos(angle) * LANE_OFFSET;
+      b.mesh.position.set(p.x + ox, groundTop(this.grid.tileAt(Math.round(p.x), Math.round(p.y))), p.y + oy);
+      b.mesh.rotation.y = -angle;
+      if (at !== null) {
+        const name = b.stopNames.get(at);
+        if (name) this.riders.vehicleArrived(`bus:${name}`, { x: p.x + ox * 1.6, y: p.y + oy * 1.6 });
+      }
+    }
+  }
+
   private updateTrains(dt: number): void {
-    const rail = this.transit.rail;
+    const rail = this.grid.map.transit.rail;
     if (!rail) return;
     this.nextTrain -= dt;
     if (this.nextTrain <= 0) {
@@ -269,6 +286,8 @@ export class Ambient {
         if (station !== null && !tr.stopped && (before - station) * (tr.x - station) <= 0) {
           tr.stopped = true;
           tr.dwell = TRAIN_DWELL;
+          const platform = this.platformOf.get(tr.y);
+          if (platform !== undefined) this.riders.vehicleArrived(`rail:${platform}`, { x: station - tr.dir * 2, y: tr.y });
         }
       }
       tr.cars.forEach((car, k) => car.position.set(tr.x - tr.dir * (k + 0.5) * TRAIN_CAR_LEN, 0.02, tr.y));
@@ -280,6 +299,24 @@ export class Ambient {
       return !out;
     });
   }
+}
+
+/** Bus articulé blanc à bandeau vert, numéro de ligne sur les flancs et à l'avant. */
+function busMesh(ref: string): THREE.Group {
+  const g = carMesh(BUS_LEN, 0.5, 0.55, 0xf2f4f3, 0x2aa58a, false);
+  const tex = signTexture(ref, '#1d2a33', '#ffd84d');
+  const plate = new THREE.MeshBasicMaterial({ map: tex });
+  for (const side of [1, -1]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.09), plate);
+    m.position.set(BUS_LEN * 0.28, 0.5, side * 0.256);
+    if (side < 0) m.rotation.y = Math.PI;
+    g.add(m);
+  }
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), plate);
+  front.position.set(BUS_LEN / 2 + 0.006, 0.55, 0);
+  front.rotation.y = Math.PI / 2;
+  g.add(front);
+  return g;
 }
 
 const SMOKE_GEOMETRY = new THREE.SphereGeometry(0.06, 6, 5);

@@ -14,8 +14,13 @@ import {
   DECOR,
   SHAPE,
   TILE,
+  type BusLine,
+  type BusStop,
+  type Cycleway,
   type DistrictMap,
+  type FacadeSign,
   type MapPoi,
+  type StreetVendor,
   type StarterBuilding,
   type Storefront,
   type StreetLabel,
@@ -39,10 +44,25 @@ const RAIL_ROW_MIN_SHARE = 0.12;
 /** Franchissements minimum du faisceau ferré (ponts / passages à niveau). */
 const MIN_RAIL_CROSSINGS = 2;
 const STARTER_BLOCKS = 3;
-const MAX_SCHOOLS = 3;
+const MAX_SCHOOLS = 40;
 const MAX_BAKERIES = 3;
-const MAX_FAST_FOODS = 4;
-const MAX_SUPERMARKETS = 2;
+const MAX_FAST_FOODS = 8;
+const MAX_SUPERMARKETS = 3;
+const MAX_SQUARES = 5;
+const MAX_GYMS = 4;
+/** Part minimale d'un tronçon couverte par une piste ou bande cyclable OSM. */
+const BIKE_COVERAGE = 0.4;
+/** Distance max (en cases) entre un arrêt de bus réel et la rue qui le dessert. */
+const BUS_STOP_SNAP = PITCH * 1.2;
+/** Marchands ambulants : quoi, près de quel lieu, combien. */
+const VENDORS: { kind: StreetVendor['kind']; near: MapPoi['kind']; count: number }[] = [
+  { kind: 'corn', near: 'station', count: 2 },
+  { kind: 'corn', near: 'tram', count: 1 },
+  { kind: 'chestnut', near: 'station', count: 1 },
+  { kind: 'chestnut', near: 'tram', count: 1 },
+  { kind: 'chestnut', near: 'townhall', count: 1 },
+];
+const VENDOR_SEARCH_RADIUS = 6;
 /** Commerces de rez-de-chaussée par îlot, au plus. */
 const MAX_STOREFRONTS_PER_BLOCK = 3;
 
@@ -51,7 +71,8 @@ const MAX_STOREFRONTS_PER_BLOCK = 3;
  * par des joueurs) : les enseignes de chaînes prennent un nom générique.
  */
 function displayName(p: RawPoi): string {
-  if (!p.brand) return p.name;
+  // Coquilles fréquentes dans OSM.
+  if (!p.brand) return p.name.replace(/martenelle/i, 'maternelle');
   const cuisine = p.cuisine ?? '';
   if (p.kind === 'supermarket') return 'Supermarché';
   if (/pizza/.test(cuisine)) return 'Pizzeria';
@@ -73,6 +94,21 @@ function fastFoodSign(p: RawPoi): string {
 }
 
 const isCommissariat = (p: RawPoi) => p.kind === 'police' && !/municipale/i.test(p.name);
+
+type SchoolLevel = 'maternelle' | 'primaire' | 'college' | 'lycee';
+function schoolLevel(p: RawPoi): SchoolLevel {
+  const s = `${p.school ?? ''} ${p.name}`.toLowerCase();
+  if (/lycée/.test(s)) return 'lycee';
+  if (/collège|secondaire|enseignement général/.test(s)) return 'college';
+  if (/maternelle|martenelle/.test(s)) return 'maternelle';
+  return 'primaire';
+}
+const SCHOOL_SIGNS: Record<SchoolLevel, string> = {
+  maternelle: 'ÉCOLE MATERNELLE',
+  primaire: 'ÉCOLE',
+  college: 'COLLÈGE',
+  lycee: 'LYCÉE',
+};
 
 const STREET_CLASSES: Record<string, string> = {
   primary: TILE.majorRoad,
@@ -97,6 +133,20 @@ export interface RawPoi {
   y: number;
   brand?: string;
   cuisine?: string;
+  /** Type d'établissement scolaire (tag `school:FR`). */
+  school?: string;
+}
+
+export interface RawBusStop {
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface RawBusRoute {
+  ref: string;
+  /** Noms des arrêts dans l'ordre de la ligne. */
+  stopNames: string[];
 }
 
 /** Carte OSM rastérisée (cases de 8 m), voir build.ts. */
@@ -108,6 +158,9 @@ export interface RawRaster {
   roads: RawRoad[];
   trams: { name: string; pts: Pt[] }[];
   pois: RawPoi[];
+  busStops: RawBusStop[];
+  busRoutes: RawBusRoute[];
+  bikeWays: Pt[][];
 }
 
 type BlockKind =
@@ -123,11 +176,15 @@ type BlockKind =
   | 'station'
   | 'police'
   | 'supermarket'
+  | 'market'
+  | 'plaza'
+  | 'gym'
   | 'rail';
 
 interface Edge {
   votes: number;
   tramVotes: number;
+  bikeVotes: number;
   names: Map<string, number>;
   code: string;
   street: boolean;
@@ -193,6 +250,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
   const newEdge = (): Edge => ({
     votes: 0,
     tramVotes: 0,
+    bikeVotes: 0,
     names: new Map(),
     code: TILE.road,
     street: false,
@@ -240,6 +298,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
   }
   const tramName = raw.trams[0]?.name ?? 'Tram';
   for (const tram of raw.trams) vote(tram.pts, (edge, l) => (edge.tramVotes += l));
+  for (const bike of raw.bikeWays) vote(bike, (edge, l) => (edge.bikeVotes += l));
 
   const allEdges = [...hEdges.flat(), ...vEdges.flat()];
   for (const e of allEdges) {
@@ -397,6 +456,23 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     }
   }
 
+  // Cités : îlots d'habitation bâtis en tours et en barres.
+  const [minLon, , , maxLat] = d.bbox;
+  const lonSpan = d.bbox[2] - minLon;
+  const latSpan = maxLat - d.bbox[1];
+  for (const estate of d.estates ?? []) {
+    const [eMinLon, eMinLat, eMaxLon, eMaxLat] = estate.bbox;
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const lon = minLon + (((i + 0.5) * PITCH + 1) / raw.width) * lonSpan;
+        const lat = maxLat - (((j + 0.5) * PITCH + 1) / raw.height) * latSpan;
+        if (lon < eMinLon || lon > eMaxLon || lat < eMinLat || lat > eMaxLat) continue;
+        if (!['houses', 'gardens', 'apartments', 'shops', 'park'].includes(kinds[j]![i]!)) continue;
+        kinds[j]![i] = (i + j) % 3 === 0 ? 'apartments' : 'tower';
+      }
+    }
+  }
+
   // Lieux notables qui occupent un îlot entier (le leur, ou un voisin libre).
   const BLOCK_POIS: Partial<Record<MapPoi['kind'], BlockKind>> = {
     townhall: 'townhall',
@@ -406,23 +482,32 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     park: 'park',
     police: 'police',
     supermarket: 'supermarket',
+    market: 'market',
+    square: 'plaza',
+    gym: 'gym',
   };
-  const priority: MapPoi['kind'][] = ['townhall', 'station', 'police', 'supermarket', 'worship', 'school', 'park'];
+  const priority: MapPoi['kind'][] = ['townhall', 'station', 'police', 'supermarket', 'market', 'square', 'worship', 'school', 'gym', 'park'];
   const schoolsFirst = (p: RawPoi) => (/collège|groupe scolaire/i.test(p.name) ? 0 : 1);
   const sortedPois = raw.pois
     // La police municipale est un simple bureau au rez-de-chaussée, pas un îlot.
     .filter((p) => BLOCK_POIS[p.kind] && (p.kind !== 'police' || isCommissariat(p)))
     .sort((a, b) => priority.indexOf(a.kind) - priority.indexOf(b.kind) || schoolsFirst(a) - schoolsFirst(b));
   const claimed = new Map<string, RawPoi>();
-  let schools = 0;
-  let supermarkets = 0;
-  let commissariats = 0;
+  const counts = new Map<MapPoi['kind'], number>();
+  const limits: Partial<Record<MapPoi['kind'], number>> = {
+    school: MAX_SCHOOLS,
+    supermarket: MAX_SUPERMARKETS,
+    police: CITY_LIMITS.policeStations,
+    square: MAX_SQUARES,
+    gym: MAX_GYMS,
+    market: 1,
+  };
   for (const p of sortedPois) {
-    if (p.kind === 'school' && schools >= MAX_SCHOOLS) continue;
-    if (p.kind === 'supermarket' && supermarkets >= MAX_SUPERMARKETS) continue;
-    if (p.kind === 'police' && commissariats >= CITY_LIMITS.policeStations) continue;
+    if ((counts.get(p.kind) ?? 0) >= (limits[p.kind] ?? Infinity)) continue;
     let ci = Math.min(nx - 1, Math.max(0, Math.floor(p.x / PITCH)));
     let cj = Math.min(ny - 1, Math.max(0, Math.floor(p.y / PITCH)));
+    // Écoles d'un même groupe scolaire (maternelle + élémentaire côte à côte) : un seul îlot.
+    if (p.kind === 'school' && claimed.get(`${ci},${cj}`)?.kind === 'school') continue;
     // La gare se place juste au sud du faisceau ferré, face aux voies.
     if (p.kind === 'station' && railRow !== null) cj = Math.min(ny - 1, railRow + 1);
     const spots: [number, number][] = [[ci, cj]];
@@ -433,15 +518,14 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     if (!free) continue;
     [ci, cj] = free;
     claimed.set(`${ci},${cj}`, p);
-    if (p.kind === 'school') schools++;
-    if (p.kind === 'supermarket') supermarkets++;
-    if (p.kind === 'police') commissariats++;
+    counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
     kinds[cj]![ci] = BLOCK_POIS[p.kind]!;
   }
 
   // ---------- 3. Remplissage des îlots ----------
 
   const pois: MapPoi[] = [];
+  const signs: FacadeSign[] = [];
   const starterCandidates: { i: number; j: number }[] = [];
   let stationX: number | null = null;
 
@@ -623,16 +707,81 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           break;
         }
         case 'school': {
-          // École en L, enseigne et drapeau ; cour avec marelle, panier et arbre.
-          fill(1, 1, 6, 2, TILE.civic, 2);
-          fill(1, 3, 2, 6, TILE.civic, 2);
+          const level = poiHere ? schoolLevel(poiHere) : 'primaire';
+          if (level === 'maternelle') {
+            // Maternelle : bâtiment bas en L, grande cour avec marelle et arbres.
+            fill(1, 1, 6, 2, TILE.civic, 1);
+            fill(1, 3, 1, 5, TILE.civic, 1);
+            fill(2, 3, 6, 6, TILE.yard);
+            deco(4, 4, DECOR.hopscotch);
+            deco(6, 6, DECOR.tree);
+            deco(2, 6, DECOR.tree);
+            deco(6, 3, DECOR.bench);
+          } else if (level === 'primaire') {
+            // École en L, cour avec marelle, panier et arbre.
+            fill(1, 1, 6, 2, TILE.civic, 2);
+            fill(1, 3, 2, 6, TILE.civic, 2);
+            fill(3, 3, 6, 6, TILE.yard);
+            deco(6, 3, DECOR.hoop);
+            deco(4, 5, DECOR.hopscotch);
+            deco(6, 6, DECOR.tree);
+          } else {
+            // Collège / lycée : bâtiments en U sur 3-4 niveaux, cour avec paniers.
+            const lv = level === 'lycee' ? 4 : 3;
+            fill(1, 1, 6, 2, TILE.civic, lv);
+            fill(1, 3, 2, 6, TILE.civic, lv - 1);
+            fill(5, 3, 6, 4, TILE.civic, lv - 1);
+            fill(3, 3, 4, 6, TILE.yard);
+            fill(5, 5, 6, 6, TILE.yard);
+            deco(3, 3, DECOR.hoop);
+            deco(6, 6, DECOR.hoop);
+            deco(4, 6, DECOR.tree);
+          }
           shape(4, 2, SHAPE.schoolSign);
+          signs.push({ x: ox + 4, y: oy + 2, text: SCHOOL_SIGNS[level] });
           deco(5, 1, DECOR.flag);
-          fill(3, 3, 6, 6, TILE.yard);
-          deco(6, 3, DECOR.hoop);
-          deco(4, 5, DECOR.hopscotch);
-          deco(6, 6, DECOR.tree);
-          addPoi({ x: 3, y: 1 }, { x: 5, y: 4 });
+          addPoi({ x: 3, y: 1 }, { x: level === 'maternelle' ? 4 : 5, y: level === 'college' || level === 'lycee' ? 5 : 4 });
+          break;
+        }
+        case 'gym': {
+          if (poiHere && /stade/i.test(poiHere.name)) {
+            // Stade : terrain de foot en herbe avec deux buts, petite tribune.
+            fill(1, 1, 6, 6, TILE.grass);
+            deco(1, 3, DECOR.goal);
+            deco(6, 3, DECOR.goal);
+            fill(1, 0, 6, 0, TILE.civic, 1);
+            addPoi({ x: 3, y: 3 }, { x: 3, y: 7 });
+          } else {
+            // Gymnase : grand volume à toit plat, enseigne, terrain extérieur.
+            fill(1, 1, 6, 3, TILE.civic, 3);
+            shape(3, 3, SHAPE.facadeSign);
+            signs.push({ x: ox + 3, y: oy + 3, text: 'GYMNASE' });
+            shape(4, 3, SHAPE.entrance);
+            fill(1, 5, 6, 6, TILE.yard);
+            deco(1, 5, DECOR.hoop);
+            deco(6, 6, DECOR.hoop);
+            addPoi({ x: 3, y: 2 }, { x: 4, y: 4 });
+          }
+          break;
+        }
+        case 'market': {
+          // Place du marché : dalles, rangées d'étals, arbres d'alignement.
+          fill(1, 1, 6, 6, TILE.pedestrian);
+          for (const y of [2, 5]) for (const x of [1, 2, 4, 5, 6]) deco(x, y, DECOR.marketStall);
+          deco(3, 3, DECOR.tree);
+          deco(4, 4, DECOR.bench);
+          addPoi({ x: 3, y: 3 }, { x: 3, y: 4 });
+          break;
+        }
+        case 'plaza': {
+          // Place : dalles, statue (ou fontaine) au centre, bancs, arbres aux coins, fleurs.
+          fill(1, 1, 6, 6, TILE.pedestrian);
+          const statue = poiHere && /jeanne/i.test(poiHere.name);
+          deco(3, 3, statue ? DECOR.statue : DECOR.fountain);
+          for (const [x, y] of [[1, 1], [6, 1], [1, 6], [6, 6]] as const) deco(x, y, DECOR.tree);
+          for (const [x, y] of [[3, 1], [1, 4], [6, 3], [4, 6]] as const) deco(x, y, DECOR.bench);
+          for (const [x, y] of [[2, 3], [5, 4]] as const) deco(x, y, DECOR.flowers);
+          addPoi({ x: 3, y: 3 }, { x: 3, y: 5 });
           break;
         }
         case 'station': {
@@ -679,6 +828,25 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
         }
       }
     }
+  }
+
+  // ---------- 3b. Quartiers (« Cité du Londeau ») : simple étiquette, on arrive sur le trottoir le plus proche ----------
+
+  for (const q of raw.pois.filter((p) => p.kind === 'quarter')) {
+    const cx = Math.round(q.x);
+    const cy = Math.round(q.y);
+    let entrance: TilePoint | null = null;
+    for (let r = 0; r <= PITCH && !entrance; r++) {
+      for (let y = cy - r; y <= cy + r && !entrance; y++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+          if (x >= 0 && y >= 0 && x < width && y < height && tileAt(x, y) === TILE.pedestrian) {
+            entrance = { x, y };
+            break;
+          }
+        }
+      }
+    }
+    if (entrance) pois.push({ kind: 'quarter', name: q.name, x: cx, y: cy, entrance });
   }
 
   // ---------- 4. Commerces de rez-de-chaussée : boulangeries, pharmacies, fast-foods, police municipale ----------
@@ -811,6 +979,194 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     }
   }
 
+  // ---------- 5b. Bus : arrêts au bord des rues, lignes tracées sur le réseau de rues ----------
+
+  const busStops: BusStop[] = [];
+  const bus: BusLine[] = [];
+  {
+    // Un tronçon de rue « roulable » (pas une rue piétonne, pas les voies ferrées).
+    const drivable = (h: boolean, line: number, seg: number) => {
+      const e = h ? hEdges[line]?.[seg] : vEdges[line]?.[seg];
+      if (!e?.street || e.code === TILE.pedestrian) return false;
+      return h || seg !== railRow || e.railCrossing;
+    };
+    // Arrêts réels regroupés par nom (un arrêt a souvent un quai de chaque côté).
+    const byStopName = new Map<string, { x: number; y: number; n: number }>();
+    for (const st of raw.busStops) {
+      const acc = byStopName.get(st.name) ?? { x: 0, y: 0, n: 0 };
+      byStopName.set(st.name, { x: acc.x + st.x, y: acc.y + st.y, n: acc.n + 1 });
+    }
+    type Snapped = { name: string; h: boolean; line: number; seg: number; along: number; pole: TilePoint; curb: TilePoint };
+    const snapped = new Map<string, Snapped>();
+    for (const [name, acc] of byStopName) {
+      const px = acc.x / acc.n;
+      const py = acc.y / acc.n;
+      let best: (Snapped & { d: number }) | null = null;
+      for (const h of [true, false]) {
+        const lines = h ? ny + 1 : nx + 1;
+        const segs = h ? nx : ny;
+        for (let line = 0; line < lines; line++) {
+          for (let seg = 0; seg < segs; seg++) {
+            if (!drivable(h, line, seg)) continue;
+            const across = line * PITCH + 0.5;
+            const along = Math.max(seg * PITCH + 3, Math.min((seg + 1) * PITCH - 2, Math.round(h ? px : py)));
+            const d = Math.hypot((h ? along : across) - px, (h ? across : along) - py);
+            if (d > BUS_STOP_SNAP || (best && d >= best.d)) continue;
+            // Poteau sur le trottoir du côté de l'arrêt réel, sinon de l'autre côté.
+            const sideFirst = (h ? py : px) < across ? -1 : 2;
+            for (const side of [sideFirst, sideFirst === -1 ? 2 : -1]) {
+              const pole = h ? { x: along, y: line * PITCH + side } : { x: line * PITCH + side, y: along };
+              if (tileAt(pole.x, pole.y) !== TILE.pedestrian) continue;
+              if ([...snapped.values()].some((o) => Math.hypot(o.pole.x - pole.x, o.pole.y - pole.y) < 2)) continue;
+              const decorHere = decor[pole.y * width + pole.x];
+              if (decorHere !== DECOR.none && decorHere !== DECOR.tree && decorHere !== DECOR.lamp) continue;
+              const lane = side === -1 ? 0 : 1;
+              const curb = h ? { x: along, y: line * PITCH + lane } : { x: line * PITCH + lane, y: along };
+              best = { name, h, line, seg, along, pole, curb, d };
+              break;
+            }
+          }
+        }
+      }
+      if (!best) continue;
+      snapped.set(name, best);
+    }
+
+    // Graphe des carrefours (nœuds i,j) reliés par les tronçons roulables.
+    const nodeKey = (i: number, j: number) => `${i},${j}`;
+    const neighbours = (i: number, j: number): [number, number][] => {
+      const out: [number, number][] = [];
+      if (drivable(true, j, i - 1)) out.push([i - 1, j]);
+      if (drivable(true, j, i)) out.push([i + 1, j]);
+      if (drivable(false, i, j - 1)) out.push([i, j - 1]);
+      if (drivable(false, i, j)) out.push([i, j + 1]);
+      return out;
+    };
+    const shortest = (from: [number, number], to: [number, number]): [number, number][] | null => {
+      const prev = new Map<string, [number, number] | null>([[nodeKey(...from), null]]);
+      const queue: [number, number][] = [from];
+      while (queue.length > 0) {
+        const cur = queue.shift()!;
+        if (cur[0] === to[0] && cur[1] === to[1]) {
+          const path: [number, number][] = [];
+          for (let c: [number, number] | null = cur; c; c = prev.get(nodeKey(...c)) ?? null) path.unshift(c);
+          return path;
+        }
+        for (const n of neighbours(...cur)) {
+          if (prev.has(nodeKey(...n))) continue;
+          prev.set(nodeKey(...n), cur);
+          queue.push(n);
+        }
+      }
+      return null;
+    };
+    const ends = (st: Snapped): [[number, number], [number, number]] =>
+      st.h
+        ? [[st.seg, st.line], [st.seg + 1, st.line]]
+        : [[st.line, st.seg], [st.line, st.seg + 1]];
+
+    const servedLines = new Map<string, string[]>();
+    for (const route of raw.busRoutes) {
+      const stops = route.stopNames.map((n) => snapped.get(n)).filter((st): st is Snapped => !!st);
+      const uniq = stops.filter((st, k) => stops.findIndex((o) => o.name === st.name) === k);
+      if (uniq.length < 2) continue;
+      // Sens de passage de chaque arrêt (entrée/sortie du tronçon), en anticipant l'arrêt suivant.
+      // Un arrêt injoignable par les rues du plan est simplement sauté.
+      const nodes: [number, number][] = [];
+      const served: Snapped[] = [];
+      const hops = (from: [number, number], to: [number, number]) => shortest(from, to)?.length ?? Infinity;
+      uniq.forEach((st, k) => {
+        const [a, b] = ends(st);
+        const next = uniq[k + 1];
+        // Sens de traversée de l'arrêt : le plus court en venant d'où l'on est et en
+        // repartant vers l'arrêt suivant (évite les demi-tours).
+        const cost = (entry: [number, number], exit: [number, number]) =>
+          (nodes.length > 0 ? hops(nodes.at(-1)!, entry) : 0) + (next ? Math.min(...ends(next).map((e) => hops(exit, e))) : 0);
+        const [entry, exit] = cost(a, b) <= cost(b, a) ? [a, b] : [b, a];
+        if (nodes.length > 0) {
+          const leg = shortest(nodes.at(-1)!, entry);
+          // Arrêt injoignable par les rues du plan : on le saute.
+          if (!leg) return;
+          nodes.push(...leg.slice(1));
+        } else {
+          nodes.push(entry);
+        }
+        nodes.push(exit);
+        served.push(st);
+      });
+      if (served.length < 2) continue;
+      const path = nodes.map(([i, j]) => ({ x: i * PITCH + 0.5, y: j * PITCH + 0.5 }));
+      const cumulative = [0];
+      for (let k = 1; k < path.length; k++) cumulative.push(cumulative[k - 1]! + Math.hypot(path[k]!.x - path[k - 1]!.x, path[k]!.y - path[k - 1]!.y));
+      const lineStops: BusLine['stops'] = [];
+      for (const st of served) {
+        const [a, b] = ends(st);
+        // Le tronçon de l'arrêt dans le tracé (dans un sens ou dans l'autre).
+        for (let k = 0; k + 1 < nodes.length; k++) {
+          const n0 = nodes[k]!;
+          const n1 = nodes[k + 1]!;
+          const same = (p: [number, number], q: [number, number]) => p[0] === q[0] && p[1] === q[1];
+          if (!((same(n0, a) && same(n1, b)) || (same(n0, b) && same(n1, a)))) continue;
+          const start = path[k]!;
+          const offset = st.h ? Math.abs(st.along - start.x) : Math.abs(st.along - start.y);
+          lineStops.push({ name: st.name, at: cumulative[k]! + offset });
+          servedLines.set(st.name, [...(servedLines.get(st.name) ?? []), route.ref]);
+          break;
+        }
+      }
+      bus.push({ ref: route.ref, path, stops: lineStops });
+    }
+    for (const st of snapped.values()) {
+      const lines = servedLines.get(st.name);
+      if (!lines) continue;
+      setDecor(st.pole.x, st.pole.y, DECOR.busStop);
+      busStops.push({ name: st.name, x: st.pole.x, y: st.pole.y, curb: st.curb, lines: [...new Set(lines)].sort((a, b) => Number(a) - Number(b)) });
+    }
+  }
+
+  // ---------- 5c. Pistes cyclables : tronçons de rue longés par une piste OSM ----------
+
+  const cycleways: Cycleway[] = [];
+  hEdges.forEach((row, j) =>
+    row.forEach((e, i) => {
+      if (e.street && e.code !== TILE.pedestrian && !e.tram && e.bikeVotes >= PITCH * BIKE_COVERAGE) {
+        cycleways.push({ x: i * PITCH + 2, y: j * PITCH, axis: 'x', length: PITCH - 2 });
+      }
+    }),
+  );
+  vEdges.forEach((col, i) =>
+    col.forEach((e, j) => {
+      if (j !== railRow && e.street && e.code !== TILE.pedestrian && !e.tram && e.bikeVotes >= PITCH * BIKE_COVERAGE) {
+        cycleways.push({ x: i * PITCH, y: j * PITCH + 2, axis: 'y', length: PITCH - 2 });
+      }
+    }),
+  );
+
+  // ---------- 5d. Marchands ambulants (maïs, marrons) près de la gare, du tram et de la mairie ----------
+
+  const vendors: StreetVendor[] = [];
+  for (const { kind, near, count } of VENDORS) {
+    const poi = pois.find((p) => p.kind === near);
+    if (!poi) continue;
+    const c = poi.entrance;
+    const spots: { p: TilePoint; d: number }[] = [];
+    for (let y = c.y - VENDOR_SEARCH_RADIUS; y <= c.y + VENDOR_SEARCH_RADIUS; y++) {
+      for (let x = c.x - VENDOR_SEARCH_RADIUS; x <= c.x + VENDOR_SEARCH_RADIUS; x++) {
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        if (tileAt(x, y) !== TILE.pedestrian || decor[y * width + x] !== DECOR.none) continue;
+        const d = Math.hypot(x - c.x, y - c.y);
+        // Pas devant la porte, et pas collés les uns aux autres.
+        if (d < 2 || vendors.some((v) => Math.hypot(v.x - x, v.y - y) < 3)) continue;
+        if (spots.some((o) => Math.hypot(o.p.x - x, o.p.y - y) < 3)) continue;
+        spots.push({ p: { x, y }, d });
+      }
+    }
+    spots.sort((a, b) => a.d - b.d);
+    for (const { p } of spots.slice(0, count)) {
+      vendors.push({ id: `${kind}-${vendors.length + 1}`, kind, x: p.x, y: p.y, facing: { ...c } });
+    }
+  }
+
   const rail: Transit['rail'] =
     railRow === null
       ? null
@@ -903,7 +1259,10 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     decor: rows(decor),
     shapes: rows(shapes),
     storefronts,
-    transit: { tram, rail },
+    transit: { tram, rail, bus, busStops },
+    cycleways,
+    vendors,
+    signs,
     starterBuildings,
     pois,
     streets,

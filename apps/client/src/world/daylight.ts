@@ -1,0 +1,102 @@
+/**
+ * Jour et nuit selon l'heure RÉELLE : position du soleil au-dessus de la ville
+ * (calcul astronomique simplifié), d'où l'on tire couleurs du ciel, brume,
+ * lumières. La nuit, fenêtres, vitrines et lampadaires s'allument (voir `night`).
+ */
+import * as THREE from 'three';
+
+/** Latitude / longitude de référence (Noisy-le-Sec). */
+const LAT = 48.89;
+const LON = 2.45;
+const DEG = Math.PI / 180;
+/** Hauteur minimale (degrés) donnée à la lumière directionnelle, pour garder des ombres lisibles. */
+const MIN_LIGHT_ELEVATION = 14;
+
+export interface Daylight {
+  /** Hauteur du soleil (degrés, négative la nuit). */
+  elevation: number;
+  /** 0 = plein jour, 1 = nuit noire. */
+  night: number;
+  /** Direction de la lumière principale (soleil, ou lune la nuit), vers la source. */
+  lightDir: THREE.Vector3;
+  lightColor: THREE.Color;
+  lightIntensity: number;
+  hemiSky: THREE.Color;
+  hemiGround: THREE.Color;
+  hemiIntensity: number;
+  skyTop: THREE.Color;
+  skyBottom: THREE.Color;
+  fog: THREE.Color;
+  exposure: number;
+}
+
+/** Hauteur et azimut (depuis le nord, sens horaire) du soleil, en degrés. */
+export function sunPosition(date: Date): { elevation: number; azimuth: number } {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+  const dayOfYear = (date.getTime() - start) / 86_400_000;
+  const decl = 23.44 * DEG * Math.sin(((2 * Math.PI) / 365) * (dayOfYear - 81));
+  const solarHours = date.getUTCHours() + date.getUTCMinutes() / 60 + LON / 15;
+  const h = (solarHours - 12) * 15 * DEG;
+  const lat = LAT * DEG;
+  const sinEl = Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(h);
+  const elevation = Math.asin(sinEl) / DEG;
+  const azimuth = (Math.atan2(Math.sin(h), Math.cos(h) * Math.sin(lat) - Math.tan(decl) * Math.cos(lat)) / DEG + 180) % 360;
+  return { elevation, azimuth };
+}
+
+const smooth = (a: number, b: number, x: number) => THREE.MathUtils.smoothstep(x, a, b);
+const c = (hex: number) => new THREE.Color(hex);
+
+const DAY = { top: c(0x8ec9ef), bottom: c(0xe6f3fb), fog: c(0xdcecf5), sky: c(0xfdf6e3), ground: c(0x6b8f5a), sun: c(0xfff0d4) };
+const DUSK = { top: c(0x3d4f8f), bottom: c(0xf0a36c), fog: c(0xc49a8a), sky: c(0xf2c39b), ground: c(0x4f5a52), sun: c(0xffa25c) };
+const NIGHT = { top: c(0x070d22), bottom: c(0x1a2546), fog: c(0x121a30), sky: c(0x5d6f9e), ground: c(0x1b2128), sun: c(0x9fb4ff) };
+
+/** Mélange jour / crépuscule / nuit selon la hauteur du soleil. */
+function blend(key: keyof typeof DAY, dusk: number, night: number): THREE.Color {
+  return DAY[key].clone().lerp(DUSK[key], dusk).lerp(NIGHT[key], night);
+}
+
+export function daylightAt(date: Date): Daylight {
+  const { elevation, azimuth } = sunPosition(date);
+  // Nuit : soleil à plus de 6° sous l'horizon ; crépuscule autour de l'horizon.
+  const night = 1 - smooth(-7, 1, elevation);
+  const dusk = (1 - smooth(2, 14, elevation)) * (1 - night);
+  const day = elevation > 0;
+
+  // La nuit, la lumière vient de la lune, haute au sud.
+  const el = (day ? Math.max(MIN_LIGHT_ELEVATION, elevation) : 50) * DEG;
+  const az = (day ? azimuth : 200) * DEG;
+  const lightDir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
+
+  return {
+    elevation,
+    night,
+    lightDir,
+    lightColor: day ? DAY.sun.clone().lerp(DUSK.sun, dusk) : NIGHT.sun.clone(),
+    lightIntensity: day ? 0.6 + 1.7 * smooth(0, 20, elevation) : 0.45 * night + 0.2,
+    hemiSky: blend('sky', dusk, night),
+    hemiGround: blend('ground', dusk, night),
+    hemiIntensity: THREE.MathUtils.lerp(1.15, 0.55, night),
+    skyTop: blend('top', dusk, night),
+    skyBottom: blend('bottom', dusk, night),
+    fog: blend('fog', dusk, night),
+    exposure: THREE.MathUtils.lerp(1.05, 1.15, night),
+  };
+}
+
+/**
+ * Heure affichée : l'heure réelle, sauf `?heure=22:30` dans l'adresse (pour
+ * essayer la nuit en plein jour). Renvoie une fonction « maintenant ».
+ */
+export function clockFromUrl(search: string): () => Date {
+  const m = /[?&]heure=(\d{1,2})(?::(\d{2}))?/.exec(search);
+  if (!m) return () => new Date();
+  const hours = Number(m[1]);
+  const minutes = Number(m[2] ?? 0);
+  return () => {
+    // Heure de Paris approximée par l'heure locale du navigateur.
+    const d = new Date();
+    d.setHours(hours, minutes, 0, 0);
+    return d;
+  };
+}

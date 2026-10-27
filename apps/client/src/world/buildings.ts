@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { DECOR, SHAPE, TILE, type MapGrid, type Storefront } from '@jeu-ville/shared';
 import { cloneModel, enableShadows, loadModel, modelNames } from './assets.js';
 import { groundTop } from './ground.js';
+import { glowAtNight, litStorefrontTexture, litWindowsTexture } from './night.js';
 import {
   type FacadeStyle,
   type FrontStyle,
@@ -86,12 +87,20 @@ class QuadBatch {
 }
 
 const materials = new Map<string, THREE.Material>();
-function mat(key: string, make: () => THREE.Texture | THREE.Color): () => THREE.Material {
+/** `lit` : texture des parties qui s'allument la nuit (fenêtres, vitrines). */
+function mat(key: string, make: () => THREE.Texture | THREE.Color, lit?: () => THREE.Texture): () => THREE.Material {
   return () => {
     let m = materials.get(key);
     if (!m) {
       const t = make();
-      m = t instanceof THREE.Color ? new THREE.MeshStandardMaterial({ color: t, roughness: 0.85 }) : new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
+      const std =
+        t instanceof THREE.Color ? new THREE.MeshStandardMaterial({ color: t, roughness: 0.85 }) : new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 });
+      if (lit) {
+        std.emissive = new THREE.Color(0xffffff);
+        std.emissiveMap = lit();
+        glowAtNight(std, 1.1);
+      }
+      m = std;
       materials.set(key, m);
     }
     return m;
@@ -156,7 +165,11 @@ function addColumn(grid: MapGrid, quads: QuadBatch, extras: THREE.Group, x: numb
   const facade: FacadeStyle =
     code === TILE.apartments ? { wall: APARTMENT_WALLS[variant]!, balcony: true } : (FACADES[code] ?? FACADES[TILE.building]!);
   const facadeKey = `facade-${code}-${code === TILE.apartments ? variant : ''}`;
-  const upper = mat(facadeKey, () => facadeTexture(facade));
+  const upper = mat(
+    facadeKey,
+    () => facadeTexture(facade),
+    () => litWindowsTexture(!!facade.wide, 1 + [...facadeKey].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 100_000, 7)),
+  );
 
   // Rez-de-chaussée : vitrine, entrée, ou façade normale.
   let groundKey = facadeKey;
@@ -164,7 +177,7 @@ function addColumn(grid: MapGrid, quads: QuadBatch, extras: THREE.Group, x: numb
   const frontStyle = groundFloor(code, shape, front);
   if (frontStyle) {
     groundKey = `front-${JSON.stringify(frontStyle)}`;
-    ground = mat(groundKey, () => storefrontTexture(frontStyle));
+    ground = mat(groundKey, () => storefrontTexture(frontStyle), litStorefrontTexture);
   }
 
   for (const s of SIDES) {
@@ -212,7 +225,12 @@ function addColumn(grid: MapGrid, quads: QuadBatch, extras: THREE.Group, x: numb
   if (shape === SHAPE.stationCenter) addSign(extras, x, y, base + LEVEL_H * 1.6, 'GARE · RER E', '#24324a', '#ffffff', 1.1, true);
   if (shape === SHAPE.facadeSign && code === TILE.police) addSign(extras, x, y, top - 0.12, 'POLICE', '#1f3f8c', '#ffffff', 1);
   if (shape === SHAPE.facadeSign && code === TILE.supermarket) addSign(extras, x, y, top + 0.14, 'SUPERMARCHÉ', '#2f8f5b', '#ffffff', 1.6);
-  if (shape === SHAPE.schoolSign) addSign(extras, x, y, top - 0.15, 'ÉCOLE', '#1f4e8c', '#ffffff', 0.9);
+  const custom = grid.map.signs.find((g) => g.x === x && g.y === y)?.text;
+  if (shape === SHAPE.facadeSign && code === TILE.civic && custom) addSign(extras, x, y, top - 0.15, custom, '#c2462e', '#ffffff', 1.1);
+  if (shape === SHAPE.schoolSign) {
+    const text = custom ?? 'ÉCOLE';
+    addSign(extras, x, y, top - 0.15, text, '#1f4e8c', '#ffffff', Math.max(0.9, text.length * 0.1));
+  }
   if (grid.decorAt(x, y) === DECOR.flag) addFlag(extras, x, y, top + (shape === SHAPE.townhallCenter ? 0.35 : 0));
 }
 

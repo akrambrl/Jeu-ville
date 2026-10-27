@@ -9,6 +9,7 @@ import {
   HOME_ACTIONS,
   REAL_MS_PER_HOUR,
   STARTING_GAUGES,
+  STREET_FOOD,
   applyGaugeEffects,
   decayGauges,
 } from '@jeu-ville/shared';
@@ -22,6 +23,7 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
     createSession: typeof import('./auth.js').createSession;
     createCharacter: typeof import('./characters.js').createCharacter;
     performHomeAction: typeof import('./characters.js').performHomeAction;
+    buyStreetFood: typeof import('./characters.js').buyStreetFood;
     ledgerBalance: typeof import('./characters.js').ledgerBalance;
     seedReferenceData: typeof import('../db/seed.js').seedReferenceData;
   };
@@ -87,6 +89,14 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
     await Promise.all(Array.from({ length: 10 }, () => mod.performHomeAction(mod.db, c.id, 'eat')));
     const balance = await mod.ledgerBalance(mod.db, c.id);
     expect(balance).toBe(ECONOMY.startingMoneyCents - 10 * HOME_ACTIONS.eat.costCents);
+  });
+
+  it('un en-cas chez le marchand ambulant passe par le journal', async () => {
+    const c = await mod.createCharacter(mod.db, await newPlayer(), look);
+    const vendor = { id: 'chestnut-1', kind: 'chestnut', x: 0, y: 0, facing: { x: 0, y: 1 } } as const;
+    const after = await mod.buyStreetFood(mod.db, c.id, vendor);
+    expect(after.moneyCents).toBe(ECONOMY.startingMoneyCents - STREET_FOOD.chestnut.costCents);
+    expect(await mod.ledgerBalance(mod.db, c.id)).toBe(after.moneyCents);
   });
 
   it("reloge l'habitant d'un immeuble qui a disparu de la carte", async () => {

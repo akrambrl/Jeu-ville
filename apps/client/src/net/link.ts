@@ -30,6 +30,8 @@ export interface DistrictLink {
   readonly sessionId: string;
   move(to: TilePoint): void;
   homeAction(action: HomeActionId): void;
+  /** Acheter à manger au marchand ambulant `vendorId` (il faut être à côté). */
+  buyStreetFood(vendorId: string): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */
   subscribePlayers(handlers: PlayerHandlers): void;
   onSelf(cb: (self: CharacterSelf) => void): void;

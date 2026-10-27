@@ -13,6 +13,8 @@ import { buildBuildings } from './buildings.js';
 import { Character3D, modelForLook } from './characters.js';
 import { buildGround, groundTop } from './ground.js';
 import { buildProps } from './props.js';
+import { clockFromUrl, daylightAt, type Daylight } from './daylight.js';
+import { applyNight } from './night.js';
 import { canvasTexture } from './textures.js';
 
 export interface CityViewOptions {
@@ -24,6 +26,12 @@ export interface CityViewOptions {
 }
 
 const TAP_MAX_MOVE_PX = 8;
+/** Recalcul de la lumière du jour (ms). */
+const DAYLIGHT_REFRESH_MS = 30_000;
+/** Le repère de destination disparaît quand le joueur est à moins de cette distance (cases). */
+const MARKER_ARRIVED = 0.35;
+/** Sans déplacement après ce délai (chemin refusé), le repère s'efface aussi. */
+const MARKER_IDLE_TIMEOUT = 1.2;
 const TAP_MAX_MS = 450;
 const LABEL_KINDS = new Set<MapPoi['kind']>([
   'townhall',
@@ -37,6 +45,10 @@ const LABEL_KINDS = new Set<MapPoi['kind']>([
   'fastfood',
   'police',
   'supermarket',
+  'market',
+  'square',
+  'gym',
+  'quarter',
 ]);
 /** Au-delà de cette distance caméra, les étiquettes secondaires sont masquées. */
 const LABEL_DISTANCE = 26;
@@ -48,10 +60,21 @@ export class CityView {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly sun: THREE.DirectionalLight;
+  private readonly hemi: THREE.HemisphereLight;
+  private readonly sky = document.createElement('canvas');
+  private readonly skyTexture: THREE.CanvasTexture;
+  private daylight: Daylight;
+  private readonly now = clockFromUrl(location.search);
   private readonly grid: MapGrid;
   private readonly clock = new THREE.Clock();
   private readonly avatars = new Map<string, Character3D>();
-  private readonly marker: THREE.Mesh;
+  private readonly marker = new THREE.Group();
+  private readonly markerRing: THREE.Mesh;
+  private readonly markerArrow: THREE.Mesh;
+  private readonly markerMaterials: THREE.MeshBasicMaterial[] = [];
+  private markerTarget: TilePoint | null = null;
+  private markerAge = 0;
+  private markerOpacity = 0;
   private ambient: Ambient | null = null;
   private following = true;
   private pointerDown: { x: number; y: number; t: number } | null = null;
@@ -77,14 +100,12 @@ export class CityView {
     this.labels.domElement.className = 'world-labels';
     container.appendChild(this.labels.domElement);
 
-    // Ciel dégradé et brume légère.
-    this.scene.background = canvasTexture(4, 256, (c) => {
-      const g = c.createLinearGradient(0, 0, 0, 256);
-      g.addColorStop(0, '#8ec9ef');
-      g.addColorStop(1, '#e6f3fb');
-      c.fillStyle = g;
-      c.fillRect(0, 0, 4, 256);
-    });
+    // Ciel dégradé et brume légère (couleurs selon l'heure, voir applyDaylight).
+    this.sky.width = 128;
+    this.sky.height = 256;
+    this.skyTexture = new THREE.CanvasTexture(this.sky);
+    this.skyTexture.colorSpace = THREE.SRGBColorSpace;
+    this.scene.background = this.skyTexture;
     this.scene.fog = new THREE.Fog(0xdcecf5, 38, 85);
 
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.3, 300);
@@ -109,7 +130,8 @@ export class CityView {
     });
 
     // Lumière : ciel + soleil chaud avec ombres douces qui suivent la caméra.
-    this.scene.add(new THREE.HemisphereLight(0xfdf6e3, 0x6b8f5a, 1.15));
+    this.hemi = new THREE.HemisphereLight(0xfdf6e3, 0x6b8f5a, 1.15);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff0d4, 2.3);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -118,11 +140,26 @@ export class CityView {
     this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.sun, this.sun.target);
 
-    this.marker = new THREE.Mesh(
-      new THREE.RingGeometry(0.28, 0.4, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }),
-    );
+    // Repère de destination : case surlignée, anneau pulsant et flèche qui rebondit.
+    const markerMat = (color: number) => {
+      const m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false });
+      this.markerMaterials.push(m);
+      return m;
+    };
+    const tileHighlight = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2), markerMat(0xffd84d));
+    this.markerRing = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 32).rotateX(-Math.PI / 2), markerMat(0xffffff));
+    this.markerRing.position.y = 0.01;
+    this.markerArrow = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 4).rotateX(Math.PI), markerMat(0xffb400));
+    this.marker.add(tileHighlight, this.markerRing, this.markerArrow);
+    this.marker.visible = false;
     this.scene.add(this.marker);
+
+    this.daylight = daylightAt(this.now());
+    this.applyDaylight();
+    window.setInterval(() => {
+      this.daylight = daylightAt(this.now());
+      this.applyDaylight();
+    }, DAYLIGHT_REFRESH_MS);
 
     this.bindInput();
     this.resize();
@@ -138,16 +175,15 @@ export class CityView {
     const buildings = await buildBuildings(this.grid, map.storefronts);
     this.scene.add(buildings.group);
     this.scene.add(await buildProps(this.grid));
-    this.ambient = new Ambient(this.grid, map.transit);
+    this.ambient = new Ambient(this.grid, map);
     this.scene.add(this.ambient.group);
-    void this.ambient.spawnKids();
-    void this.ambient.spawnVendors(map.pois);
+    void this.ambient.spawnVendors(map.vendors);
 
     // Étiquettes des lieux, au-dessus des toits.
     for (const poi of map.pois) {
       if (!LABEL_KINDS.has(poi.kind)) continue;
       const el = document.createElement('div');
-      const major = poi.kind === 'townhall' || poi.kind === 'station';
+      const major = poi.kind === 'townhall' || poi.kind === 'station' || poi.kind === 'quarter';
       el.className = `poi-label${major ? ' major' : ''}`;
       el.textContent = poi.name;
       const obj = new CSS2DObject(el);
@@ -157,6 +193,8 @@ export class CityView {
       this.poiLabels.push({ obj, major });
     }
     this.addStreetNames();
+    // Les matériaux qui s'allument la nuit viennent d'être créés.
+    this.applyDaylight();
     if (this.opts.homeDoor) {
       const el = document.createElement('div');
       el.className = 'home-tag';
@@ -177,7 +215,9 @@ export class CityView {
   requestMove(to: TilePoint): void {
     this.opts.link.move(to);
     this.marker.position.set(to.x, groundTop(this.grid.tileAt(to.x, to.y)) + 0.02, to.y);
-    (this.marker.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    this.marker.visible = true;
+    this.markerTarget = to;
+    this.markerAge = 0;
     this.following = true;
   }
 
@@ -186,11 +226,9 @@ export class CityView {
   private frame(): void {
     const dt = Math.min(0.1, this.clock.getDelta());
     for (const a of this.avatars.values()) a.update(dt);
-    this.ambient?.update(dt);
-    const markerMat = this.marker.material as THREE.MeshBasicMaterial;
-    markerMat.opacity = Math.max(0, markerMat.opacity - dt * 0.8);
-
+    this.ambient?.update(dt, { x: this.controls.target.x, y: this.controls.target.z });
     const self = this.avatars.get(this.opts.link.sessionId);
+    this.updateMarker(dt, self);
     if (self) {
       this.opts.onLocalPosition(self.tileX, self.tileY);
       if (this.following) {
@@ -203,9 +241,9 @@ export class CityView {
     }
     this.controls.update();
 
-    // Le soleil (et sa zone d'ombre) suit le point regardé.
+    // Le soleil (ou la lune) et sa zone d'ombre suivent le point regardé.
     const t = this.controls.target;
-    this.sun.position.set(t.x - 18, 34, t.z + 12);
+    this.sun.position.copy(this.daylight.lightDir).multiplyScalar(40).add(t);
     this.sun.target.position.copy(t);
 
     const dist = this.camera.position.distanceTo(t);
@@ -214,6 +252,60 @@ export class CityView {
 
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
+  }
+
+  /** Le repère reste affiché tant que le joueur n'est pas arrivé, puis s'efface. */
+  private updateMarker(dt: number, self: Character3D | undefined): void {
+    if (!this.marker.visible) return;
+    this.markerAge += dt;
+    const target = this.markerTarget;
+    const arrived =
+      !target ||
+      !self ||
+      Math.hypot(self.tileX - target.x, self.tileY - target.y) < MARKER_ARRIVED ||
+      (this.markerAge > MARKER_IDLE_TIMEOUT && !self.isMoving);
+    if (arrived) this.markerTarget = null;
+    this.markerOpacity = arrived ? Math.max(0, this.markerOpacity - dt * 2.5) : Math.min(1, this.markerOpacity + dt * 6);
+    if (this.markerOpacity === 0 && arrived) {
+      this.marker.visible = false;
+      return;
+    }
+    const pulse = (Math.sin(this.markerAge * 5) + 1) / 2;
+    const [tileMat, ringMat, arrowMat] = this.markerMaterials;
+    tileMat!.opacity = 0.45 * this.markerOpacity;
+    ringMat!.opacity = (0.6 + 0.4 * pulse) * this.markerOpacity;
+    arrowMat!.opacity = this.markerOpacity;
+    this.markerRing.scale.setScalar(0.85 + 0.25 * pulse);
+    this.markerArrow.position.y = 0.55 + 0.12 * Math.abs(Math.sin(this.markerAge * 4));
+    this.markerArrow.rotation.y += dt * 2;
+  }
+
+  /** Couleurs du ciel, brume, lumières et éclairages nocturnes selon l'heure réelle. */
+  private applyDaylight(): void {
+    const d = this.daylight;
+    const c = this.sky.getContext('2d')!;
+    const g = c.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, `#${d.skyTop.getHexString()}`);
+    g.addColorStop(1, `#${d.skyBottom.getHexString()}`);
+    c.fillStyle = g;
+    c.fillRect(0, 0, 128, 256);
+    if (d.night > 0.3) {
+      // Étoiles (toujours les mêmes).
+      let s = 7;
+      const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+      c.fillStyle = `rgba(255,255,255,${(d.night - 0.3) * 1.2})`;
+      for (let k = 0; k < 90; k++) c.fillRect(rand() * 128, rand() * 150, rand() < 0.2 ? 2 : 1, 1);
+    }
+    this.skyTexture.needsUpdate = true;
+    (this.scene.fog as THREE.Fog).color.copy(d.fog);
+    this.hemi.color.copy(d.hemiSky);
+    this.hemi.groundColor.copy(d.hemiGround);
+    this.hemi.intensity = d.hemiIntensity;
+    this.sun.color.copy(d.lightColor);
+    this.sun.intensity = d.lightIntensity;
+    this.renderer.toneMappingExposure = d.exposure;
+    applyNight(d.night);
+    document.body.classList.toggle('night', d.night > 0.5);
   }
 
   private resize(): void {

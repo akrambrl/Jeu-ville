@@ -31,10 +31,18 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
   écoles avec cour (enfants qui jouent), boulangeries, gare RER E,
   pharmacies, fast-foods, commissariat (voitures de police), supermarchés avec
   parking. Pas de marques déposées : les enseignes de chaînes ont un nom générique.
-- Faisceau ferré avec RER animés et tram T1 animé jusqu'à son terminus de la gare.
+- Carte étendue de la rue du Parc à la cité du Londeau : toutes les écoles
+  (maternelles, élémentaires, collèges, lycées), gymnase et stade, place du marché,
+  places (Jeanne-d'Arc et sa statue…), pistes cyclables.
+- Faisceau ferré avec RER animés, tram T1, 7 lignes de bus et leurs arrêts ;
+  des voyageurs attendent, montent et descendent.
+- Marchands ambulants de maïs grillé et de marrons chauds (achat validé par le serveur).
+- Jour et nuit selon l'heure réelle (fenêtres et lampadaires allumés la nuit ;
+  `?heure=22:30` dans l'adresse pour essayer).
+- Une seule personne par case : on attend, on contourne, ou on s'arrête à côté.
 - Bouton « Aller à… » : chez moi et tous les lieux du quartier.
 - Pseudo + création de personnage (sexe, 6 styles, peau, cheveux, corpulence).
-- Déplacement au clic/toucher (A* côté serveur), plusieurs joueurs visibles.
+- Déplacement au clic/toucher (A* côté serveur), case visée affichée, plusieurs joueurs visibles.
 - Jauges faim, hygiène, apparence, santé, bonheur, qui baissent même hors ligne.
 - Appart de départ (zone de 6 immeubles près de la mairie) : manger, se doucher, se changer.
 - 20 000 € de départ, chaque mouvement d'argent tracé dans un journal.

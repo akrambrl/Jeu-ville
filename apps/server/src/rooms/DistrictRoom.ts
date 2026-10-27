@@ -8,11 +8,15 @@ import {
   MapGrid,
   MOVEMENT,
   SERVER,
-  advance,
-  type Mover,
+  TileOccupancy,
+  buyStreetFoodSchema,
+  nearestFreeTile,
+  pathAvoiding,
+  stepWalker,
+  type Walker,
+  type DistrictMap,
   ServerMessage,
   districtJoinSchema,
-  findPath,
   getDistrictMap,
   homeActionSchema,
   moveSchema,
@@ -27,6 +31,7 @@ import {
   getCharacterSelf,
   performHomeAction,
   savePosition,
+  buyStreetFood,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
 
@@ -36,7 +41,7 @@ interface AuthData {
   characterId: string;
 }
 
-interface Session extends Mover {
+interface Session extends Walker {
   characterId: string;
   client: Client;
   /** Porte de l'immeuble du joueur (pour les actions « chez soi »). */
@@ -46,6 +51,9 @@ interface Session extends Mover {
 export class DistrictRoom extends Room<DistrictState> {
   override state = new DistrictState();
   private grid!: MapGrid;
+  private map!: DistrictMap;
+  /** Une case = une personne (joueurs, et bientôt bots ; stands des marchands). */
+  private readonly occupancy = new TileOccupancy();
   /** Sessions par sessionId Colyseus. */
   private readonly sessions = new Map<string, Session>();
 
@@ -53,9 +61,12 @@ export class DistrictRoom extends Room<DistrictState> {
     const map = getDistrictMap(options.districtId);
     if (!map) throw new Error(`Quartier inconnu : ${options.districtId}`);
     this.grid = new MapGrid(map);
+    this.map = map;
+    for (const v of map.vendors) this.occupancy.block(v.x, v.y);
 
     this.onMessage(ClientMessage.move, (client, raw) => this.handleMove(client, raw));
     this.onMessage(ClientMessage.homeAction, (client, raw) => this.handleHomeAction(client, raw));
+    this.onMessage(ClientMessage.buyStreetFood, (client, raw) => this.handleBuyStreetFood(client, raw));
 
     this.setSimulationInterval((dt) => this.tick(dt), SERVER.roomTickMs);
     this.clock.setInterval(() => void this.pushSelfToAll(), SERVER.selfSnapshotIntervalMs);
@@ -83,14 +94,20 @@ export class DistrictRoom extends Room<DistrictState> {
     ]);
     if (!self) throw new GameError('Personnage introuvable.', 404);
 
-    const pos = this.grid.nearestWalkable(stored ?? this.grid.map.spawn) ?? this.grid.map.spawn;
+    const wanted = this.grid.nearestWalkable(stored ?? this.grid.map.spawn) ?? this.grid.map.spawn;
+    // La case peut être prise par quelqu'un d'autre : on apparaît juste à côté.
+    const pos = nearestFreeTile(this.grid, this.occupancy, wanted, client.sessionId) ?? wanted;
+    this.occupancy.tryHold(client.sessionId, pos.x, pos.y);
     const session: Session = {
+      id: client.sessionId,
       characterId: auth.characterId,
       client,
       x: pos.x,
       y: pos.y,
       dir: 2,
       path: [],
+      tile: { x: pos.x, y: pos.y },
+      blockedMs: 0,
       homeDoor: self.home?.door ?? null,
     };
     this.sessions.set(client.sessionId, session);
@@ -115,6 +132,7 @@ export class DistrictRoom extends Room<DistrictState> {
     const session = this.sessions.get(client.sessionId);
     this.sessions.delete(client.sessionId);
     this.state.players.delete(client.sessionId);
+    this.occupancy.releaseAll(client.sessionId);
     if (session) await this.persistPosition(session);
   }
 
@@ -133,12 +151,12 @@ export class DistrictRoom extends Room<DistrictState> {
       const p = this.state.players.get(sessionId);
       if (!p) continue;
       if (s.path.length > 0) {
-        advance(s, distance);
+        stepWalker(this.grid, this.occupancy, s, distance, dtMs);
         p.x = s.x;
         p.y = s.y;
         p.dir = s.dir;
       }
-      p.moving = s.path.length > 0;
+      p.moving = s.path.length > 0 && s.blockedMs === 0;
     }
   }
 
@@ -149,11 +167,12 @@ export class DistrictRoom extends Room<DistrictState> {
     const goal = parsed.data;
     if (!this.grid.isWalkable(goal.x, goal.y)) return this.notify(client, 'error', 'Impossible d’aller là.');
 
-    const start = this.grid.nearestWalkable({ x: s.x, y: s.y });
-    const path = start ? findPath(this.grid, start, goal, MOVEMENT.maxPathLength) : null;
+    // Case déjà prise par quelqu'un : on s'arrête sur la case libre la plus proche.
+    const target = nearestFreeTile(this.grid, this.occupancy, goal, s.id);
+    const path = target ? pathAvoiding(this.grid, this.occupancy, s, target) : null;
     if (!path) return this.notify(client, 'error', 'Impossible d’aller là.');
-    // On repart de la case de départ si on est entre deux cases.
-    s.path = start && (start.x !== s.x || start.y !== s.y) ? [start, ...path] : path;
+    s.path = path;
+    s.blockedMs = 0;
   }
 
   private async handleHomeAction(client: Client, raw: unknown): Promise<void> {
@@ -169,6 +188,25 @@ export class DistrictRoom extends Room<DistrictState> {
     } catch (err) {
       if (err instanceof GameError) return this.notify(client, 'error', err.message);
       console.error('homeAction', err);
+      this.notify(client, 'error', 'Erreur serveur, réessaie.');
+    }
+  }
+
+  private async handleBuyStreetFood(client: Client, raw: unknown): Promise<void> {
+    const s = this.sessions.get(client.sessionId);
+    const parsed = buyStreetFoodSchema.safeParse(raw);
+    if (!s || !parsed.success) return;
+    const vendor = this.map.vendors.find((v) => v.id === parsed.data.vendorId);
+    if (!vendor) return this.notify(client, 'error', 'Ce marchand n’est plus là.');
+    if (Math.hypot(s.x - vendor.x, s.y - vendor.y) > MOVEMENT.vendorInteractionRange) {
+      return this.notify(client, 'error', 'Approche-toi du marchand.');
+    }
+    try {
+      const self = await buyStreetFood(db, s.characterId, vendor);
+      client.send(ServerMessage.self, self);
+    } catch (err) {
+      if (err instanceof GameError) return this.notify(client, 'error', err.message);
+      console.error('buyStreetFood', err);
       this.notify(client, 'error', 'Erreur serveur, réessaie.');
     }
   }
