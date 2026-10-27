@@ -16,12 +16,14 @@ import {
   pathAvoiding,
   stepWalker,
   resolveHomeAction,
-  resolveStreetFood,
+  foodPlaces,
+  resolveFood,
   snapshotGauges,
   type CharacterLook,
   type CharacterSelf,
   type CreateCharacterRequest,
   type DistrictMap,
+  type FoodPlace,
   type HomeActionId,
   type Walker,
   type Notice,
@@ -38,6 +40,8 @@ const PASSERBY_MAX_PATH = 80;
 /** Les passants marchent un peu moins vite que le joueur. */
 const PASSERBY_SPEED_FACTOR = 0.6;
 const SAVE_INTERVAL_MS = 5_000;
+/** Pas de simulation maximal (onglet en arrière-plan, gros ralentissement). */
+const MAX_TICK_MS = 1_000;
 
 export interface DemoSave {
   version: 1;
@@ -138,6 +142,7 @@ export class LocalDistrict implements DistrictLink {
   private readonly walkers = new Map<string, DemoWalker>();
   /** Une case = une personne, comme sur le serveur. */
   private readonly occupancy = new TileOccupancy();
+  private readonly food: FoodPlace[];
   private readonly walkable: TilePoint[] = [];
   private handlers: PlayerHandlers | null = null;
   private selfCb: (self: CharacterSelf) => void = () => {};
@@ -149,6 +154,7 @@ export class LocalDistrict implements DistrictLink {
     private readonly save: DemoSave,
   ) {
     this.grid = new MapGrid(map);
+    this.food = foodPlaces(map);
     // Destinations des passants : seulement les cases reliées aux rues (pas les cours fermées).
     const seen = new Uint8Array(map.width * map.height);
     const queue: TilePoint[] = [map.spawn];
@@ -183,7 +189,13 @@ export class LocalDistrict implements DistrictLink {
     });
     for (let i = 0; i < PASSERBY_COUNT; i++) this.addPasserby(i);
 
-    window.setInterval(() => this.tick(SERVER.roomTickMs), SERVER.roomTickMs);
+    // Temps réellement écoulé : si la page rame (téléphone modeste), on ne marche pas au ralenti.
+    let last = performance.now();
+    window.setInterval(() => {
+      const now = performance.now();
+      this.tick(Math.min(MAX_TICK_MS, now - last));
+      last = now;
+    }, SERVER.roomTickMs);
     window.setInterval(() => this.selfCb(this.self()), SERVER.selfSnapshotIntervalMs);
     window.setInterval(() => this.persist(), SAVE_INTERVAL_MS);
     window.addEventListener('pagehide', () => this.persist());
@@ -221,14 +233,14 @@ export class LocalDistrict implements DistrictLink {
     this.selfCb(this.self());
   }
 
-  buyStreetFood(vendorId: string): void {
+  buyFood(placeId: string, itemId: string): void {
     const me = this.walkers.get(SELF_ID)!;
-    const vendor = this.map.vendors.find((v) => v.id === vendorId);
-    if (!vendor || Math.hypot(me.x - vendor.x, me.y - vendor.y) > MOVEMENT.vendorInteractionRange) {
-      return this.noticeCb({ level: 'error', text: 'Approche-toi du marchand.' });
+    const place = this.food.find((p) => p.id === placeId);
+    if (!place || Math.hypot(me.x - place.x, me.y - place.y) > MOVEMENT.foodInteractionRange) {
+      return this.noticeCb({ level: 'error', text: 'Approche-toi pour commander.' });
     }
     const now = Date.now();
-    const result = resolveStreetFood(vendor, this.save.gauges, this.save.gaugesUpdatedAt, this.save.moneyCents, now);
+    const result = resolveFood(place.kind, itemId, this.save.gauges, this.save.gaugesUpdatedAt, this.save.moneyCents, now);
     if (!result.ok) return this.noticeCb({ level: 'error', text: result.error });
     this.save.gauges = result.gauges;
     this.save.gaugesUpdatedAt = now;

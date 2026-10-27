@@ -1,4 +1,4 @@
-import { MOVEMENT, getDistrictMap, vendorInReach, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
+import { MOVEMENT, foodPlaceInReach, foodPlaces, getDistrictMap, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -23,6 +23,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   if (!map) return showFatal(ui, 'Quartier inconnu.', () => location.reload());
 
   let homeDoor = character.home?.door ?? null;
+  const food = foodPlaces(map);
   const container = document.getElementById('game')!;
   const view = new CityView(container, {
     map,
@@ -31,7 +32,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
     onLocalPosition: (x, y) => {
       const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
       hud.setNearHome(near);
-      hud.setNearVendor(vendorInReach(map, x, y));
+      hud.setNearFood(foodPlaceInReach(food, x, y));
     },
   });
 
@@ -41,7 +42,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       onGoHome: () => homeDoor && view.requestMove(homeDoor),
       onGoTo: (point) => view.requestMove(point),
       onHomeAction: (action) => link.homeAction(action),
-      onBuyStreetFood: (vendorId) => link.buyStreetFood(vendorId),
+      onBuyFood: (placeId, itemId) => link.buyFood(placeId, itemId),
       onRecenter: () => view.recenter(),
     },
     destinationsOf(map),

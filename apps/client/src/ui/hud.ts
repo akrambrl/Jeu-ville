@@ -1,13 +1,13 @@
 import {
   HOME_ACTIONS,
-  STREET_FOOD,
+  foodMenu,
   HOME_ACTION_IDS,
   computeHappiness,
   decayGauges,
   isCritical,
   type CharacterSelf,
   type HomeActionId,
-  type StreetVendor,
+  type FoodPlace,
   type TilePoint,
 } from '@jeu-ville/shared';
 import { el, formatMoney, showToast } from './dom.js';
@@ -35,7 +35,7 @@ export interface HudCallbacks {
   onGoHome: () => void;
   onGoTo: (point: TilePoint) => void;
   onHomeAction: (action: HomeActionId) => void;
-  onBuyStreetFood: (vendorId: string) => void;
+  onBuyFood: (placeId: string, itemId: string) => void;
   onRecenter: () => void;
 }
 
@@ -49,8 +49,8 @@ export class Hud {
   private readonly moneyEl = el('div', { class: 'money' });
   private readonly bars = new Map<string, HTMLElement>();
   private readonly homePanel: HTMLElement;
-  private readonly vendorButton: HTMLButtonElement;
-  private vendorId: string | null = null;
+  private readonly foodPanel: HTMLElement;
+  private foodPlaceId: string | null = null;
   private readonly goToButton: HTMLButtonElement;
   private readonly destinationsPanel: HTMLElement;
   private readonly timer: number;
@@ -83,16 +83,15 @@ export class Hud {
       this.homePanel.append(b);
     }
     this.homePanel.hidden = true;
-    this.vendorButton = el('button', { class: 'primary vendor-buy' });
-    this.vendorButton.hidden = true;
-    this.vendorButton.addEventListener('click', () => this.vendorId && callbacks.onBuyStreetFood(this.vendorId));
+    this.foodPanel = el('div', { class: 'home-panel food-panel' });
+    this.foodPanel.hidden = true;
 
     this.root = el('div', {}, [
       el('div', { class: 'hud-top' }, [
         el('div', { class: 'hud-card identity' }, [this.nameEl, this.metaEl, this.moneyEl]),
         gauges,
       ]),
-      el('div', { class: 'hud-bottom' }, [this.homePanel, this.vendorButton, this.goToButton, recenter]),
+      el('div', { class: 'hud-bottom' }, [this.homePanel, this.foodPanel, this.goToButton, recenter]),
       this.destinationsPanel,
       el('div', { class: 'attribution' }),
     ]);
@@ -122,15 +121,18 @@ export class Hud {
     this.homePanel.hidden = !near;
   }
 
-  /** Bouton d'achat quand le perso est à côté d'un marchand ambulant (null : aucun). */
-  setNearVendor(vendor: StreetVendor | null): void {
-    const id = vendor?.id ?? null;
-    if (id === this.vendorId) return;
-    this.vendorId = id;
-    this.vendorButton.hidden = !vendor;
-    if (vendor) {
-      const food = STREET_FOOD[vendor.kind];
-      this.vendorButton.textContent = `${food.icon} ${food.label} (${formatMoney(food.costCents)})`;
+  /** Menu de l'endroit où l'on peut manger (marchand, boulangerie, fast-food, grande surface) à côté du perso. */
+  setNearFood(place: FoodPlace | null): void {
+    const id = place?.id ?? null;
+    if (id === this.foodPlaceId) return;
+    this.foodPlaceId = id;
+    this.foodPanel.hidden = !place;
+    this.foodPanel.replaceChildren();
+    if (!place) return;
+    for (const item of foodMenu(place.kind)) {
+      const b = el('button', { class: 'primary', text: `${item.icon} ${item.label} (${formatMoney(item.costCents)})` });
+      b.addEventListener('click', () => this.callbacks.onBuyFood(place.id, item.id));
+      this.foodPanel.append(b);
     }
   }
 

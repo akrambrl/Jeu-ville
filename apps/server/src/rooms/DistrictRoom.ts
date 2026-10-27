@@ -9,12 +9,13 @@ import {
   MOVEMENT,
   SERVER,
   TileOccupancy,
-  buyStreetFoodSchema,
+  buyFoodSchema,
+  foodPlaces,
+  type FoodPlace,
   nearestFreeTile,
   pathAvoiding,
   stepWalker,
   type Walker,
-  type DistrictMap,
   ServerMessage,
   districtJoinSchema,
   getDistrictMap,
@@ -31,7 +32,7 @@ import {
   getCharacterSelf,
   performHomeAction,
   savePosition,
-  buyStreetFood,
+  buyFood,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
 
@@ -51,7 +52,7 @@ interface Session extends Walker {
 export class DistrictRoom extends Room<DistrictState> {
   override state = new DistrictState();
   private grid!: MapGrid;
-  private map!: DistrictMap;
+  private food: FoodPlace[] = [];
   /** Une case = une personne (joueurs, et bientôt bots ; stands des marchands). */
   private readonly occupancy = new TileOccupancy();
   /** Sessions par sessionId Colyseus. */
@@ -61,12 +62,12 @@ export class DistrictRoom extends Room<DistrictState> {
     const map = getDistrictMap(options.districtId);
     if (!map) throw new Error(`Quartier inconnu : ${options.districtId}`);
     this.grid = new MapGrid(map);
-    this.map = map;
+    this.food = foodPlaces(map);
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
 
     this.onMessage(ClientMessage.move, (client, raw) => this.handleMove(client, raw));
     this.onMessage(ClientMessage.homeAction, (client, raw) => this.handleHomeAction(client, raw));
-    this.onMessage(ClientMessage.buyStreetFood, (client, raw) => this.handleBuyStreetFood(client, raw));
+    this.onMessage(ClientMessage.buyFood, (client, raw) => this.handleBuyFood(client, raw));
 
     this.setSimulationInterval((dt) => this.tick(dt), SERVER.roomTickMs);
     this.clock.setInterval(() => void this.pushSelfToAll(), SERVER.selfSnapshotIntervalMs);
@@ -192,21 +193,21 @@ export class DistrictRoom extends Room<DistrictState> {
     }
   }
 
-  private async handleBuyStreetFood(client: Client, raw: unknown): Promise<void> {
+  private async handleBuyFood(client: Client, raw: unknown): Promise<void> {
     const s = this.sessions.get(client.sessionId);
-    const parsed = buyStreetFoodSchema.safeParse(raw);
+    const parsed = buyFoodSchema.safeParse(raw);
     if (!s || !parsed.success) return;
-    const vendor = this.map.vendors.find((v) => v.id === parsed.data.vendorId);
-    if (!vendor) return this.notify(client, 'error', 'Ce marchand n’est plus là.');
-    if (Math.hypot(s.x - vendor.x, s.y - vendor.y) > MOVEMENT.vendorInteractionRange) {
-      return this.notify(client, 'error', 'Approche-toi du marchand.');
+    const place = this.food.find((p) => p.id === parsed.data.placeId);
+    if (!place) return this.notify(client, 'error', 'Cet endroit n’existe plus.');
+    if (Math.hypot(s.x - place.x, s.y - place.y) > MOVEMENT.foodInteractionRange) {
+      return this.notify(client, 'error', 'Approche-toi pour commander.');
     }
     try {
-      const self = await buyStreetFood(db, s.characterId, vendor);
+      const self = await buyFood(db, s.characterId, place.kind, parsed.data.itemId);
       client.send(ServerMessage.self, self);
     } catch (err) {
       if (err instanceof GameError) return this.notify(client, 'error', err.message);
-      console.error('buyStreetFood', err);
+      console.error('buyFood', err);
       this.notify(client, 'error', 'Erreur serveur, réessaie.');
     }
   }

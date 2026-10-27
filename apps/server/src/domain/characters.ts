@@ -6,7 +6,7 @@ import {
   ageAt,
   getDistrictMap,
   resolveHomeAction,
-  resolveStreetFood,
+  resolveFood,
   snapshotGauges,
   STARTING_GAUGES,
   type CharacterSelf,
@@ -14,7 +14,7 @@ import {
   type HomeActionId,
   type HomeInfo,
   type StoredGauges,
-  type StreetVendor,
+  type FoodPlaceKind,
 } from '@jeu-ville/shared';
 import type { Db, Tx } from '../db/client.js';
 import { characters, dwellings } from '../db/schema.js';
@@ -181,18 +181,18 @@ export async function performHomeAction(
   });
 }
 
-/** Achat d'un en-cas à un marchand ambulant (la proximité est vérifiée par la room). */
-export async function buyStreetFood(db: Db, characterId: string, vendor: StreetVendor, nowMs = Date.now()): Promise<CharacterSelf> {
+/** Manger dehors : `itemId` acheté à un endroit de type `kind` (la proximité est vérifiée par la room). */
+export async function buyFood(db: Db, characterId: string, kind: FoodPlaceKind, itemId: string, nowMs = Date.now()): Promise<CharacterSelf> {
   return db.transaction(async (tx) => {
     const [row] = await tx.select().from(characters).where(eq(characters.id, characterId)).for('update');
     if (!row) throw new GameError('Personnage introuvable.', 404);
 
-    const result = resolveStreetFood(vendor, storedGauges(row), row.gaugesUpdatedAt.getTime(), row.moneyCents, nowMs);
+    const result = resolveFood(kind, itemId, storedGauges(row), row.gaugesUpdatedAt.getTime(), row.moneyCents, nowMs);
     if (!result.ok) throw new GameError(result.error);
     await recordLedgerEntry(tx, {
       characterId,
       amountCents: result.moneyDeltaCents,
-      reason: `street_food:${vendor.kind}`,
+      reason: `food:${kind}:${itemId}`,
     });
     const [updated] = await tx
       .update(characters)

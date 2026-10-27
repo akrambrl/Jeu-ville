@@ -3,7 +3,7 @@ export * from './config/characters.js';
 export * from './time/index.js';
 export * from './formulas/gauges.js';
 export * from './formulas/homeActions.js';
-export * from './formulas/streetFood.js';
+export * from './formulas/food.js';
 export * from './map/types.js';
 export * from './map/grid.js';
 export * from './map/pathfinding.js';

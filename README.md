@@ -36,7 +36,8 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
   places (Jeanne-d'Arc et sa statue…), pistes cyclables.
 - Faisceau ferré avec RER animés, tram T1, 7 lignes de bus et leurs arrêts ;
   des voyageurs attendent, montent et descendent.
-- Marchands ambulants de maïs grillé et de marrons chauds (achat validé par le serveur).
+- Manger dehors : marchands de maïs et de marrons, boulangeries, fast-foods,
+  grandes surfaces (menus dans la config, achat validé par le serveur).
 - Jour et nuit selon l'heure réelle (fenêtres et lampadaires allumés la nuit ;
   `?heure=22:30` dans l'adresse pour essayer).
 - Une seule personne par case : on attend, on contourne, ou on s'arrête à côté.
