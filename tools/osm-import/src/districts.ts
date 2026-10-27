@@ -13,8 +13,9 @@ export const DISTRICTS: DistrictSource[] = [
     cityName: 'Noisy-le-Sec',
     districtId: 'centre-ville-mairie',
     districtName: 'Centre-Ville - Mairie',
-    // Emprise du quartier OSM « Centre-Ville - Mairie » (relation 12593925).
-    bbox: [2.447, 48.887, 2.4611, 48.8934],
+    // Quartier OSM « Centre-Ville - Mairie » (relation 12593925), étendu au nord
+    // jusqu'à la gare RER E et au terminus du tram T1.
+    bbox: [2.447, 48.887, 2.464, 48.899],
   },
 ];
 

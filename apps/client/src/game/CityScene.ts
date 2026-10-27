@@ -6,12 +6,13 @@ import {
   MARKER_TEXTURE,
   PROP_DECOR,
   PROP_ORIGIN_Y,
-  buildingOriginY,
   createGroundTextures,
-  ensureBuildingTexture,
   ensurePropTexture,
   groundFrame,
 } from '../render/cityTextures.js';
+import { EDGE, buildingOriginY, ensureBuildingTexture, roofTopPx } from '../render/buildingTextures.js';
+import { SchoolKids } from './SchoolKids.js';
+import { TransitLayer } from './Transit.js';
 import { LEVEL_PX, TILE_H, TILE_W, screenToTile, tileToScreen } from '../render/iso.js';
 import { BACKGROUND_COLOR } from '../render/palette.js';
 import { Avatar } from './Avatar.js';
@@ -27,7 +28,7 @@ export interface CitySceneData {
 const DRAG_THRESHOLD_PX = 8;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2;
-const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market', 'school']);
+const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market', 'school', 'tram', 'bakery']);
 
 export class CityScene extends Phaser.Scene {
   private ctx!: CitySceneData;
@@ -37,6 +38,8 @@ export class CityScene extends Phaser.Scene {
   private drag: { startX: number; startY: number; scrollX: number; scrollY: number; active: boolean } | null = null;
   private pinch: { distance: number; zoom: number } | null = null;
   private following = true;
+  private transit!: TransitLayer;
+  private kids!: SchoolKids;
 
   constructor() {
     super('city');
@@ -57,14 +60,18 @@ export class CityScene extends Phaser.Scene {
     this.buildLabels();
     this.buildHomeMarker();
 
+    this.transit = new TransitLayer(this, this.ctx.map.transit, this.ctx.map.width);
+    this.kids = new SchoolKids(this, this.grid);
     this.marker = this.add.image(0, 0, MARKER_TEXTURE).setDepth(-0.5).setVisible(false);
     this.setupCamera();
     this.setupInput();
     this.bindPlayers();
   }
 
-  override update(_time: number, delta: number): void {
+  override update(time: number, delta: number): void {
     for (const a of this.avatars.values()) a.update(delta);
+    this.transit.update(time, delta);
+    this.kids.update(time, delta);
     const self = this.avatars.get(this.ctx.link.sessionId);
     if (self) {
       this.ctx.onLocalPosition(self.tileX, self.tileY);
@@ -117,7 +124,17 @@ export class CityScene extends Phaser.Scene {
         const code = this.grid.tileAt(x, y);
         if (!BUILDING_TILES.has(code)) continue;
         const levels = Math.max(1, this.grid.levelsAt(x, y));
-        const key = ensureBuildingTexture(this.textures, code, levels);
+        // Côtés en façade : la case voisine n'appartient pas au même bâtiment.
+        const same = (nx: number, ny: number) =>
+          this.grid.tileAt(nx, ny) === code && this.grid.levelsAt(nx, ny) === this.grid.levelsAt(x, y);
+        const edges =
+          (same(x, y - 1) ? 0 : EDGE.north) |
+          (same(x, y + 1) ? 0 : EDGE.south) |
+          (same(x - 1, y) ? 0 : EDGE.west) |
+          (same(x + 1, y) ? 0 : EDGE.east);
+        // Une couleur par îlot pour les immeubles.
+        const variant = (Math.floor(x / 10) * 7 + Math.floor(y / 10) * 13) % 5;
+        const key = ensureBuildingTexture(this.textures, code, levels, this.grid.shapeAt(x, y), edges, variant);
         const p = tileToScreen(x, y);
         this.add.image(p.x, p.y, key).setOrigin(0.5, buildingOriginY(levels)).setDepth(x + y);
       }
@@ -133,7 +150,10 @@ export class CityScene extends Phaser.Scene {
         if (!PROP_DECOR.has(decor)) continue;
         const key = ensurePropTexture(this.textures, decor, (x * 7 + y * 13) % 4);
         const p = tileToScreen(x, y);
-        this.add.image(p.x, p.y, key).setOrigin(0.5, PROP_ORIGIN_Y).setDepth(x + y + 0.3);
+        // Objets posés sur un toit (drapeau) : surélevés, dessinés après le bâtiment.
+        const onRoof = BUILDING_TILES.has(this.grid.tileAt(x, y));
+        const lift = onRoof ? roofTopPx(this.grid.levelsAt(x, y), this.grid.shapeAt(x, y)) : 0;
+        this.add.image(p.x, p.y - lift, key).setOrigin(0.5, PROP_ORIGIN_Y).setDepth(x + y + (onRoof ? 0.45 : 0.3));
       }
     }
   }

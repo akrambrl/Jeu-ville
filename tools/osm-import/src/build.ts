@@ -221,6 +221,7 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
   const pois: RawPoi[] = [];
   const addPoi = (kind: RawPoi['kind'], name: string | undefined, p: Pt | null) => {
     if (!name || !p) return;
+    if (kind === 'station' && !/gare/i.test(name)) name = `Gare de ${name}`;
     if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) return;
     if (pois.some((q) => q.kind === kind && q.name === name)) return;
     pois.push({ kind, name, x: p.x, y: p.y });
@@ -232,11 +233,14 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (t.amenity === 'school') return 'school';
     if (t.amenity === 'place_of_worship') return 'worship';
     if (t.amenity === 'marketplace') return 'market';
+    if (t.shop === 'bakery') return 'bakery';
+    if (t.railway === 'tram_stop') return 'tram';
     return null;
   };
   for (const n of osm.nodes.values()) {
     const k = poiKind(n.tags);
-    if (k) addPoi(k, n.tags.name, project(n.lat, n.lon));
+    // Une boulangerie sans nom reste une boulangerie.
+    if (k) addPoi(k, n.tags.name ?? (k === 'bakery' ? 'Boulangerie' : undefined), project(n.lat, n.lon));
   }
   for (const a of areas) {
     const k = poiKind(a.tags);
@@ -254,6 +258,9 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     tiles: rows,
     levels,
     roads: roads.map((w) => ({ name: w.tags.name, highway: w.tags.highway!, pts: wayPoints(w) })),
+    trams: [...osm.ways.values()]
+      .filter((w) => w.tags.railway === 'tram' && !w.tags.service)
+      .map((w) => ({ name: w.tags.name ?? 'Tram', pts: wayPoints(w) })),
     pois,
   });
 }

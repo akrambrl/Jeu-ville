@@ -70,11 +70,13 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
 
 const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; order: number }> = {
   townhall: { icon: '🏛️', kind: 'Mairie', order: 0 },
-  station: { icon: '🚉', kind: 'Gare', order: 1 },
-  market: { icon: '🧺', kind: 'Marché', order: 2 },
-  park: { icon: '🌳', kind: 'Square', order: 3 },
-  worship: { icon: '⛪', kind: 'Lieu de culte', order: 4 },
-  school: { icon: '🏫', kind: 'École', order: 5 },
+  station: { icon: '🚉', kind: 'Gare RER E', order: 1 },
+  tram: { icon: '🚋', kind: 'Arrêt de tram', order: 2 },
+  bakery: { icon: '🥖', kind: 'Boulangerie', order: 3 },
+  market: { icon: '🧺', kind: 'Marché', order: 4 },
+  park: { icon: '🌳', kind: 'Square', order: 5 },
+  worship: { icon: '⛪', kind: 'Lieu de culte', order: 6 },
+  school: { icon: '🏫', kind: 'École', order: 7 },
 };
 
 /** Lieux du quartier proposés dans « Aller à… ». */

@@ -9,6 +9,8 @@ export const GROUND_COLORS: Record<string, number> = {
   [TILE.majorRoad]: 0x5a5f6b,
   [TILE.water]: 0x5fb3e0,
   [TILE.rail]: 0x9c8a74,
+  [TILE.yard]: 0xb9bec7,
+  [TILE.platform]: 0xd4d0c8,
 };
 
 /** Couleur des bâtiments par code de case. */
@@ -17,11 +19,12 @@ export const BUILDING_COLORS: Record<string, number> = {
   [TILE.house]: 0xf1c9a5,
   [TILE.apartments]: 0xd9dde4,
   [TILE.commercial]: 0xf0b86e,
-  [TILE.civic]: 0xb9d6f2,
+  [TILE.civic]: 0xf6e3b4,
   [TILE.townhall]: 0xf3e9d2,
   [TILE.worship]: 0xd9cdb4,
   [TILE.industrial]: 0xb7aea3,
   [TILE.starter]: 0x7fcfc0,
+  [TILE.station]: 0xe7d8bf,
 };
 
 export const ROOF_COLORS: Record<string, number> = {

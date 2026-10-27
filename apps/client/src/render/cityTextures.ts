@@ -1,7 +1,7 @@
 /** Génère les textures de la ville (sol + blocs d'immeubles) sans asset externe. */
 import Phaser from 'phaser';
 import { DECOR, TILE } from '@jeu-ville/shared';
-import { BUILDING_COLORS, GROUND_COLORS, ROOF_COLORS, WINDOW_COLOR } from './palette.js';
+import { GROUND_COLORS } from './palette.js';
 import { LEVEL_PX, TILE_H, TILE_W, boxColors, drawBox, makeCanvas, polygon, project, shade } from './iso.js';
 
 export const GROUND_TEXTURE = 'ground';
@@ -77,6 +77,18 @@ function drawGroundTile(ctx: CanvasRenderingContext2D, ox: number, oy: number, c
       ctx.lineTo(...project(ox, oy, 16, yy, 0));
       ctx.stroke();
     }
+  } else if (code === TILE.yard) {
+    // Enrobé de cour d'école, quelques gravillons.
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = shade(color, 1.06);
+      ctx.fillRect(Math.round(ox + (r() - 0.5) * 40), Math.round(oy + (r() - 0.5) * 16), 2, 1);
+    }
+  } else if (code === TILE.platform) {
+    // Quai : bande d'éveil jaune côté voies.
+    const q = (y0: number, y1: number, fill: string) =>
+      polygon(ctx, [project(ox, oy, -17, y0, 0), project(ox, oy, 17, y0, 0), project(ox, oy, 17, y1, 0), project(ox, oy, -17, y1, 0)], fill);
+    q(-16, -13, '#e8c547');
+    q(13, 16, '#e8c547');
   } else if (code === TILE.water) {
     ctx.strokeStyle = shade(color, 1.2);
     ctx.beginPath();
@@ -93,6 +105,23 @@ function drawMarking(ctx: CanvasRenderingContext2D, ox: number, oy: number, mark
   const white = 'rgba(245,245,240,0.9)';
   const quad = (x0: number, y0: number, x1: number, y1: number, fill: string) =>
     polygon(ctx, [project(ox, oy, x0, y0, 0), project(ox, oy, x1, y0, 0), project(ox, oy, x1, y1, 0), project(ox, oy, x0, y1, 0)], fill);
+  const tram = TRAM_RAILS[mark];
+  if (tram) {
+    // Plateforme de tram (béton clair) et rail, le long du bord de la case.
+    for (const [axis, side] of tram) {
+      const edge = side === 'a' ? 16 : -16;
+      const inner = side === 'a' ? 9 : -9;
+      const rail = side === 'a' ? 11 : -11;
+      if (axis === 'x') {
+        quad(-17, Math.min(edge, inner), 17, Math.max(edge, inner), 'rgba(205,205,200,0.55)');
+        quad(-17, rail - 0.9, 17, rail + 0.9, '#6d737c');
+      } else {
+        quad(Math.min(edge, inner), -17, Math.max(edge, inner), 17, 'rgba(205,205,200,0.55)');
+        quad(rail - 0.9, -17, rail + 0.9, 17, '#6d737c');
+      }
+    }
+    return;
+  }
   switch (mark) {
     case DECOR.laneX:
       quad(-8, 14.5, 8, 17.5, white);
@@ -106,6 +135,16 @@ function drawMarking(ctx: CanvasRenderingContext2D, ox: number, oy: number, mark
     case DECOR.crossingY:
       for (const x of [-12, -4, 4, 12]) quad(x - 2, -11, x + 2, 11, white);
       break;
+    case DECOR.railCrossing:
+      for (const y of [-6, 6]) quad(-17, y - 0.8, 17, y + 0.8, '#8d939c');
+      break;
+    case DECOR.hopscotch: {
+      const colors = ['#f2d14b', '#e8607a', '#5fb3e0', '#7fcf7a'];
+      for (let k = 0; k < 4; k++) quad(-12 + k * 6, -3, -7 + k * 6, 3, colors[k]!);
+      quad(-12, -9, -7, -4, colors[2]!);
+      quad(-12, 4, -7, 9, colors[3]!);
+      break;
+    }
     case DECOR.flowers: {
       const colors = ['#f2d14b', '#e8607a', '#ffffff', '#b07ce0'];
       const r = rand(7);
@@ -119,8 +158,29 @@ function drawMarking(ctx: CanvasRenderingContext2D, ox: number, oy: number, mark
   }
 }
 
+/** Rails de tram par code : (axe du rail, côté de la case : a = bord positif). */
+const TRAM_RAILS: Record<string, ['x' | 'y', 'a' | 'b'][]> = {
+  [DECOR.tramXa]: [['x', 'a']],
+  [DECOR.tramXb]: [['x', 'b']],
+  [DECOR.tramYa]: [['y', 'a']],
+  [DECOR.tramYb]: [['y', 'b']],
+  [DECOR.tramXaYa]: [['x', 'a'], ['y', 'a']],
+  [DECOR.tramXaYb]: [['x', 'a'], ['y', 'b']],
+  [DECOR.tramXbYa]: [['x', 'b'], ['y', 'a']],
+  [DECOR.tramXbYb]: [['x', 'b'], ['y', 'b']],
+};
+
+const ROAD_MARKS = [
+  DECOR.laneX,
+  DECOR.laneY,
+  DECOR.crossingX,
+  DECOR.crossingY,
+  DECOR.railCrossing,
+  ...Object.keys(TRAM_RAILS),
+];
+
 /** Décors dessinés à plat dans le sol (le reste est en relief, voir les props). */
-const FLAT_DECOR = new Set<string>([DECOR.laneX, DECOR.laneY, DECOR.crossingX, DECOR.crossingY, DECOR.flowers]);
+const FLAT_DECOR = new Set<string>([...ROAD_MARKS, DECOR.flowers, DECOR.hopscotch]);
 
 /** Nom de frame du sol pour une case. */
 export function groundFrame(code: string, decor: string): string {
@@ -129,9 +189,10 @@ export function groundFrame(code: string, decor: string): string {
 
 const GROUND_FRAMES = new Set<string>([
   ...Object.keys(GROUND_COLORS),
-  ...[TILE.road, TILE.majorRoad].flatMap((c) => [DECOR.laneX, DECOR.laneY, DECOR.crossingX, DECOR.crossingY].map((m) => c + m)),
+  ...[TILE.road, TILE.majorRoad].flatMap((c) => ROAD_MARKS.map((m) => c + m)),
   TILE.grass + DECOR.flowers,
   TILE.pedestrian + DECOR.flowers,
+  TILE.yard + DECOR.hopscotch,
 ]);
 
 /** Atlas des sols : une frame par code de case. */
@@ -150,83 +211,9 @@ export function createGroundTextures(textures: Phaser.Textures.TextureManager): 
   textures.addCanvas(MARKER_TEXTURE, m.canvas);
 }
 
-export function buildingTextureKey(code: string, levels: number): string {
-  return `bld-${code}-${levels}`;
-}
-
-/** Bloc d'immeuble d'une case, avec fenêtres sur les deux faces visibles. */
-export function ensureBuildingTexture(textures: Phaser.Textures.TextureManager, code: string, levels: number): string {
-  const key = buildingTextureKey(code, levels);
-  if (textures.exists(key)) return key;
-  const color = BUILDING_COLORS[code] ?? BUILDING_COLORS[TILE.building]!;
-  const heightPx = levels * LEVEL_PX;
-  const w = TILE_W + 2;
-  const h = TILE_H + heightPx + 2;
-  const { canvas, ctx } = makeCanvas(w, h);
-  // Origine : centre du losange au sol.
-  const ox = w / 2;
-  const oy = h - TILE_H / 2 - 1;
-  const c = boxColors(color);
-  const p = (x: number, y: number, z: number) => project(ox, oy, x, y, z);
-
-  // Faces
-  polygon(ctx, [p(-16, 16, 0), p(16, 16, 0), p(16, 16, heightPx), p(-16, 16, heightPx)], c.left);
-  polygon(ctx, [p(16, -16, 0), p(16, 16, 0), p(16, 16, heightPx), p(16, -16, heightPx)], c.right);
-
-  // Fenêtres : 2 par étage et par face.
-  const win = (face: 'left' | 'right', u: number, z: number) => {
-    const ww = 7;
-    const wh = 5;
-    const pts: [number, number][] =
-      face === 'left'
-        ? [p(u, 16, z), p(u + ww, 16, z), p(u + ww, 16, z + wh), p(u, 16, z + wh)]
-        : [p(16, u, z), p(16, u + ww, z), p(16, u + ww, z + wh), p(16, u, z + wh)];
-    polygon(ctx, pts, face === 'left' ? shade(WINDOW_COLOR, 1.1) : shade(WINDOW_COLOR, 0.9));
-  };
-  for (let lv = 0; lv < levels; lv++) {
-    const z = lv * LEVEL_PX + 2;
-    for (const u of [-11, 4]) {
-      win('left', u, z);
-      win('right', u, z);
-    }
-  }
-
-  // Commerces : store rayé au-dessus du rez-de-chaussée.
-  if (code === TILE.commercial) {
-    const awning = [0xd94f3d, 0x3b6ea8, 0x4e9a5b, 0xe0a530][levels % 4]!;
-    const z0 = LEVEL_PX - 1;
-    for (let k = 0; k < 4; k++) {
-      const fill = k % 2 === 0 ? shade(awning, 1) : '#f4efe6';
-      const u0 = -16 + k * 8;
-      polygon(ctx, [p(u0, 16, z0), p(u0 + 8, 16, z0), p(u0 + 8, 19, z0 - 3), p(u0, 19, z0 - 3)], fill);
-      polygon(ctx, [p(16, u0, z0), p(16, u0 + 8, z0), p(19, u0 + 8, z0 - 3), p(19, u0, z0 - 3)], fill);
-    }
-  }
-
-  // Toit
-  const roof = ROOF_COLORS[code];
-  polygon(ctx, [p(-16, -16, heightPx), p(16, -16, heightPx), p(16, 16, heightPx), p(-16, 16, heightPx)], roof ? shade(roof, 1) : c.top);
-  // Arêtes légères pour l'effet « bloc »
-  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(...p(16, 16, 0));
-  ctx.lineTo(...p(16, 16, heightPx));
-  ctx.stroke();
-
-  textures.addCanvas(key, canvas);
-  return key;
-}
-
-/** Décalage vertical de l'origine d'un bloc (pour `setOrigin`). */
-export function buildingOriginY(levels: number): number {
-  const h = TILE_H + levels * LEVEL_PX + 2;
-  return (h - TILE_H / 2 - 1) / h;
-}
-
 // ---------- Objets du décor en relief ----------
 
-export const PROP_DECOR = new Set<string>([DECOR.tree, DECOR.lamp, DECOR.bench]);
+export const PROP_DECOR = new Set<string>([DECOR.tree, DECOR.lamp, DECOR.bench, DECOR.flag, DECOR.shelter, DECOR.hoop]);
 const PROP_W = 48;
 const PROP_H = 72;
 /** Pied de l'objet dans la texture (pour `setOrigin`). */
@@ -262,6 +249,27 @@ export function ensurePropTexture(textures: Phaser.Textures.TextureManager, deco
     box(-1, -1, 0, 1, 1, 30, 0x3a3f4a);
     box(-3, -3, 30, 3, 3, 33, 0x3a3f4a);
     box(-2, -2, 28, 2, 2, 30, 0xffe9a8);
+  } else if (decor === DECOR.flag) {
+    // Drapeau tricolore sur son mât.
+    box(-0.6, -0.6, 0, 0.6, 0.6, 26, 0xdcdcdc);
+    const flag = (x0: number, x1: number, color: string) =>
+      polygon(ctx, [project(ox, oy, x0, 0, 25), project(ox, oy, x1, 0, 25), project(ox, oy, x1, 0, 18), project(ox, oy, x0, 0, 18)], color);
+    flag(0.6, 4.5, '#1f4ea8');
+    flag(4.5, 8.5, '#ffffff');
+    flag(8.5, 12.5, '#e1373c');
+  } else if (decor === DECOR.shelter) {
+    // Abri de tram : poteaux, vitre, toit et plaque « T1 ».
+    box(-10, -6, 0, -9, -5, 20, 0x5b6470);
+    box(9, -6, 0, 10, -5, 20, 0x5b6470);
+    box(-10, -7, 4, 10, -6, 19, 0xbcd6e6);
+    box(-12, -8, 20, 12, 4, 22, 0x2f6fb5);
+    box(10, 2, 0, 11, 3, 26, 0x5b6470);
+    box(8, 2, 22, 14, 3, 28, 0x2f6fb5);
+  } else if (decor === DECOR.hoop) {
+    // Panier de basket.
+    box(-1, -1, 0, 1, 1, 30, 0x5b6470);
+    box(-6, 1, 24, 6, 2, 33, 0xffffff);
+    box(-2.5, 2, 24, 2.5, 6, 25, 0xf07a2a);
   } else if (decor === DECOR.bench) {
     box(-8, -3, 0, -6, 3, 4, 0x3a3f4a);
     box(6, -3, 0, 8, 3, 4, 0x3a3f4a);

@@ -30,6 +30,10 @@ export class MapGrid {
     return this.map.decor[y]?.[x] ?? '.';
   }
 
+  shapeAt(x: number, y: number): string {
+    return this.map.shapes[y]?.[x] ?? '.';
+  }
+
   levelsAt(x: number, y: number): number {
     return Number(this.map.levels[y]?.[x] ?? '0');
   }
