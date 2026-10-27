@@ -17,9 +17,12 @@ et on demande à l'utilisateur plutôt que d'inventer.
 ## Stack
 
 - Monorepo **pnpm workspaces**, **TypeScript strict** partout.
-- `apps/client` : **Phaser 3** + **Vite** (rendu isométrique 2D, mobile + PC).
-- `apps/server` : **Node.js** + **Colyseus** (temps réel) + **Fastify** (API REST :
-  comptes, agence immobilière, achats, webhooks Stripe).
+- `apps/client` : **Phaser 3.90** + **Vite** (rendu isométrique 2D, mobile + PC).
+  Interface (menus, HUD) en DOM/CSS par-dessus le canvas.
+- `apps/server` : **Node.js** + **Colyseus 0.16** (temps réel) + **Fastify** (API REST :
+  comptes, agence immobilière, achats, webhooks Stripe), sur le même serveur HTTP.
+  Versions majeures de Phaser et Colyseus figées volontairement : ne pas monter
+  de version sans accord.
 - `packages/shared` : types, schémas de messages (validation **zod**), formules
   de jeu pures et **configuration d'équilibrage**.
 - Base : **PostgreSQL** via **Drizzle ORM** (migrations versionnées).
@@ -107,6 +110,30 @@ l'argent réel, stores Apple/Google.
 8. Famille, vieillissement, événements aléatoires, club de foot.
 9. Monnaie premium (Stripe) et pages légales.
 
+## Structure
+
+```
+apps/client/src      game/ (scène, avatars) · render/ (textures voxel générées en code)
+                     ui/ (écrans DOM, HUD) · net/ (API REST)
+apps/server/src      api/ (routes REST) · domain/ (logique métier) · rooms/ (Colyseus)
+                     db/ (schéma Drizzle, migrations, seed) · drizzle/ (SQL généré)
+packages/shared/src  config/ (ÉQUILIBRAGE) · time/ · formulas/ · map/ · protocol/
+packages/shared/maps cartes de quartier JSON générées depuis OSM
+tools/osm-import     OSM → grille isométrique
+```
+
+- Identifiant de quartier = clé globale `<ville>:<quartier>` (ex. `noisy-le-sec:centre-ville-mairie`).
+- Tout mouvement d'argent passe par `recordLedgerEntry` (`apps/server/src/domain/ledger.ts`).
+
 ## Commandes
 
-À compléter quand le projet sera initialisé (install, dev, test, lint, migrations).
+```bash
+pnpm install
+docker compose up -d          # PostgreSQL local (ou tout Postgres 16 + DATABASE_URL)
+cp .env.example .env
+pnpm dev                      # serveur (2567, migrations + seed auto) + client (5173)
+pnpm test                     # tests ; ceux sur base réelle tournent si DATABASE_URL est défini
+pnpm typecheck
+pnpm db:generate              # après modification de apps/server/src/db/schema.ts
+pnpm map:fetch && pnpm map:build   # re-télécharger / régénérer les cartes OSM
+```

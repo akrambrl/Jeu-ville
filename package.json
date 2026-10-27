@@ -1,0 +1,31 @@
+{
+  "name": "jeu-ville",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @jeu-ville/server --filter @jeu-ville/client dev",
+    "dev:server": "pnpm --filter @jeu-ville/server dev",
+    "dev:client": "pnpm --filter @jeu-ville/client dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter @jeu-ville/server db:migrate",
+    "db:generate": "pnpm --filter @jeu-ville/server db:generate",
+    "map:fetch": "pnpm --filter @jeu-ville/osm-import fetch",
+    "map:build": "pnpm --filter @jeu-ville/osm-import build-map"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@jeu-ville/osm-import",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "tsx src/fetch.ts",
+    "build-map": "tsx src/build.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@jeu-ville/shared": "workspace:*",
+    "fast-xml-parser": "^5.3.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

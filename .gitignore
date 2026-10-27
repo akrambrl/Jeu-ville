@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+# Données OSM brutes (re-téléchargeables via `pnpm map:fetch`)
+tools/osm-import/data/*.osm

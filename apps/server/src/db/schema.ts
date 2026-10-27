@@ -1,0 +1,111 @@
+import { sql } from 'drizzle-orm';
+import {
+  bigint,
+  bigserial,
+  boolean,
+  check,
+  index,
+  pgTable,
+  real,
+  smallint,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+
+export const cities = pgTable('cities', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  unlocked: boolean('unlocked').notNull().default(false),
+});
+
+export const districts = pgTable('districts', {
+  id: text('id').primaryKey(),
+  cityId: text('city_id')
+    .notNull()
+    .references(() => cities.id),
+  name: text('name').notNull(),
+});
+
+export const players = pgTable(
+  'players',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pseudo: text('pseudo').notNull(),
+    /** Hash SHA-256 du jeton de session (le jeton lui-même n'est jamais stocké). */
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('players_pseudo_lower_idx').on(sql`lower(${t.pseudo})`)],
+);
+
+export const dwellings = pgTable(
+  'dwellings',
+  {
+    /** `<quartier>:<bâtiment>:<n°>` */
+    id: text('id').primaryKey(),
+    districtId: text('district_id')
+      .notNull()
+      .references(() => districts.id),
+    buildingId: text('building_id').notNull(),
+    buildingName: text('building_name').notNull(),
+    kind: text('kind').notNull(),
+    weeklyRentCents: bigint('weekly_rent_cents', { mode: 'number' }).notNull(),
+    /** Locataire actuel. Unique : un perso n'a qu'un logement, un logement qu'un locataire. */
+    tenantCharacterId: uuid('tenant_character_id').unique(),
+  },
+  (t) => [index('dwellings_district_kind_idx').on(t.districtId, t.kind)],
+);
+
+export const characters = pgTable(
+  'characters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .unique()
+      .references(() => players.id),
+    name: text('name').notNull(),
+    sex: text('sex').notNull(),
+    baseLook: smallint('base_look').notNull(),
+    skinTone: smallint('skin_tone').notNull(),
+    hairColor: smallint('hair_color').notNull(),
+    bodyType: smallint('body_type').notNull(),
+    cityId: text('city_id')
+      .notNull()
+      .references(() => cities.id),
+    districtId: text('district_id')
+      .notNull()
+      .references(() => districts.id),
+    dwellingId: text('dwelling_id').references(() => dwellings.id),
+    moneyCents: bigint('money_cents', { mode: 'number' }).notNull(),
+    hunger: real('hunger').notNull(),
+    hygiene: real('hygiene').notNull(),
+    appearance: real('appearance').notNull(),
+    health: real('health').notNull(),
+    gaugesUpdatedAt: timestamp('gauges_updated_at', { withTimezone: true }).notNull(),
+    posX: real('pos_x').notNull(),
+    posY: real('pos_y').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('characters_money_non_negative', sql`${t.moneyCents} >= 0`)],
+);
+
+/** Journal de tous les mouvements d'argent : les soldes doivent pouvoir en être recalculés. */
+export const ledgerEntries = pgTable(
+  'ledger_entries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id),
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    balanceAfterCents: bigint('balance_after_cents', { mode: 'number' }).notNull(),
+    reason: text('reason').notNull(),
+    idempotencyKey: text('idempotency_key').unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('ledger_character_idx').on(t.characterId, t.createdAt)],
+);
