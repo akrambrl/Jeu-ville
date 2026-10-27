@@ -138,6 +138,11 @@ function drawMarking(ctx: CanvasRenderingContext2D, ox: number, oy: number, mark
     case DECOR.railCrossing:
       for (const y of [-6, 6]) quad(-17, y - 0.8, 17, y + 0.8, '#8d939c');
       break;
+    case DECOR.parking:
+      // Lignes de places de stationnement.
+      for (const x of [-16, 15]) quad(x, -14, x + 1.2, 14, white);
+      quad(-16, 13, 16.2, 14.2, white);
+      break;
     case DECOR.hopscotch: {
       const colors = ['#f2d14b', '#e8607a', '#5fb3e0', '#7fcf7a'];
       for (let k = 0; k < 4; k++) quad(-12 + k * 6, -3, -7 + k * 6, 3, colors[k]!);
@@ -180,7 +185,7 @@ const ROAD_MARKS = [
 ];
 
 /** Décors dessinés à plat dans le sol (le reste est en relief, voir les props). */
-const FLAT_DECOR = new Set<string>([...ROAD_MARKS, DECOR.flowers, DECOR.hopscotch]);
+const FLAT_DECOR = new Set<string>([...ROAD_MARKS, DECOR.flowers, DECOR.hopscotch, DECOR.parking]);
 
 /** Nom de frame du sol pour une case. */
 export function groundFrame(code: string, decor: string): string {
@@ -193,6 +198,7 @@ const GROUND_FRAMES = new Set<string>([
   TILE.grass + DECOR.flowers,
   TILE.pedestrian + DECOR.flowers,
   TILE.yard + DECOR.hopscotch,
+  TILE.pedestrian + DECOR.parking,
 ]);
 
 /** Atlas des sols : une frame par code de case. */
@@ -213,7 +219,7 @@ export function createGroundTextures(textures: Phaser.Textures.TextureManager): 
 
 // ---------- Objets du décor en relief ----------
 
-export const PROP_DECOR = new Set<string>([DECOR.tree, DECOR.lamp, DECOR.bench, DECOR.flag, DECOR.shelter, DECOR.hoop]);
+export const PROP_DECOR = new Set<string>([DECOR.tree, DECOR.lamp, DECOR.bench, DECOR.flag, DECOR.shelter, DECOR.hoop, DECOR.car, DECOR.policeCar]);
 const PROP_W = 48;
 const PROP_H = 72;
 /** Pied de l'objet dans la texture (pour `setOrigin`). */
@@ -270,6 +276,25 @@ export function ensurePropTexture(textures: Phaser.Textures.TextureManager, deco
     box(-1, -1, 0, 1, 1, 30, 0x5b6470);
     box(-6, 1, 24, 6, 2, 33, 0xffffff);
     box(-2.5, 2, 24, 2.5, 6, 25, 0xf07a2a);
+  } else if (decor === DECOR.car || decor === DECOR.policeCar) {
+    // Voiture garée (orientée selon y, nez vers la caméra).
+    const police = decor === DECOR.policeCar;
+    const body = police ? 0xf4f5f7 : [0xd94f3d, 0x3b6ea8, 0xe9e9e9, 0x2f2f38, 0xe0a530][variant % 5]!;
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, 15, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    for (const [x, y] of [[-7, -10], [5, -10], [-7, 8], [5, 8]] as const) box(x, y, 0, x + 2, y + 3, 4, 0x1d1d22);
+    box(-7, -13, 2, 7, 13, 8, body);
+    box(-6, -7, 8, 6, 6, 13, police ? 0xf4f5f7 : body);
+    // Vitres
+    polygon(ctx, [project(ox, oy, -5, 6, 8.5), project(ox, oy, 5, 6, 8.5), project(ox, oy, 5, 6, 12.5), project(ox, oy, -5, 6, 12.5)], '#2c3b4d');
+    polygon(ctx, [project(ox, oy, 6, -6, 8.5), project(ox, oy, 6, 5, 8.5), project(ox, oy, 6, 5, 12.5), project(ox, oy, 6, -6, 12.5)], '#3a4d63');
+    if (police) {
+      polygon(ctx, [project(ox, oy, 7, -12, 3.5), project(ox, oy, 7, 12, 3.5), project(ox, oy, 7, 12, 5.5), project(ox, oy, 7, -12, 5.5)], '#1f3f8c');
+      box(-3, -2, 13, -0.5, 1, 15, 0x2f6fe0);
+      box(0.5, -2, 13, 3, 1, 15, 0xe1373c);
+    }
   } else if (decor === DECOR.bench) {
     box(-8, -3, 0, -6, 3, 4, 0x3a3f4a);
     box(6, -3, 0, 8, 3, 4, 0x3a3f4a);

@@ -10,7 +10,7 @@ import {
   ensurePropTexture,
   groundFrame,
 } from '../render/cityTextures.js';
-import { EDGE, buildingOriginY, ensureBuildingTexture, roofTopPx } from '../render/buildingTextures.js';
+import { EDGE, buildingOriginY, ensureBuildingTexture, roofTopPx, type FrontInfo } from '../render/buildingTextures.js';
 import { SchoolKids } from './SchoolKids.js';
 import { TransitLayer } from './Transit.js';
 import { LEVEL_PX, TILE_H, TILE_W, screenToTile, tileToScreen } from '../render/iso.js';
@@ -26,9 +26,11 @@ export interface CitySceneData {
 }
 
 const DRAG_THRESHOLD_PX = 8;
+/** Commerces de rez-de-chaussée : leurs étiquettes cèdent la place aux grands lieux. */
+const STOREFRONT_KINDS: ReadonlySet<string> = new Set(['bakery', 'pharmacy', 'fastfood', 'police']);
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2;
-const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market', 'school', 'tram', 'bakery']);
+const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market', 'school', 'tram', 'bakery', 'pharmacy', 'fastfood', 'police', 'supermarket']);
 
 export class CityScene extends Phaser.Scene {
   private ctx!: CitySceneData;
@@ -119,6 +121,7 @@ export class CityScene extends Phaser.Scene {
 
   private buildBuildings(): void {
     const { map } = this.ctx;
+    const fronts = new Map<string, FrontInfo>(map.storefronts.map((f) => [`${f.x},${f.y}`, f]));
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const code = this.grid.tileAt(x, y);
@@ -134,7 +137,8 @@ export class CityScene extends Phaser.Scene {
           (same(x + 1, y) ? 0 : EDGE.east);
         // Une couleur par îlot pour les immeubles.
         const variant = (Math.floor(x / 10) * 7 + Math.floor(y / 10) * 13) % 5;
-        const key = ensureBuildingTexture(this.textures, code, levels, this.grid.shapeAt(x, y), edges, variant);
+        const front = fronts.get(`${x},${y}`);
+        const key = ensureBuildingTexture(this.textures, code, levels, this.grid.shapeAt(x, y), edges, variant, front && { kind: front.kind, sign: front.sign });
         const p = tileToScreen(x, y);
         this.add.image(p.x, p.y, key).setOrigin(0.5, buildingOriginY(levels)).setDepth(x + y);
       }
@@ -178,11 +182,15 @@ export class CityScene extends Phaser.Scene {
   }
 
   private buildLabels(): void {
-    for (const poi of this.ctx.map.pois) {
-      if (!POI_LABELS.has(poi.kind)) continue;
+    // Les grands lieux d'abord ; une étiquette qui en chevauche une autre est remontée.
+    const pois = this.ctx.map.pois
+      .filter((poi) => POI_LABELS.has(poi.kind))
+      .sort((a, b) => Number(STOREFRONT_KINDS.has(a.kind)) - Number(STOREFRONT_KINDS.has(b.kind)));
+    const placed: Phaser.Geom.Rectangle[] = [];
+    for (const poi of pois) {
       const p = tileToScreen(poi.x, poi.y);
       const levels = this.grid.levelsAt(poi.x, poi.y);
-      this.add
+      const label = this.add
         .text(p.x, p.y - levels * LEVEL_PX - 18, poi.name, {
           fontFamily: 'system-ui, sans-serif',
           fontSize: poi.kind === 'townhall' ? '13px' : '11px',
@@ -194,6 +202,12 @@ export class CityScene extends Phaser.Scene {
         .setOrigin(0.5, 1)
         .setResolution(2)
         .setDepth(1e6 - 1);
+      let bounds = label.getBounds();
+      for (let tries = 0; tries < 4 && placed.some((r) => Phaser.Geom.Intersects.RectangleToRectangle(r, bounds)); tries++) {
+        label.y -= bounds.height + 2;
+        bounds = label.getBounds();
+      }
+      placed.push(bounds);
     }
   }
 

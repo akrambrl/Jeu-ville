@@ -10,12 +10,14 @@
  * - le faisceau ferré et la ligne de tram réels, simplifiés sur la grille.
  */
 import {
+  CITY_LIMITS,
   DECOR,
   SHAPE,
   TILE,
   type DistrictMap,
   type MapPoi,
   type StarterBuilding,
+  type Storefront,
   type StreetLabel,
   type TilePoint,
   type Transit,
@@ -39,6 +41,38 @@ const MIN_RAIL_CROSSINGS = 2;
 const STARTER_BLOCKS = 3;
 const MAX_SCHOOLS = 3;
 const MAX_BAKERIES = 3;
+const MAX_FAST_FOODS = 4;
+const MAX_SUPERMARKETS = 2;
+/** Commerces de rez-de-chaussée par îlot, au plus. */
+const MAX_STOREFRONTS_PER_BLOCK = 3;
+
+/**
+ * Pas de marques déposées dans le jeu (ces commerces deviendront rachetables
+ * par des joueurs) : les enseignes de chaînes prennent un nom générique.
+ */
+function displayName(p: RawPoi): string {
+  if (!p.brand) return p.name;
+  const cuisine = p.cuisine ?? '';
+  if (p.kind === 'supermarket') return 'Supermarché';
+  if (/pizza/.test(cuisine)) return 'Pizzeria';
+  if (/mexican|tacos/.test(cuisine)) return 'Tacos';
+  if (/chicken/.test(cuisine)) return 'Poulet frit';
+  if (/burger/.test(cuisine)) return 'Burger';
+  return 'Restauration rapide';
+}
+
+/** Texte de l'enseigne d'un fast-food selon sa cuisine. */
+function fastFoodSign(p: RawPoi): string {
+  const c = p.cuisine ?? '';
+  if (/kebab/.test(c)) return 'KEBAB';
+  if (/pizza/.test(c)) return 'PIZZA';
+  if (/mexican|tacos/.test(c)) return 'TACOS';
+  if (/chicken/.test(c)) return 'CHICKEN';
+  if (/burger/.test(c)) return 'BURGER';
+  return 'SNACK';
+}
+
+const isCommissariat = (p: RawPoi) => p.kind === 'police' && !/municipale/i.test(p.name);
 
 const STREET_CLASSES: Record<string, string> = {
   primary: TILE.majorRoad,
@@ -61,6 +95,8 @@ export interface RawPoi {
   name: string;
   x: number;
   y: number;
+  brand?: string;
+  cuisine?: string;
 }
 
 /** Carte OSM rastérisée (cases de 8 m), voir build.ts. */
@@ -85,6 +121,8 @@ type BlockKind =
   | 'worship'
   | 'school'
   | 'station'
+  | 'police'
+  | 'supermarket'
   | 'rail';
 
 interface Edge {
@@ -366,16 +404,23 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     worship: 'worship',
     school: 'school',
     park: 'park',
+    police: 'police',
+    supermarket: 'supermarket',
   };
-  const priority: MapPoi['kind'][] = ['townhall', 'station', 'worship', 'school', 'park'];
+  const priority: MapPoi['kind'][] = ['townhall', 'station', 'police', 'supermarket', 'worship', 'school', 'park'];
   const schoolsFirst = (p: RawPoi) => (/collège|groupe scolaire/i.test(p.name) ? 0 : 1);
   const sortedPois = raw.pois
-    .filter((p) => BLOCK_POIS[p.kind])
+    // La police municipale est un simple bureau au rez-de-chaussée, pas un îlot.
+    .filter((p) => BLOCK_POIS[p.kind] && (p.kind !== 'police' || isCommissariat(p)))
     .sort((a, b) => priority.indexOf(a.kind) - priority.indexOf(b.kind) || schoolsFirst(a) - schoolsFirst(b));
   const claimed = new Map<string, RawPoi>();
   let schools = 0;
+  let supermarkets = 0;
+  let commissariats = 0;
   for (const p of sortedPois) {
     if (p.kind === 'school' && schools >= MAX_SCHOOLS) continue;
+    if (p.kind === 'supermarket' && supermarkets >= MAX_SUPERMARKETS) continue;
+    if (p.kind === 'police' && commissariats >= CITY_LIMITS.policeStations) continue;
     let ci = Math.min(nx - 1, Math.max(0, Math.floor(p.x / PITCH)));
     let cj = Math.min(ny - 1, Math.max(0, Math.floor(p.y / PITCH)));
     // La gare se place juste au sud du faisceau ferré, face aux voies.
@@ -389,6 +434,8 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     [ci, cj] = free;
     claimed.set(`${ci},${cj}`, p);
     if (p.kind === 'school') schools++;
+    if (p.kind === 'supermarket') supermarkets++;
+    if (p.kind === 'police') commissariats++;
     kinds[cj]![ci] = BLOCK_POIS[p.kind]!;
   }
 
@@ -419,11 +466,11 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
         shape(x + 1, y + 1, SHAPE.roofSouth);
       };
       const poiHere = claimed.get(`${i},${j}`);
-      const addPoi = (center: TilePoint, entrance: TilePoint) => {
+      const addPoi = (center: TilePoint, entrance: TilePoint, name?: string) => {
         if (!poiHere) return;
         pois.push({
           kind: poiHere.kind,
-          name: poiHere.name,
+          name: name ?? displayName(poiHere),
           x: ox + center.x,
           y: oy + center.y,
           entrance: { x: ox + entrance.x, y: oy + entrance.y },
@@ -601,42 +648,95 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           addPoi({ x: 3, y: 2 }, { x: 4, y: 5 });
           break;
         }
+        case 'police': {
+          // Commissariat : bâtiment à bandeau bleu, drapeau, voitures de police garées.
+          fill(1, 1, 6, 3, TILE.police, 3);
+          shape(3, 3, SHAPE.facadeSign);
+          deco(5, 1, DECOR.flag);
+          for (const x of [1, 2, 5, 6]) {
+            deco(x, 5, DECOR.parking);
+          }
+          deco(1, 5, DECOR.policeCar);
+          deco(5, 5, DECOR.policeCar);
+          deco(6, 5, DECOR.car);
+          addPoi({ x: 3, y: 2 }, { x: 3, y: 4 }, 'Commissariat de police');
+          break;
+        }
+        case 'supermarket': {
+          // Grande surface : grand bâtiment bas, entrée vitrée, parking devant.
+          fill(1, 1, 6, 3, TILE.supermarket, 2);
+          shape(3, 3, SHAPE.facadeSign);
+          shape(4, 3, SHAPE.entrance);
+          for (let x = 1; x <= 6; x++) {
+            for (const y of [5, 6]) {
+              deco(x, y, DECOR.parking);
+              if (r(60 + x * 3 + y) < 0.45) deco(x, y, DECOR.car);
+            }
+          }
+          const street = edgeName(hEdges[j + 1]?.[i]) ?? edgeName(vEdges[i + 1]?.[j]);
+          addPoi({ x: 3, y: 2 }, { x: 3, y: 4 }, street ? `Supermarché ${street.replace(/^(Rue|Avenue|Boulevard|Allée) (de la |du |des |de l'|de )?/, '')}` : undefined);
+          break;
+        }
       }
     }
   }
 
-  // ---------- 4. Boulangeries : au rez-de-chaussée d'un immeuble ou commerce proche ----------
+  // ---------- 4. Commerces de rez-de-chaussée : boulangeries, pharmacies, fast-foods, police municipale ----------
 
-  const bakeries = raw.pois.filter((p) => p.kind === 'bakery');
-  const usedBlocks = new Set<string>();
-  for (const p of bakeries) {
-    if (pois.filter((q) => q.kind === 'bakery').length >= MAX_BAKERIES) break;
-    const ci = Math.floor(p.x / PITCH);
-    const cj = Math.floor(p.y / PITCH);
-    const spots: [number, number][] = [[ci, cj], [ci + 1, cj], [ci - 1, cj], [ci, cj + 1], [ci, cj - 1]];
+  const storefronts: Storefront[] = [];
+  const blockStorefronts = new Map<string, number>();
+  const center = pois.find((p) => p.kind === 'townhall') ?? { x: width / 2, y: height / 2 };
+  const byDistance = (list: RawPoi[]) =>
+    [...list].sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y));
+  const wanted: { poi: RawPoi; kind: Storefront['kind']; sign: string; poiKind: MapPoi['kind'] }[] = [
+    ...raw.pois
+      .filter((p) => p.kind === 'bakery')
+      .slice(0, MAX_BAKERIES)
+      .map((poi) => ({ poi, kind: 'bakery' as const, sign: 'BOULANGERIE', poiKind: 'bakery' as const })),
+    // Pharmacies : commerce rare, limité par ville ; on garde les plus centrales.
+    ...byDistance(raw.pois.filter((p) => p.kind === 'pharmacy'))
+      .slice(0, CITY_LIMITS.pharmacies)
+      .map((poi) => ({ poi, kind: 'pharmacy' as const, sign: 'PHARMACIE', poiKind: 'pharmacy' as const })),
+    ...raw.pois
+      .filter((p) => p.kind === 'fastfood')
+      .slice(0, MAX_FAST_FOODS)
+      .map((poi) => ({ poi, kind: 'fastfood' as const, sign: fastFoodSign(poi), poiKind: 'fastfood' as const })),
+    ...raw.pois
+      .filter((p) => p.kind === 'police' && !isCommissariat(p))
+      .map((poi) => ({ poi, kind: 'police' as const, sign: 'POLICE', poiKind: 'police' as const })),
+  ];
+  const canHost = (x: number, y: number) => {
+    const t = tileAt(x, y);
+    return (t === TILE.apartments || t === TILE.commercial) && shapes[y * width + x] === SHAPE.plain;
+  };
+  for (const { poi, kind, sign, poiKind } of wanted) {
+    const ci = Math.floor(poi.x / PITCH);
+    const cj = Math.floor(poi.y / PITCH);
+    // Îlot du commerce réel, puis les îlots voisins (jusqu'à 2 de distance), du plus proche au plus loin.
+    const spots: [number, number][] = [];
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) spots.push([ci + di, cj + dj]);
+    spots.sort((a, b) => Math.hypot(a[0] - ci, a[1] - cj) - Math.hypot(b[0] - ci, b[1] - cj));
     for (const [i, j] of spots) {
-      if (i < 0 || j < 0 || i >= nx || j >= ny || usedBlocks.has(`${i},${j}`)) continue;
+      if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+      if ((blockStorefronts.get(`${i},${j}`) ?? 0) >= MAX_STOREFRONTS_PER_BLOCK) continue;
       const ox = i * PITCH + 2;
       const oy = j * PITCH + 2;
-      // Façade sud de l'îlot (visible), à côté d'un trottoir.
-      const candidates: [number, number][] = [[2, 6], [1, 6], [5, 6], [6, 6], [6, 1]];
-      const spot = candidates.find(([x, y]) => {
-        const t = tileAt(ox + x, oy + y);
-        return (t === TILE.apartments || t === TILE.commercial) && shapes[(oy + y) * width + ox + x] === SHAPE.plain;
-      });
+      // Façades sud et est de l'îlot (visibles), le long d'un trottoir.
+      const candidates: [number, number][] = [[2, 6], [5, 6], [6, 2], [6, 5], [1, 6], [6, 1]];
+      const spot = candidates.find(([x, y]) => canHost(ox + x, oy + y));
       if (!spot) continue;
       const [x, y] = spot;
-      setShape(ox + x, oy + y, SHAPE.bakery);
+      const tilesOf: [number, number][] = [[ox + x, oy + y]];
       // Devanture sur deux cases quand c'est possible.
-      const nx2 = y === 6 ? x + 1 : x;
-      const ny2 = y === 6 ? y : y + 1;
-      const t2 = tileAt(ox + nx2, oy + ny2);
-      if ((t2 === TILE.apartments || t2 === TILE.commercial) && shapes[(oy + ny2) * width + ox + nx2] === SHAPE.plain) {
-        setShape(ox + nx2, oy + ny2, SHAPE.bakery);
+      const second: [number, number] = y === 6 ? [ox + x + 1, oy + y] : [ox + x, oy + y + 1];
+      if (canHost(...second) && second[0] - ox <= 6 && second[1] - oy <= 6) tilesOf.push(second);
+      for (const [tx, ty] of tilesOf) {
+        setShape(tx, ty, SHAPE.storefront);
+        storefronts.push({ x: tx, y: ty, kind, sign });
       }
-      usedBlocks.add(`${i},${j}`);
+      blockStorefronts.set(`${i},${j}`, (blockStorefronts.get(`${i},${j}`) ?? 0) + 1);
       const entrance = y === 6 ? { x: ox + x, y: oy + 7 } : { x: ox + 7, y: oy + y };
-      pois.push({ kind: 'bakery', name: p.name, x: ox + x, y: oy + y, entrance });
+      pois.push({ kind: poiKind, name: displayName(poi), x: ox + x, y: oy + y, entrance });
       break;
     }
   }
@@ -725,7 +825,6 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
   const townhall = pois.find((p) => p.kind === 'townhall') ?? { x: width / 2, y: height / 2 };
   const blockCenter = (b: { i: number; j: number }) => ({ x: b.i * PITCH + 6, y: b.j * PITCH + 6 });
   const starterBlocks = starterCandidates
-    .filter((b) => !usedBlocks.has(`${b.i},${b.j}`))
     .sort((a, b) => {
       const ca = blockCenter(a);
       const cb = blockCenter(b);
@@ -803,6 +902,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     levels: Array.from({ length: height }, (_, y) => Array.from(levels.subarray(y * width, (y + 1) * width)).join('')),
     decor: rows(decor),
     shapes: rows(shapes),
+    storefronts,
     transit: { tram, rail },
     starterBuildings,
     pois,

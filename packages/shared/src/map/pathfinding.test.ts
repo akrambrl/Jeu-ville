@@ -16,6 +16,7 @@ function makeGrid(rows: string[]): MapGrid {
     levels: rows.map((r) => '0'.repeat(r.length)),
     decor: rows.map((r) => '.'.repeat(r.length)),
     shapes: rows.map((r) => '.'.repeat(r.length)),
+    storefronts: [],
     transit: { tram: null, rail: null },
     starterBuildings: [],
     pois: [],

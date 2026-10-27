@@ -219,12 +219,12 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
 
   // 4. Lieux notables.
   const pois: RawPoi[] = [];
-  const addPoi = (kind: RawPoi['kind'], name: string | undefined, p: Pt | null) => {
+  const addPoi = (kind: RawPoi['kind'], name: string | undefined, p: Pt | null, tags: Tags = {}) => {
     if (!name || !p) return;
     if (kind === 'station' && !/gare/i.test(name)) name = `Gare de ${name}`;
     if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) return;
     if (pois.some((q) => q.kind === kind && q.name === name)) return;
-    pois.push({ kind, name, x: p.x, y: p.y });
+    pois.push({ kind, name, x: p.x, y: p.y, brand: tags.brand, cuisine: tags.cuisine });
   };
   const poiKind = (t: Tags): RawPoi['kind'] | null => {
     if (t.amenity === 'townhall') return 'townhall';
@@ -235,18 +235,22 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (t.amenity === 'marketplace') return 'market';
     if (t.shop === 'bakery') return 'bakery';
     if (t.railway === 'tram_stop') return 'tram';
+    if (t.amenity === 'pharmacy') return 'pharmacy';
+    if (t.amenity === 'fast_food') return 'fastfood';
+    if (t.amenity === 'police') return 'police';
+    if (t.shop === 'supermarket') return 'supermarket';
     return null;
   };
   for (const n of osm.nodes.values()) {
     const k = poiKind(n.tags);
     // Une boulangerie sans nom reste une boulangerie.
-    if (k) addPoi(k, n.tags.name ?? (k === 'bakery' ? 'Boulangerie' : undefined), project(n.lat, n.lon));
+    if (k) addPoi(k, n.tags.name ?? (k === 'bakery' ? 'Boulangerie' : undefined), project(n.lat, n.lon), n.tags);
   }
   for (const a of areas) {
     const k = poiKind(a.tags);
     const ring = a.rings[0];
     if (!k || !ring || ring.length === 0) continue;
-    addPoi(k, a.tags.name, { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length });
+    addPoi(k, a.tags.name, { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length }, a.tags);
   }
 
   const rows: string[] = [];

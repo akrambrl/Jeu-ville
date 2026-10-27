@@ -26,10 +26,11 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
   commerces, squares), mairie, églises et écoles à leur place approximative.
 - Vraies architectures : pavillons à toit à deux pans, immeubles à balcons,
   mairie (toit à la Mansart, horloge, fronton, drapeau), églises à clocher,
-  écoles avec cour (enfants qui jouent), boulangeries, gare RER E.
+  écoles avec cour (enfants qui jouent), boulangeries, gare RER E,
+  pharmacies, fast-foods, commissariat (voitures de police), supermarchés avec
+  parking. Pas de marques déposées : les enseignes de chaînes ont un nom générique.
 - Faisceau ferré avec RER animés et tram T1 animé jusqu'à son terminus de la gare.
-- Bouton « Aller à… » : chez moi, la mairie, la gare, le tram, les boulangeries,
-  les squares, les églises, les écoles.
+- Bouton « Aller à… » : chez moi et tous les lieux du quartier.
 - Pseudo + création de personnage (sexe, 6 styles, peau, cheveux, corpulence).
 - Déplacement au clic/toucher (A* côté serveur), plusieurs joueurs visibles.
 - Jauges faim, hygiène, apparence, santé, bonheur, qui baissent même hors ligne.

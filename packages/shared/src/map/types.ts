@@ -22,6 +22,10 @@ export const TILE = {
   industrial: 'I',
   /** Gare (bâtiment voyageurs). */
   station: 'J',
+  /** Commissariat de police. */
+  police: 'N',
+  /** Grande surface. */
+  supermarket: 'U',
   /** Immeuble de la zone d'appartements de départ. */
   starter: 'K',
   /** Cour d'école (praticable). */
@@ -49,6 +53,11 @@ export const DECOR = {
   flag: 'F',
   /** Abri d'arrêt de tram. */
   shelter: 's',
+  /** Voiture garée / voiture de police garée. */
+  car: 'c',
+  policeCar: 'v',
+  /** Places de parking peintes au sol. */
+  parking: 'p',
   /** Panier de basket (cour d'école). */
   hoop: 'k',
   /** Marelle peinte au sol (cour d'école). */
@@ -88,12 +97,14 @@ export const SHAPE = {
   townhallCenter: 'c',
   /** Clocher. */
   belfry: 'b',
-  /** Boulangerie au rez-de-chaussée. */
-  bakery: 'B',
+  /** Commerce au rez-de-chaussée (détails dans `storefronts`). */
+  storefront: 'B',
   /** Enseigne « ÉCOLE ». */
   schoolSign: 'S',
   /** Gare : façade principale avec enseigne RER. */
   stationCenter: 'g',
+  /** Enseigne principale en façade (commissariat, grande surface). */
+  facadeSign: 'G',
 } as const;
 
 export const WALKABLE_TILES: ReadonlySet<string> = new Set([
@@ -115,6 +126,8 @@ export const BUILDING_TILES: ReadonlySet<string> = new Set([
   TILE.worship,
   TILE.industrial,
   TILE.station,
+  TILE.police,
+  TILE.supermarket,
   TILE.starter,
 ]);
 
@@ -132,7 +145,19 @@ export interface StarterBuilding {
 }
 
 export interface MapPoi {
-  kind: 'townhall' | 'station' | 'park' | 'school' | 'worship' | 'market' | 'bakery' | 'tram';
+  kind:
+    | 'townhall'
+    | 'station'
+    | 'park'
+    | 'school'
+    | 'worship'
+    | 'market'
+    | 'bakery'
+    | 'tram'
+    | 'pharmacy'
+    | 'fastfood'
+    | 'police'
+    | 'supermarket';
   name: string;
   /** Centre du lieu (pour l'étiquette). */
   x: number;
@@ -146,6 +171,15 @@ export interface Transit {
   tram: { name: string; path: TilePoint[]; stops: { name: string; at: number }[] } | null;
   /** Voies ferrées : ordonnée (y) de chaque voie, parcourue selon x ; gare (x) où les trains s'arrêtent. */
   rail: { tracks: number[]; stationX: number | null; name: string } | null;
+}
+
+/** Devanture d'un commerce au rez-de-chaussée d'un immeuble. */
+export interface Storefront {
+  x: number;
+  y: number;
+  kind: 'bakery' | 'pharmacy' | 'fastfood' | 'police';
+  /** Texte de l'enseigne (en capitales). */
+  sign: string;
 }
 
 /** Nom de rue écrit sur la chaussée. */
@@ -172,6 +206,8 @@ export interface DistrictMap {
   decor: string[];
   /** Forme des cases de bâtiment (codes SHAPE), mêmes dimensions que `tiles`. */
   shapes: string[];
+  /** Devantures des cases SHAPE.storefront. */
+  storefronts: Storefront[];
   /** Lignes de transport animées (purement visuelles pour l'instant). */
   transit: Transit;
   starterBuildings: StarterBuilding[];

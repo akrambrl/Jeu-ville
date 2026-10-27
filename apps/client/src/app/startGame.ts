@@ -72,11 +72,15 @@ const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; order: numb
   townhall: { icon: '🏛️', kind: 'Mairie', order: 0 },
   station: { icon: '🚉', kind: 'Gare RER E', order: 1 },
   tram: { icon: '🚋', kind: 'Arrêt de tram', order: 2 },
-  bakery: { icon: '🥖', kind: 'Boulangerie', order: 3 },
-  market: { icon: '🧺', kind: 'Marché', order: 4 },
-  park: { icon: '🌳', kind: 'Square', order: 5 },
-  worship: { icon: '⛪', kind: 'Lieu de culte', order: 6 },
-  school: { icon: '🏫', kind: 'École', order: 7 },
+  police: { icon: '👮', kind: 'Police', order: 3 },
+  pharmacy: { icon: '💊', kind: 'Pharmacie', order: 4 },
+  supermarket: { icon: '🛒', kind: 'Grande surface', order: 5 },
+  bakery: { icon: '🥖', kind: 'Boulangerie', order: 6 },
+  fastfood: { icon: '🍔', kind: 'Restauration rapide', order: 7 },
+  market: { icon: '🧺', kind: 'Marché', order: 8 },
+  park: { icon: '🌳', kind: 'Square', order: 9 },
+  worship: { icon: '⛪', kind: 'Lieu de culte', order: 10 },
+  school: { icon: '🏫', kind: 'École', order: 11 },
 };
 
 /** Lieux du quartier proposés dans « Aller à… ». */

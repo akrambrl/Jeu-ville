@@ -107,3 +107,14 @@ export const SERVER = {
   /** Fréquence d'envoi des jauges au joueur connecté (ms). */
   selfSnapshotIntervalMs: 60_000,
 } as const;
+
+/**
+ * Commerces rares : nombre maximum par ville (cahier des charges §10).
+ * Médecins et pharmacies sont tenus par des bots uniquement.
+ */
+export const CITY_LIMITS = {
+  pharmacies: 2,
+  doctors: 2,
+  /** Un commissariat par ville. */
+  policeStations: 1,
+} as const;

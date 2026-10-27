@@ -25,6 +25,8 @@ export const BUILDING_COLORS: Record<string, number> = {
   [TILE.industrial]: 0xb7aea3,
   [TILE.starter]: 0x7fcfc0,
   [TILE.station]: 0xe7d8bf,
+  [TILE.police]: 0xeef1f5,
+  [TILE.supermarket]: 0xf1efe8,
 };
 
 export const ROOF_COLORS: Record<string, number> = {

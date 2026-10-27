@@ -5,7 +5,7 @@
  * deux pans, mairie, église…) sont composés de ces colonnes.
  */
 import Phaser from 'phaser';
-import { SHAPE, TILE } from '@jeu-ville/shared';
+import { SHAPE, TILE, type Storefront } from '@jeu-ville/shared';
 import { BUILDING_COLORS, ROOF_COLORS, WINDOW_COLOR } from './palette.js';
 import { LEVEL_PX, TILE_H, TILE_W, makeCanvas, polygon, project, shade } from './iso.js';
 
@@ -25,8 +25,18 @@ export const EDGE = { north: 1, south: 2, west: 4, east: 8, all: 15 } as const;
 /** Couleurs possibles des immeubles, variées d'un îlot à l'autre. */
 const APARTMENT_COLORS = [0xd9dde4, 0xeadbc8, 0xf1e4cf, 0xdbe5d8, 0xead6d2];
 
-export function buildingTextureKey(code: string, levels: number, shape: string, edges: number, variant: number): string {
-  return `bld-${code}-${levels}-${shape}-${edges}-${variant}`;
+/** Devanture à dessiner sur une case SHAPE.storefront. */
+export type FrontInfo = Pick<Storefront, 'kind' | 'sign'>;
+
+export function buildingTextureKey(
+  code: string,
+  levels: number,
+  shape: string,
+  edges: number,
+  variant: number,
+  front?: FrontInfo,
+): string {
+  return `bld-${code}-${levels}-${shape}-${edges}-${variant}${front ? `-${front.kind}-${front.sign}` : ''}`;
 }
 
 function textureHeight(levels: number): number {
@@ -157,8 +167,9 @@ export function ensureBuildingTexture(
   shape: string,
   edges: number = EDGE.all,
   variant = 0,
+  front?: FrontInfo,
 ): string {
-  const key = buildingTextureKey(code, levels, shape, edges, variant);
+  const key = buildingTextureKey(code, levels, shape, edges, variant, front);
   if (textures.exists(key)) return key;
 
   const H = levels * LEVEL_PX;
@@ -186,10 +197,16 @@ export function ensureBuildingTexture(
     case TILE.starter:
     case TILE.building:
     case TILE.industrial:
-      drawApartments(g, code, shape, levels, H, base);
+      drawApartments(g, code, shape, levels, H, base, front);
       break;
     case TILE.commercial:
-      drawShop(g, shape, levels, H, base);
+      drawShop(g, shape, levels, H, base, front);
+      break;
+    case TILE.police:
+      drawPolice(g, shape, levels, H, base);
+      break;
+    case TILE.supermarket:
+      drawSupermarket(g, shape, H, base);
       break;
     case TILE.townhall:
       drawTownhall(g, shape, levels, H, base, wall);
@@ -281,7 +298,7 @@ function drawHouse(g: Painter, shape: string, H: number, wall: (f: Face) => stri
 
 // ---------- Immeuble : soubassement, balcons, halls, boulangerie ----------
 
-function drawApartments(g: Painter, code: string, shape: string, levels: number, H: number, base: number): void {
+function drawApartments(g: Painter, code: string, shape: string, levels: number, H: number, base: number, front?: FrontInfo): void {
   const faces: Face[] = ['L', 'R'];
   // Soubassement plus sombre.
   for (const f of faces) g.quad(f, -16, 16, 0, LEVEL_PX - 1, shade(base, f === 'L' ? 0.82 : 0.68));
@@ -296,8 +313,8 @@ function drawApartments(g: Painter, code: string, shape: string, levels: number,
       }
     }
   }
-  if (shape === SHAPE.bakery) {
-    drawBakeryFront(g);
+  if (shape === SHAPE.storefront && front) {
+    drawStorefront(g, front);
   } else {
     for (const f of faces) {
       if (shape === SHAPE.entrance) {
@@ -313,27 +330,110 @@ function drawApartments(g: Painter, code: string, shape: string, levels: number,
   g.flatRoof(H, base);
 }
 
-function drawBakeryFront(g: Painter): void {
+function drawStorefront(g: Painter, front: FrontInfo): void {
   for (const f of ['L', 'R'] as Face[]) {
-    // Devanture en bois, vitrine dorée (pains), store rayé et grande enseigne.
-    g.quad(f, -16, 16, 0, LEVEL_PX + 7, '#6e3f22');
-    g.quad(f, -13, 13, 1, 6, '#f3c97a');
-    for (const u of [-10, -4, 2, 8]) g.quad(f, u, u + 4, 1.5, 3, '#c98a3a');
-    g.quad(f, -1, 1, 0, 6, '#6e3f22');
-    for (let k = 0; k < 4; k++) {
-      g.quad(f, -16 + k * 8, -8 + k * 8, LEVEL_PX - 2, LEVEL_PX, k % 2 ? '#f6ecd8' : '#b5763a', 4);
+    switch (front.kind) {
+      case 'bakery':
+        // Devanture en bois, vitrine dorée (pains), store rayé et grande enseigne.
+        g.quad(f, -16, 16, 0, LEVEL_PX + 7, '#6e3f22');
+        g.quad(f, -13, 13, 1, 6, '#f3c97a');
+        for (const u of [-10, -4, 2, 8]) g.quad(f, u, u + 4, 1.5, 3, '#c98a3a');
+        g.quad(f, -1, 1, 0, 6, '#6e3f22');
+        for (let k = 0; k < 4; k++) g.quad(f, -16 + k * 8, -8 + k * 8, LEVEL_PX - 2, LEVEL_PX, k % 2 ? '#f6ecd8' : '#b5763a', 4);
+        g.quad(f, -15.5, 15.5, LEVEL_PX + 0.5, LEVEL_PX + 6.5, '#4a2614', 0.5);
+        g.text(f, 0, LEVEL_PX + 3.5, front.sign, '#ffd98a', 5.4);
+        break;
+      case 'pharmacy': {
+        // Façade blanche, vitrine, bandeau vert et croix verte lumineuse.
+        g.quad(f, -16, 16, 0, LEVEL_PX + 7, '#f4f7f4');
+        g.quad(f, -13, 13, 1, 6, '#bfe3d0');
+        g.quad(f, -1, 1, 0, 6, '#2f9e5b');
+        g.quad(f, -15.5, 15.5, LEVEL_PX + 0.5, LEVEL_PX + 6.5, '#2f9e5b', 0.5);
+        g.text(f, -3, LEVEL_PX + 3.5, front.sign, '#ffffff', 4.6);
+        // Croix (en saillie, côté droit de l'enseigne).
+        g.quad(f, 10, 15, LEVEL_PX + 2.5, LEVEL_PX + 4.5, '#3fe07a', 1.5);
+        g.quad(f, 11.5, 13.5, LEVEL_PX + 1, LEVEL_PX + 6, '#3fe07a', 1.5);
+        break;
+      }
+      case 'fastfood':
+        // Façade rouge, grande vitrine, enseigne jaune.
+        g.quad(f, -16, 16, 0, LEVEL_PX + 7, '#c8322b');
+        g.quad(f, -13, 13, 1, 6, '#ffd36b');
+        g.quad(f, -12, 12, 1.5, 5.5, '#2c3b4d');
+        g.quad(f, -1, 1, 0, 6, '#c8322b');
+        for (let k = 0; k < 4; k++) g.quad(f, -16 + k * 8, -8 + k * 8, LEVEL_PX - 2, LEVEL_PX, k % 2 ? '#ffffff' : '#c8322b', 4);
+        g.quad(f, -15.5, 15.5, LEVEL_PX + 0.5, LEVEL_PX + 6.5, '#8f1d18', 0.5);
+        g.text(f, 0, LEVEL_PX + 3.5, front.sign, '#ffd36b', 5.6);
+        break;
+      case 'police':
+        // Bureau de police municipale : façade claire, bandeau bleu.
+        g.quad(f, -16, 16, 0, LEVEL_PX + 7, '#eef1f5');
+        g.quad(f, -13, 13, 1, 6, '#9fb6d6');
+        g.quad(f, -1, 1, 0, 6, '#eef1f5');
+        g.quad(f, -15.5, 15.5, LEVEL_PX + 0.5, LEVEL_PX + 6.5, '#1f3f8c', 0.5);
+        g.text(f, 0, LEVEL_PX + 3.5, front.sign, '#ffffff', 5.4);
+        break;
     }
-    g.quad(f, -15.5, 15.5, LEVEL_PX + 0.5, LEVEL_PX + 6.5, '#4a2614', 0.5);
-    g.text(f, 0, LEVEL_PX + 3.5, 'BOULANGERIE', '#ffd98a', 5.4);
   }
+}
+
+// ---------- Commissariat ----------
+
+function drawPolice(g: Painter, shape: string, levels: number, H: number, base: number): void {
+  const faces: Face[] = ['L', 'R'];
+  for (let lv = 0; lv < levels; lv++) {
+    for (const f of faces) {
+      if (lv === 0 && f === 'L' && shape === SHAPE.facadeSign) continue;
+      for (const u of [-12, 3]) g.window(f, u, lv * LEVEL_PX + 1.5, 9, 5, GLASS);
+    }
+  }
+  // Bandeau bleu-blanc-rouge sous le toit.
+  for (const f of faces) {
+    g.quad(f, -16, 16, H - 2.5, H, '#1f3f8c', 0.5);
+  }
+  if (shape === SHAPE.facadeSign) {
+    g.quad('L', -6, 6, 0, 6.5, GLASS_DARK);
+    g.quad('L', -8, 8, 6.5, 7.5, '#1f3f8c', 3);
+    g.quad('L', -15, 15, LEVEL_PX + 1, LEVEL_PX + 7, '#1f3f8c', 0.6);
+    g.text('L', 0, LEVEL_PX + 4, 'POLICE', '#ffffff', 5.6);
+    g.quad('L', -15, -11, LEVEL_PX + 1, LEVEL_PX + 7, '#1f4ea8', 0.8);
+    g.quad('L', -11, -7, LEVEL_PX + 1, LEVEL_PX + 7, '#ffffff', 0.8);
+    g.quad('L', -7, -3, LEVEL_PX + 1, LEVEL_PX + 2, '#e1373c', 0.8);
+  }
+  g.flatRoof(H, base);
+}
+
+// ---------- Grande surface ----------
+
+function drawSupermarket(g: Painter, shape: string, H: number, base: number): void {
+  const faces: Face[] = ['L', 'R'];
+  // Bardage clair et bandeau de couleur sur toute la hauteur haute.
+  for (const f of faces) {
+    g.quad(f, -16, 16, H - 5, H, '#2f8f5b', 0.3);
+    if (shape !== SHAPE.entrance && shape !== SHAPE.facadeSign) {
+      g.quad(f, -14, -2, 2, 7, shade(base, 0.88));
+      g.quad(f, 2, 14, 2, 7, shade(base, 0.88));
+    }
+  }
+  if (shape === SHAPE.entrance || shape === SHAPE.facadeSign) {
+    // Grande entrée vitrée et auvent.
+    g.quad('L', -16, 16, 0, H - 5, GLASS_DARK);
+    for (const u of [-8, 0, 8]) g.quad('L', u - 0.4, u + 0.4, 0, H - 5, 'rgba(255,255,255,0.45)');
+    g.quad('L', -16, 16, H - 6, H - 5, '#2f8f5b', 4);
+  }
+  if (shape === SHAPE.facadeSign) {
+    g.quad('L', -15, 15, H, H + 6.5, '#2f8f5b', 0.5);
+    g.text('L', 0, H + 3.2, 'SUPERMARCHÉ', '#ffffff', 4.4);
+  }
+  g.flatRoof(H, 0xcfd3d6);
 }
 
 // ---------- Commerces ----------
 
-function drawShop(g: Painter, shape: string, levels: number, H: number, base: number): void {
+function drawShop(g: Painter, shape: string, levels: number, H: number, base: number, front?: FrontInfo): void {
   const faces: Face[] = ['L', 'R'];
-  if (shape === SHAPE.bakery) {
-    drawBakeryFront(g);
+  if (shape === SHAPE.storefront && front) {
+    drawStorefront(g, front);
   } else {
     const awning = [0xd94f3d, 0x3b6ea8, 0x4e9a5b, 0xe0a530][levels % 4]!;
     for (const f of faces) {
