@@ -141,6 +141,7 @@ export class CityView {
     this.ambient = new Ambient(this.grid, map.transit);
     this.scene.add(this.ambient.group);
     void this.ambient.spawnKids();
+    void this.ambient.spawnVendors(map.pois);
 
     // Étiquettes des lieux, au-dessus des toits.
     for (const poi of map.pois) {

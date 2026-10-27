@@ -533,3 +533,14 @@ button.sheet-close {
   font-weight: 600;
   box-shadow: var(--shadow);
 }
+
+.speech {
+  font: 700 12px system-ui, sans-serif;
+  color: #3b2a12;
+  background: #fff8e6;
+  padding: 4px 9px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  pointer-events: none;
+}

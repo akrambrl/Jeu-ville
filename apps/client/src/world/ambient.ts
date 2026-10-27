@@ -4,8 +4,10 @@
  * exploitables en phase 7).
  */
 import * as THREE from 'three';
-import { TILE, type MapGrid, type TilePoint, type Transit } from '@jeu-ville/shared';
+import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { DECOR, TILE, type MapGrid, type MapPoi, type TilePoint, type Transit } from '@jeu-ville/shared';
 import { Character3D } from './characters.js';
+import { groundTop } from './ground.js';
 
 const TRAM_SPEED = 1.6;
 const TRAM_DWELL = 4;
@@ -18,6 +20,14 @@ const TRAIN_CARS = 5;
 const TRAIN_CAR_LEN = 1.6;
 const TRAIN_GAP: [number, number] = [6, 20];
 const KIDS_PER_YARD = 6;
+/** Vendeurs de maïs chaud : combien autour de la gare et de l'arrêt de tram. */
+const CORN_VENDORS: { near: MapPoi['kind']; count: number }[] = [
+  { near: 'station', count: 2 },
+  { near: 'tram', count: 1 },
+];
+const VENDOR_SEARCH_RADIUS = 6;
+const VENDOR_CALL_EVERY: [number, number] = [5, 11];
+const VENDOR_CALL_DURATION = 2.5;
 
 function carMesh(length: number, width: number, height: number, body: number, band: number, doubleDeck: boolean): THREE.Group {
   const g = new THREE.Group();
@@ -58,6 +68,8 @@ export class Ambient {
   private trains: { cars: THREE.Group[]; y: number; x: number; dir: 1 | -1; stopped: boolean; dwell: number }[] = [];
   private nextTrain = 2;
   private kids: { c: Character3D; yard: TilePoint[]; target: TilePoint; wait: number; run: boolean }[] = [];
+  private vendors: { c: Character3D; bubble: CSS2DObject; nextCall: number; calling: number }[] = [];
+  private smoke: { mesh: THREE.Mesh; base: THREE.Vector3; t: number }[] = [];
 
   constructor(
     private readonly grid: MapGrid,
@@ -89,6 +101,89 @@ export class Ambient {
     }
   }
 
+  /** Vendeurs de maïs chaud (caddie-brasero) sur le parvis de la gare et près du tram. */
+  async spawnVendors(pois: MapPoi[]): Promise<void> {
+    const taken: TilePoint[] = [];
+    for (const { near, count } of CORN_VENDORS) {
+      const poi = pois.find((p) => p.kind === near);
+      if (!poi) continue;
+      const spots = this.freeSidewalkNear(poi.entrance, taken).slice(0, count);
+      for (const spot of spots) {
+        taken.push(spot);
+        await this.addCornVendor(spot, poi.entrance);
+      }
+    }
+  }
+
+  /** Cases de trottoir libres (sans arbre, banc…) près d'un point, des plus proches aux plus lointaines. */
+  private freeSidewalkNear(center: TilePoint, taken: TilePoint[]): TilePoint[] {
+    const out: { p: TilePoint; d: number }[] = [];
+    const r = VENDOR_SEARCH_RADIUS;
+    for (let y = center.y - r; y <= center.y + r; y++) {
+      for (let x = center.x - r; x <= center.x + r; x++) {
+        if (this.grid.tileAt(x, y) !== TILE.pedestrian || this.grid.decorAt(x, y) !== DECOR.none) continue;
+        const d = Math.hypot(x - center.x, y - center.y);
+        // Pas devant la porte, et pas collés les uns aux autres.
+        if (d < 2 || taken.some((t) => Math.hypot(t.x - x, t.y - y) < 3)) continue;
+        if (out.some((o) => Math.hypot(o.p.x - x, o.p.y - y) < 3)) continue;
+        out.push({ p: { x, y }, d });
+      }
+    }
+    return out.sort((a, b) => a.d - b.d).map((o) => o.p);
+  }
+
+  private async addCornVendor(spot: TilePoint, lookAt: TilePoint): Promise<void> {
+    const top = groundTop(this.grid.tileAt(spot.x, spot.y));
+    // Le vendeur, à côté de son caddie, tourné vers le passage.
+    const vendor = new Character3D((x, y) => this.grid.tileAt(x, y), spot.x - 0.25, spot.y);
+    await vendor.load(['character-male-c', 'character-male-e', 'character-female-d'][this.vendors.length % 3]!);
+    const angle = Math.atan2(lookAt.x - spot.x, lookAt.y - spot.y);
+    vendor.root.rotation.y = angle;
+    vendor.setTarget(spot.x - 0.25, spot.y, false);
+    this.group.add(vendor.root);
+
+    const cart = cornCart();
+    cart.position.set(spot.x + 0.22, top, spot.y + 0.05);
+    cart.rotation.y = angle;
+    this.group.add(cart);
+    // Fumée du brasero.
+    for (let k = 0; k < 4; k++) {
+      const puff = new THREE.Mesh(SMOKE_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0xdedede, transparent: true, opacity: 0, depthWrite: false }));
+      const base = new THREE.Vector3(spot.x + 0.22, top + 0.62, spot.y + 0.05);
+      this.group.add(puff);
+      this.smoke.push({ mesh: puff, base, t: k / 4 });
+    }
+    // Bulle « Maïs chaud ! ».
+    const el = document.createElement('div');
+    el.className = 'speech';
+    el.textContent = '🌽 Maïs chaud !';
+    const bubble = new CSS2DObject(el);
+    bubble.position.set(0, 1.25, 0);
+    bubble.visible = false;
+    vendor.root.add(bubble);
+    this.vendors.push({ c: vendor, bubble, nextCall: 1 + Math.random() * 4, calling: 0 });
+  }
+
+  private updateVendors(dt: number): void {
+    for (const v of this.vendors) {
+      v.c.update(dt);
+      if (v.calling > 0) {
+        v.calling -= dt;
+        if (v.calling <= 0) v.bubble.visible = false;
+      } else if ((v.nextCall -= dt) <= 0) {
+        v.calling = VENDOR_CALL_DURATION;
+        v.bubble.visible = true;
+        v.nextCall = VENDOR_CALL_EVERY[0] + Math.random() * (VENDOR_CALL_EVERY[1] - VENDOR_CALL_EVERY[0]);
+      }
+    }
+    for (const s of this.smoke) {
+      s.t = (s.t + dt * 0.35) % 1;
+      s.mesh.position.set(s.base.x + Math.sin(s.t * 6) * 0.05, s.base.y + s.t * 0.7, s.base.z);
+      s.mesh.scale.setScalar(0.6 + s.t * 1.4);
+      (s.mesh.material as THREE.MeshBasicMaterial).opacity = 0.45 * (1 - s.t);
+    }
+  }
+
   private tramPoint(d: number): { x: number; y: number; angle: number } {
     const t = this.tram!;
     const pos = THREE.MathUtils.clamp(d, 0, t.length);
@@ -103,6 +198,7 @@ export class Ambient {
   update(dt: number): void {
     this.updateTram(dt);
     this.updateTrains(dt);
+    this.updateVendors(dt);
     for (const kid of this.kids) {
       const dx = kid.target.x - kid.c.tileX;
       const dy = kid.target.y - kid.c.tileY;
@@ -178,6 +274,44 @@ export class Ambient {
       return !out;
     });
   }
+}
+
+const SMOKE_GEOMETRY = new THREE.SphereGeometry(0.06, 6, 5);
+
+/** Caddie transformé en brasero, avec épis de maïs sur la grille. */
+function cornCart(): THREE.Group {
+  const g = new THREE.Group();
+  const metal = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.6, roughness: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2e2f33, roughness: 0.7 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  // Panier du caddie (grillage = parois fines) et roues.
+  for (const [w, d, x, z] of [[0.36, 0.02, 0, 0.12], [0.36, 0.02, 0, -0.12], [0.02, 0.24, 0.18, 0], [0.02, 0.24, -0.18, 0]] as const) {
+    add(new THREE.BoxGeometry(w, 0.2, d), metal, x, 0.32, z);
+  }
+  add(new THREE.BoxGeometry(0.36, 0.02, 0.24), metal, 0, 0.22, 0);
+  for (const [x, z] of [[0.15, 0.1], [0.15, -0.1], [-0.15, 0.1], [-0.15, -0.1]] as const) {
+    add(new THREE.BoxGeometry(0.02, 0.2, 0.02), metal, x, 0.11, z);
+    add(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8).rotateX(Math.PI / 2), dark, x, 0.03, z);
+  }
+  add(new THREE.BoxGeometry(0.02, 0.02, 0.26), metal, -0.24, 0.48, 0); // poignée
+  // Brasero (demi-bidon) et braises.
+  add(new THREE.CylinderGeometry(0.13, 0.11, 0.12, 12), dark, 0, 0.47, 0);
+  add(new THREE.CylinderGeometry(0.11, 0.11, 0.01, 12), new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff4a00, emissiveIntensity: 0.8 }), 0, 0.53, 0);
+  // Épis de maïs grillés.
+  const corn = new THREE.MeshStandardMaterial({ color: 0xf2c230, roughness: 0.6 });
+  const husk = new THREE.MeshStandardMaterial({ color: 0xc9b06b });
+  for (const z of [-0.06, -0.02, 0.02, 0.06]) {
+    const cob = add(new THREE.CapsuleGeometry(0.018, 0.12, 3, 6).rotateZ(Math.PI / 2), corn, 0, 0.56, z);
+    cob.rotation.y = z * 2;
+    add(new THREE.ConeGeometry(0.015, 0.05, 5).rotateZ(-Math.PI / 2), husk, 0.1, 0.56, z);
+  }
+  return g;
 }
 
 function findYards(grid: MapGrid): TilePoint[][] {
