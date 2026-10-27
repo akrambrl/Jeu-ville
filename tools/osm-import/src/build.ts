@@ -5,18 +5,18 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TILE, WALKABLE_TILES, type DistrictMap, type MapPoi, type StarterBuilding, type TilePoint } from '@jeu-ville/shared';
+import { TILE, type DistrictMap } from '@jeu-ville/shared';
 import { DISTRICTS, mapFileName, osmFileName, type DistrictSource } from './districts.js';
 import { parseOsm, type OsmData, type OsmWay, type Tags } from './osm.js';
 import { assembleRings, fillRings, makeProjection, strokeLine, type Pt } from './raster.js';
+import { schematize, type RawPoi } from './schematize.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, '..', '..', 'packages', 'shared', 'maps');
 
 const CELL_SIZE_METERS = 8;
-const STARTER_BUILDING_COUNT = 6;
+/** Seuil d'étages à partir duquel un bâtiment résidentiel compte comme immeuble. */
 const STARTER_MIN_LEVELS = 4;
-const STARTER_MIN_CELLS = 4;
 
 /** Largeur des voies en mètres et code de case associé. */
 const HIGHWAYS: Record<string, { meters: number; code: string }> = {
@@ -217,82 +217,15 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     b.cells = b.cells.filter((i) => owner[i] === bi);
   });
 
-  // 4. Plus grande zone marchable connexe (les cours fermées en sont exclues).
-  const component = new Int32Array(size).fill(-1);
-  let mainComponent = -1;
-  let mainSize = 0;
-  for (let start = 0, label = 0; start < size; start++) {
-    if (component[start] !== -1 || !WALKABLE_TILES.has(tiles[start]!)) continue;
-    const queue = [start];
-    component[start] = label;
-    let count = 0;
-    while (queue.length > 0) {
-      const i = queue.pop()!;
-      count++;
-      const x = i % width;
-      const y = (i - x) / width;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        const ni = ny * width + nx;
-        if (component[ni] === -1 && WALKABLE_TILES.has(tiles[ni]!)) {
-          component[ni] = label;
-          queue.push(ni);
-        }
-      }
-    }
-    if (count > mainSize) {
-      mainSize = count;
-      mainComponent = label;
-    }
-    label++;
-  }
-  const inMain = (i: number) => component[i] === mainComponent;
-
-  const toPoint = (i: number): TilePoint => ({ x: i % width, y: Math.floor(i / width) });
-  const centroid = (cells: number[]): Pt => {
-    let sx = 0;
-    let sy = 0;
-    for (const i of cells) {
-      sx += i % width;
-      sy += Math.floor(i / width);
-    }
-    return { x: sx / cells.length, y: sy / cells.length };
-  };
-
-  /** Case marchable devant un bâtiment, de préférence côté rue. */
-  const findDoor = (b: BuildingInfo): TilePoint | null => {
-    const c = centroid(b.cells);
-    let best: { i: number; score: number } | null = null;
-    for (const i of b.cells) {
-      const x = i % width;
-      const y = (i - x) / width;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        const ni = ny * width + nx;
-        if (!inMain(ni)) continue;
-        const street = tiles[ni] === TILE.road || tiles[ni] === TILE.majorRoad || tiles[ni] === TILE.pedestrian;
-        const score = Math.hypot(nx - c.x, ny - c.y) - (street ? 100 : 0);
-        if (!best || score < best.score) best = { i: ni, score };
-      }
-    }
-    return best ? toPoint(best.i) : null;
-  };
-
-  // 5. Lieux notables.
-  const pois: MapPoi[] = [];
-  const addPoi = (kind: MapPoi['kind'], name: string | undefined, p: Pt | null) => {
+  // 4. Lieux notables.
+  const pois: RawPoi[] = [];
+  const addPoi = (kind: RawPoi['kind'], name: string | undefined, p: Pt | null) => {
     if (!name || !p) return;
-    const x = Math.floor(p.x);
-    const y = Math.floor(p.y);
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) return;
     if (pois.some((q) => q.kind === kind && q.name === name)) return;
-    pois.push({ kind, name, x, y });
+    pois.push({ kind, name, x: p.x, y: p.y });
   };
-  const poiKind = (t: Tags): MapPoi['kind'] | null => {
+  const poiKind = (t: Tags): RawPoi['kind'] | null => {
     if (t.amenity === 'townhall') return 'townhall';
     if (t.railway === 'station' || (t.public_transport === 'station' && t.train === 'yes')) return 'station';
     if (t.leisure === 'park') return 'park';
@@ -312,83 +245,17 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     addPoi(k, a.tags.name, { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length });
   }
 
-  const townhall = pois.find((p) => p.kind === 'townhall') ?? { x: width / 2, y: height / 2 };
-
-  /** Nom de la rue nommée la plus proche d'un point. */
-  const namedStreets = roads.filter((w) => w.tags.name).map((w) => ({ name: w.tags.name!, pts: wayPoints(w) }));
-  const nearestStreet = (p: Pt): string | null => {
-    let best: { name: string; dist: number } | null = null;
-    for (const s of namedStreets) {
-      for (let i = 0; i + 1 < s.pts.length; i++) {
-        const a = s.pts[i]!;
-        const b = s.pts[i + 1]!;
-        const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1;
-        const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2));
-        const dist = Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
-        if (!best || dist < best.dist) best = { name: s.name, dist };
-      }
-    }
-    return best?.name ?? null;
-  };
-
-  // 6. Zone d'appartements de départ : les immeubles les plus proches de la mairie.
-  const starters: StarterBuilding[] = [];
-  const candidates = buildings
-    .filter((b) => b.code === TILE.apartments && b.levels >= STARTER_MIN_LEVELS && b.cells.length >= STARTER_MIN_CELLS)
-    .map((b) => ({ b, c: centroid(b.cells) }))
-    .sort((p, q) => Math.hypot(p.c.x - townhall.x, p.c.y - townhall.y) - Math.hypot(q.c.x - townhall.x, q.c.y - townhall.y));
-  for (const { b } of candidates) {
-    if (starters.length >= STARTER_BUILDING_COUNT) break;
-    const door = findDoor(b);
-    if (!door) continue;
-    const t = b.tags;
-    const address = t['addr:housenumber'] && t['addr:street'] ? `${t['addr:housenumber']} ${t['addr:street']}` : null;
-    starters.push({
-      id: b.id,
-      name: t.name ?? address ?? `Résidence ${starters.length + 1}, ${nearestStreet({ x: door.x + 0.5, y: door.y + 0.5 }) ?? d.districtName}`,
-      levels: b.levels,
-      door,
-    });
-    for (const i of b.cells) tiles[i] = TILE.starter;
-  }
-  if (starters.length === 0) throw new Error(`Aucun immeuble de départ trouvé pour ${d.districtId}`);
-
-  // 7. Point d'apparition : devant la mairie.
-  let spawn = starters[0]!.door;
-  let bestDist = Infinity;
-  for (let i = 0; i < size; i++) {
-    if (!inMain(i)) continue;
-    const p = toPoint(i);
-    const dist = Math.hypot(p.x - townhall.x, p.y - townhall.y);
-    if (dist < bestDist) {
-      bestDist = dist;
-      spawn = p;
-    }
-  }
-
   const rows: string[] = [];
-  const levelRows: string[] = [];
-  for (let y = 0; y < height; y++) {
-    rows.push(tiles.slice(y * width, (y + 1) * width).join(''));
-    levelRows.push(Array.from(levels.subarray(y * width, (y + 1) * width)).join(''));
-  }
+  for (let y = 0; y < height; y++) rows.push(tiles.slice(y * width, (y + 1) * width).join(''));
 
-  return {
-    cityId: d.cityId,
-    cityName: d.cityName,
-    districtId: d.districtId,
-    districtName: d.districtName,
+  return schematize(d, {
     width,
     height,
-    cellSizeMeters: CELL_SIZE_METERS,
     tiles: rows,
-    levels: levelRows,
-    starterBuildings: starters,
+    levels,
+    roads: roads.map((w) => ({ name: w.tags.name, highway: w.tags.highway!, pts: wayPoints(w) })),
     pois,
-    spawn,
-    attribution: '© les contributeurs d’OpenStreetMap (ODbL)',
-    source: { bbox: d.bbox, fetchedAt: new Date().toISOString().slice(0, 10) },
-  };
+  });
 }
 
 for (const d of DISTRICTS) {
@@ -401,4 +268,5 @@ for (const d of DISTRICTS) {
   console.log(`${d.cityName} / ${d.districtName} : ${map.width}×${map.height} cases`, counts);
   console.log('  Immeubles de départ :', map.starterBuildings.map((s) => s.name).join(' | '));
   console.log('  Lieux :', map.pois.map((p) => `${p.kind}:${p.name}`).join(' | '));
+  console.log('  Rues :', [...new Set(map.streets.map((s) => s.name))].join(' | '));
 }

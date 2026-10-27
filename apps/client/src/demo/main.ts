@@ -9,7 +9,7 @@ import { startGame } from '../app/startGame.js';
 import { showCreationScreen } from '../ui/creationScreen.js';
 import { el } from '../ui/dom.js';
 import { showLoginScreen } from '../ui/loginScreen.js';
-import { LocalDistrict, createDemoSave, demoSelf, demoStore, type DemoSave } from './localDistrict.js';
+import { LocalDistrict, createDemoSave, demoSelf, demoStore, repairDemoSave, type DemoSave } from './localDistrict.js';
 import '../ui/styles.css';
 
 const ui = document.getElementById('ui')!;
@@ -55,7 +55,8 @@ function showDemoBadge(): void {
 }
 
 async function start(): Promise<void> {
-  const save = demoStore.load() ?? (await newGame());
+  const loaded = demoStore.load();
+  const save = loaded ? repairDemoSave(map, loaded) : await newGame();
   const link = new LocalDistrict(map, DEFAULT_DISTRICT_KEY, save);
   startGame(ui, link.self(), link);
   showDemoBadge();

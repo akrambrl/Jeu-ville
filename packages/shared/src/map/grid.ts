@@ -26,6 +26,10 @@ export class MapGrid {
     return this.map.tiles[y]?.[x] ?? '';
   }
 
+  decorAt(x: number, y: number): string {
+    return this.map.decor[y]?.[x] ?? '.';
+  }
+
   levelsAt(x: number, y: number): number {
     return Number(this.map.levels[y]?.[x] ?? '0');
   }

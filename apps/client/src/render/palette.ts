@@ -18,12 +18,17 @@ export const BUILDING_COLORS: Record<string, number> = {
   [TILE.apartments]: 0xd9dde4,
   [TILE.commercial]: 0xf0b86e,
   [TILE.civic]: 0xb9d6f2,
+  [TILE.townhall]: 0xf3e9d2,
+  [TILE.worship]: 0xd9cdb4,
   [TILE.industrial]: 0xb7aea3,
   [TILE.starter]: 0x7fcfc0,
 };
 
 export const ROOF_COLORS: Record<string, number> = {
   [TILE.house]: 0xc8664a,
+  /** Toit en ardoise bleue, comme les mairies françaises. */
+  [TILE.townhall]: 0x4a6a8c,
+  [TILE.worship]: 0x5b6470,
 };
 
 export const WINDOW_COLOR = 0x4b5f7a;

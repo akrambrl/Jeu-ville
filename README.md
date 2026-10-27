@@ -21,8 +21,10 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
 ## État d'avancement
 
 **Phase 1 — Prototype** ✅
-- Noisy-le-Sec, quartier Centre-Ville - Mairie, généré depuis OpenStreetMap
-  (rues, bâtiments, squares, mairie), rendu isométrique « voxel ».
+- Noisy-le-Sec, quartier Centre-Ville - Mairie, en **plan schématisé** généré depuis
+  OpenStreetMap : rues droites aux vrais noms, îlots (pavillons, immeubles, cité,
+  commerces, squares), mairie, églises et écoles à leur place approximative.
+- Bouton « Aller à… » : chez moi, la mairie, les squares, les églises, les écoles.
 - Pseudo + création de personnage (sexe, 6 styles, peau, cheveux, corpulence).
 - Déplacement au clic/toucher (A* côté serveur), plusieurs joueurs visibles.
 - Jauges faim, hygiène, apparence, santé, bonheur, qui baissent même hors ligne.

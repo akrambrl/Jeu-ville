@@ -89,6 +89,16 @@ export function createDemoSave(map: DistrictMap, name: string, input: CreateChar
   };
 }
 
+/**
+ * Une sauvegarde peut viser un immeuble qui n'existe plus (carte régénérée) :
+ * on réattribue alors un appart de départ, devant lequel le perso réapparaît.
+ */
+export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
+  if (map.starterBuildings.some((b) => b.id === save.buildingId)) return save;
+  const building = map.starterBuildings[Math.floor(Math.random() * map.starterBuildings.length)]!;
+  return { ...save, buildingId: building.id, pos: building.door };
+}
+
 export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, nowMs = Date.now()): CharacterSelf {
   const building = map.starterBuildings.find((b) => b.id === save.buildingId);
   const age = ageAt(save.createdAt, nowMs);

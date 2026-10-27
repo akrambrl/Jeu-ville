@@ -356,6 +356,23 @@ button:disabled {
     align-items: baseline;
     flex-wrap: wrap;
   }
+  .hud-bottom {
+    gap: 6px;
+  }
+  .hud-bottom button {
+    padding: 8px 12px;
+    font-size: 15px;
+  }
+  .home-panel {
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+  }
+  .home-panel button {
+    flex: 1 1 0;
+    padding: 8px 6px;
+    min-width: 0;
+  }
 }
 
 /* ---------- Démo solo ---------- */
@@ -393,4 +410,71 @@ button.danger {
 
 .card .actions.two {
   gap: 8px;
+}
+
+/* ---------- Feuille « Aller à… » ---------- */
+
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 460px;
+  max-height: 75%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 18px 18px 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow);
+}
+
+.sheet h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.destination-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+  touch-action: pan-y;
+}
+
+button.destination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #eef2f3;
+  padding: 8px 12px;
+}
+
+.destination-icon {
+  font-size: 22px;
+}
+
+.destination-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.destination-text small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+button.sheet-close {
+  background: transparent;
+  color: var(--muted);
 }

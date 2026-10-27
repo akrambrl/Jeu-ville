@@ -4,9 +4,13 @@ import type { DistrictLink, PlayerView } from '../net/link.js';
 import {
   GROUND_TEXTURE,
   MARKER_TEXTURE,
+  PROP_DECOR,
+  PROP_ORIGIN_Y,
   buildingOriginY,
   createGroundTextures,
   ensureBuildingTexture,
+  ensurePropTexture,
+  groundFrame,
 } from '../render/cityTextures.js';
 import { LEVEL_PX, TILE_H, TILE_W, screenToTile, tileToScreen } from '../render/iso.js';
 import { BACKGROUND_COLOR } from '../render/palette.js';
@@ -23,7 +27,7 @@ export interface CitySceneData {
 const DRAG_THRESHOLD_PX = 8;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2;
-const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market']);
+const POI_LABELS = new Set(['townhall', 'station', 'park', 'worship', 'market', 'school']);
 
 export class CityScene extends Phaser.Scene {
   private ctx!: CitySceneData;
@@ -48,6 +52,8 @@ export class CityScene extends Phaser.Scene {
     createGroundTextures(this.textures);
     this.buildGround();
     this.buildBuildings();
+    this.buildProps();
+    this.buildStreetNames();
     this.buildLabels();
     this.buildHomeMarker();
 
@@ -97,7 +103,7 @@ export class CityScene extends Phaser.Scene {
       for (let x = 0; x < map.width; x++) {
         const code = this.grid.tileAt(x, y);
         // Sous les bâtiments : trottoir.
-        const frame = BUILDING_TILES.has(code) ? 'P' : code;
+        const frame = BUILDING_TILES.has(code) ? 'P' : groundFrame(code, this.grid.decorAt(x, y));
         const p = tileToScreen(x, y);
         blitter.create(p.x - fw / 2, p.y - fh / 2, frame);
       }
@@ -115,6 +121,39 @@ export class CityScene extends Phaser.Scene {
         const p = tileToScreen(x, y);
         this.add.image(p.x, p.y, key).setOrigin(0.5, buildingOriginY(levels)).setDepth(x + y);
       }
+    }
+  }
+
+  /** Arbres, lampadaires, bancs. */
+  private buildProps(): void {
+    const { map } = this.ctx;
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        const decor = this.grid.decorAt(x, y);
+        if (!PROP_DECOR.has(decor)) continue;
+        const key = ensurePropTexture(this.textures, decor, (x * 7 + y * 13) % 4);
+        const p = tileToScreen(x, y);
+        this.add.image(p.x, p.y, key).setOrigin(0.5, PROP_ORIGIN_Y).setDepth(x + y + 0.3);
+      }
+    }
+  }
+
+  /** Noms des rues écrits sur la chaussée, dans le sens de la rue. */
+  private buildStreetNames(): void {
+    const angle = Math.atan2(TILE_H / 2, TILE_W / 2);
+    for (const s of this.ctx.map.streets) {
+      const p = tileToScreen(s.x, s.y);
+      this.add
+        .text(p.x, p.y, s.name, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: 'rgba(255,255,255,0.75)',
+        })
+        .setOrigin(0.5)
+        .setResolution(2)
+        .setRotation(s.axis === 'x' ? angle : -angle)
+        .setDepth(-0.6);
     }
   }
 

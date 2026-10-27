@@ -132,7 +132,7 @@ pnpm install
 docker compose up -d          # PostgreSQL local (ou tout Postgres 16 + DATABASE_URL)
 cp .env.example .env
 pnpm dev                      # serveur (2567, migrations + seed auto) + client (5173)
-pnpm test                     # tests ; ceux sur base réelle tournent si DATABASE_URL est défini
+pnpm test                     # tests ; ceux sur base réelle utilisent TEST_DATABASE_URL (vidée à chaque lancement)
 pnpm typecheck
 pnpm db:generate              # après modification de apps/server/src/db/schema.ts
 pnpm map:fetch && pnpm map:build   # re-télécharger / régénérer les cartes OSM

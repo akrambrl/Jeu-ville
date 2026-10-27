@@ -6,6 +6,7 @@ import {
   isCritical,
   type CharacterSelf,
   type HomeActionId,
+  type TilePoint,
 } from '@jeu-ville/shared';
 import { el, formatMoney, showToast } from './dom.js';
 
@@ -20,8 +21,17 @@ const GAUGES = [
 /** Rafraîchissement local des jauges entre deux envois du serveur. */
 const LOCAL_REFRESH_MS = 5_000;
 
+export interface Destination {
+  icon: string;
+  name: string;
+  /** Type de lieu affiché sous le nom (« Mairie », « Square »…). */
+  kind: string;
+  point: TilePoint;
+}
+
 export interface HudCallbacks {
   onGoHome: () => void;
+  onGoTo: (point: TilePoint) => void;
   onHomeAction: (action: HomeActionId) => void;
   onRecenter: () => void;
 }
@@ -36,12 +46,14 @@ export class Hud {
   private readonly moneyEl = el('div', { class: 'money' });
   private readonly bars = new Map<string, HTMLElement>();
   private readonly homePanel: HTMLElement;
-  private readonly goHomeButton: HTMLButtonElement;
+  private readonly goToButton: HTMLButtonElement;
+  private readonly destinationsPanel: HTMLElement;
   private readonly timer: number;
 
   constructor(
     private readonly container: HTMLElement,
-    callbacks: HudCallbacks,
+    private readonly callbacks: HudCallbacks,
+    private readonly destinations: Destination[],
   ) {
     const gauges = el('div', { class: 'hud-card gauges' });
     for (const g of GAUGES) {
@@ -51,8 +63,9 @@ export class Hud {
       gauges.append(el('div', { text: g.label }), bar);
     }
 
-    this.goHomeButton = el('button', { class: 'primary', text: '🏠 Rentrer chez moi' });
-    this.goHomeButton.addEventListener('click', callbacks.onGoHome);
+    this.goToButton = el('button', { class: 'primary', text: '📍 Aller à…' });
+    this.goToButton.addEventListener('click', () => this.toggleDestinations());
+    this.destinationsPanel = this.buildDestinations();
     const recenter = el('button', { text: '🎯', title: 'Recentrer', 'aria-label': 'Recentrer la caméra' });
     recenter.addEventListener('click', callbacks.onRecenter);
 
@@ -71,7 +84,8 @@ export class Hud {
         el('div', { class: 'hud-card identity' }, [this.nameEl, this.metaEl, this.moneyEl]),
         gauges,
       ]),
-      el('div', { class: 'hud-bottom' }, [this.homePanel, this.goHomeButton, recenter]),
+      el('div', { class: 'hud-bottom' }, [this.homePanel, this.goToButton, recenter]),
+      this.destinationsPanel,
       el('div', { class: 'attribution' }),
     ]);
     const attribution = this.root.querySelector('.attribution')!;
@@ -96,7 +110,37 @@ export class Hud {
   setNearHome(near: boolean): void {
     if (this.homePanel.hidden === !near) return;
     this.homePanel.hidden = !near;
-    this.goHomeButton.hidden = near;
+  }
+
+  private buildDestinations(): HTMLElement {
+    const list = el('div', { class: 'destination-list' });
+    const item = (icon: string, name: string, kind: string, go: () => void) => {
+      const b = el('button', { class: 'destination' }, [
+        el('span', { class: 'destination-icon', text: icon }),
+        el('span', { class: 'destination-text' }, [el('strong', { text: name }), el('small', { text: kind })]),
+      ]);
+      b.addEventListener('click', () => {
+        go();
+        this.toggleDestinations(false);
+      });
+      list.append(b);
+    };
+    item('🏠', 'Chez moi', 'Mon appartement', this.callbacks.onGoHome);
+    for (const d of this.destinations) item(d.icon, d.name, d.kind, () => this.callbacks.onGoTo(d.point));
+
+    const close = el('button', { class: 'sheet-close', text: 'Fermer' });
+    close.addEventListener('click', () => this.toggleDestinations(false));
+    const sheet = el('div', { class: 'sheet' }, [el('h2', { text: 'Aller à…' }), list, close]);
+    const backdrop = el('div', { class: 'sheet-backdrop' }, [sheet]);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) this.toggleDestinations(false);
+    });
+    backdrop.hidden = true;
+    return backdrop;
+  }
+
+  private toggleDestinations(open = this.destinationsPanel.hidden): void {
+    this.destinationsPanel.hidden = !open;
   }
 
   notify(text: string, level: 'info' | 'error' = 'info'): void {

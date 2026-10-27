@@ -3,7 +3,7 @@
 export const TILE_W = 64;
 export const TILE_H = 32;
 /** Hauteur d'un étage, en pixels écran. */
-export const LEVEL_PX = 9;
+export const LEVEL_PX = 8;
 
 /** Case (x, y) → centre du losange à l'écran. */
 export function tileToScreen(x: number, y: number): { x: number; y: number } {

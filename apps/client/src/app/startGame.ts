@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { MOVEMENT, getDistrictMap, type CharacterSelf } from '@jeu-ville/shared';
+import { MOVEMENT, getDistrictMap, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
 import { CityScene, type CitySceneData } from '../game/CityScene.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
-import { Hud } from '../ui/hud.js';
+import { Hud, type Destination } from '../ui/hud.js';
 import { showTutorialOnce } from '../ui/tutorial.js';
 
 export function showFatal(ui: HTMLElement, message: string, retry: () => void): void {
@@ -26,11 +26,16 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   const scene = new CityScene();
   let homeDoor = character.home?.door ?? null;
 
-  const hud = new Hud(ui, {
-    onGoHome: () => homeDoor && scene.requestMove(homeDoor),
-    onHomeAction: (action) => link.homeAction(action),
-    onRecenter: () => scene.recenter(),
-  });
+  const hud = new Hud(
+    ui,
+    {
+      onGoHome: () => homeDoor && scene.requestMove(homeDoor),
+      onGoTo: (point) => scene.requestMove(point),
+      onHomeAction: (action) => link.homeAction(action),
+      onRecenter: () => scene.recenter(),
+    },
+    destinationsOf(map),
+  );
   hud.setSelf(character);
 
   link.onSelf((self) => {
@@ -61,4 +66,20 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   game.scene.add('city', scene, true, sceneData);
 
   showTutorialOnce(ui, map.cityName);
+}
+
+const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; order: number }> = {
+  townhall: { icon: '🏛️', kind: 'Mairie', order: 0 },
+  station: { icon: '🚉', kind: 'Gare', order: 1 },
+  market: { icon: '🧺', kind: 'Marché', order: 2 },
+  park: { icon: '🌳', kind: 'Square', order: 3 },
+  worship: { icon: '⛪', kind: 'Lieu de culte', order: 4 },
+  school: { icon: '🏫', kind: 'École', order: 5 },
+};
+
+/** Lieux du quartier proposés dans « Aller à… ». */
+function destinationsOf(map: DistrictMap): Destination[] {
+  return [...map.pois]
+    .sort((a, b) => POI_INFO[a.kind].order - POI_INFO[b.kind].order || a.name.localeCompare(b.name, 'fr'))
+    .map((p) => ({ icon: POI_INFO[p.kind].icon, name: p.name, kind: POI_INFO[p.kind].kind, point: p.entrance }));
 }
