@@ -3,6 +3,10 @@
  * ce qui permet aussi de les embarquer dans la démo autonome (data URI).
  * Chaque pack a sa propre palette `colormap.png`, référencée en relatif dans les
  * GLB : on la redirige vers l'URL du bon fichier.
+ *
+ * Aucune requête réseau (`fetch`) n'est faite pour les fichiers embarqués : la démo
+ * publiée tourne dans un cadre qui les interdit. Les GLB en data URI sont décodés
+ * sur place, et les textures sont chargées comme de simples images.
  */
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -27,6 +31,11 @@ function loaderFor(pack: Pack): GLTFLoader {
     const manager = new THREE.LoadingManager();
     manager.setURLModifier((url) => (/colormap\.png$/.test(url) && palette ? palette : url));
     loader = new GLTFLoader(manager);
+    // Textures via <img> (TextureLoader) plutôt que fetch (ImageBitmapLoader).
+    loader.register((parser) => {
+      (parser as unknown as { textureLoader: THREE.Loader }).textureLoader = new THREE.TextureLoader(manager);
+      return { name: 'jeu-ville-image-textures' };
+    });
     loaders.set(pack, loader);
   }
   return loader;
@@ -41,7 +50,8 @@ export function loadModel(pack: Pack, name: string): Promise<GLTF> {
   if (!p) {
     const url = modelUrls[`../assets/models/${pack}/${name}.glb`];
     if (!url) throw new Error(`Modèle introuvable : ${key}`);
-    p = loaderFor(pack).loadAsync(url);
+    const loader = loaderFor(pack);
+    p = url.startsWith('data:') ? loader.parseAsync(decodeDataUri(url), '') : loader.loadAsync(url);
     cache.set(key, p);
   }
   return p;
@@ -67,4 +77,13 @@ export function enableShadows(object: THREE.Object3D, cast = true, receive = tru
       o.receiveShadow = receive;
     }
   });
+}
+
+/** Data URI base64 → octets, sans passer par fetch. */
+function decodeDataUri(uri: string): ArrayBuffer {
+  const base64 = uri.slice(uri.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
 }
