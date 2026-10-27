@@ -1,4 +1,4 @@
-import type { TilePoint } from '@jeu-ville/shared';
+import type { TilePoint } from './types.js';
 
 export interface Mover {
   x: number;

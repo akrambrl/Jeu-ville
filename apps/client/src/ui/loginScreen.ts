@@ -1,9 +1,11 @@
 import { PSEUDO_RULES } from '@jeu-ville/shared';
-import { api, tokenStore } from '../net/api.js';
 import { el } from './dom.js';
 
-/** Écran d'arrivée : choix du pseudo (pas de mot de passe dans le prototype). */
-export function showLoginScreen(root: HTMLElement): Promise<void> {
+/**
+ * Écran d'arrivée : choix du pseudo (pas de mot de passe dans le prototype).
+ * `submitPseudo` valide le pseudo et rejette avec un message à afficher en cas d'échec.
+ */
+export function showLoginScreen(root: HTMLElement, submitPseudo: (pseudo: string) => Promise<void>): Promise<void> {
   return new Promise((resolve) => {
     const input = el('input', {
       type: 'text',
@@ -31,8 +33,7 @@ export function showLoginScreen(root: HTMLElement): Promise<void> {
       submit.disabled = true;
       error.textContent = '';
       try {
-        const session = await api.createSession(input.value.trim());
-        tokenStore.set(session.token);
+        await submitPseudo(input.value.trim());
         screen.remove();
         resolve();
       } catch (err) {

@@ -1,14 +1,6 @@
 import Phaser from 'phaser';
-import { getStateCallbacks, type Room } from 'colyseus.js';
-import {
-  BUILDING_TILES,
-  ClientMessage,
-  MapGrid,
-  type CharacterLook,
-  type DistrictMap,
-  type MoveMessage,
-  type TilePoint,
-} from '@jeu-ville/shared';
+import { BUILDING_TILES, MapGrid, type CharacterLook, type DistrictMap, type TilePoint } from '@jeu-ville/shared';
+import type { DistrictLink, PlayerView } from '../net/link.js';
 import {
   GROUND_TEXTURE,
   MARKER_TEXTURE,
@@ -20,24 +12,9 @@ import { LEVEL_PX, TILE_H, TILE_W, screenToTile, tileToScreen } from '../render/
 import { BACKGROUND_COLOR } from '../render/palette.js';
 import { Avatar } from './Avatar.js';
 
-/** État d'un joueur tel que synchronisé par le serveur (voir apps/server/src/rooms/state.ts). */
-interface PlayerView {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  dir: number;
-  moving: boolean;
-  sex: string;
-  baseLook: number;
-  skinTone: number;
-  hairColor: number;
-  bodyType: number;
-}
-
 export interface CitySceneData {
   map: DistrictMap;
-  room: Room;
+  link: DistrictLink;
   homeDoor: TilePoint | null;
   /** Appelé à chaque image avec la position affichée du joueur local. */
   onLocalPosition: (x: number, y: number) => void;
@@ -77,12 +54,12 @@ export class CityScene extends Phaser.Scene {
     this.marker = this.add.image(0, 0, MARKER_TEXTURE).setDepth(-0.5).setVisible(false);
     this.setupCamera();
     this.setupInput();
-    this.bindRoom();
+    this.bindPlayers();
   }
 
   override update(_time: number, delta: number): void {
     for (const a of this.avatars.values()) a.update(delta);
-    const self = this.avatars.get(this.ctx.room.sessionId);
+    const self = this.avatars.get(this.ctx.link.sessionId);
     if (self) {
       this.ctx.onLocalPosition(self.tileX, self.tileY);
       if (this.following) {
@@ -101,7 +78,7 @@ export class CityScene extends Phaser.Scene {
 
   /** Demande au serveur d'aller vers une case. */
   requestMove(to: TilePoint): void {
-    this.ctx.room.send(ClientMessage.move, { x: to.x, y: to.y } satisfies MoveMessage);
+    this.ctx.link.move(to);
     const p = tileToScreen(to.x, to.y);
     this.marker.setPosition(p.x, p.y).setVisible(true).setAlpha(1);
     this.tweens.killTweensOf(this.marker);
@@ -261,27 +238,28 @@ export class CityScene extends Phaser.Scene {
 
   // ---------- Synchronisation avec le serveur ----------
 
-  private bindRoom(): void {
-    const room = this.ctx.room;
-    const $ = getStateCallbacks(room);
-    const state = room.state as { players: Map<string, PlayerView> };
-
-    $(state).players.onAdd((p: PlayerView, sessionId: string) => {
-      const look: CharacterLook = {
-        sex: p.sex === 'female' ? 'female' : 'male',
-        baseLook: p.baseLook,
-        skinTone: p.skinTone,
-        hairColor: p.hairColor,
-        bodyType: p.bodyType,
-      };
-      const avatar = new Avatar(this, look, p.name, p.x, p.y, sessionId === room.sessionId);
-      this.avatars.set(sessionId, avatar);
-      $(p).onChange(() => avatar.setServerState(p.x, p.y, p.dir, p.moving));
-    });
-
-    $(state).players.onRemove((_p: PlayerView, sessionId: string) => {
-      this.avatars.get(sessionId)?.destroy();
-      this.avatars.delete(sessionId);
+  private bindPlayers(): void {
+    const link = this.ctx.link;
+    link.subscribePlayers({
+      added: (id, p) => {
+        const avatar = new Avatar(this, lookOf(p), p.name, p.x, p.y, id === link.sessionId);
+        this.avatars.set(id, avatar);
+      },
+      changed: (id, p) => this.avatars.get(id)?.setServerState(p.x, p.y, p.dir, p.moving),
+      removed: (id) => {
+        this.avatars.get(id)?.destroy();
+        this.avatars.delete(id);
+      },
     });
   }
+}
+
+function lookOf(p: PlayerView): CharacterLook {
+  return {
+    sex: p.sex === 'female' ? 'female' : 'male',
+    baseLook: p.baseLook,
+    skinTone: p.skinTone,
+    hairColor: p.hairColor,
+    bodyType: p.bodyType,
+  };
 }

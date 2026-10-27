@@ -5,3 +5,4 @@ dist/
 .DS_Store
 # Données OSM brutes (re-téléchargeables via `pnpm map:fetch`)
 tools/osm-import/data/*.osm
+dist-demo/

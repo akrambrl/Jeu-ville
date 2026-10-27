@@ -8,7 +8,6 @@ import {
   type CharacterSelf,
   type CreateCharacterRequest,
 } from '@jeu-ville/shared';
-import { api } from '../net/api.js';
 import { AVATAR_H, AVATAR_W, drawAvatar } from '../render/avatar.js';
 import { hex } from '../render/iso.js';
 import { el, formatMoney } from './dom.js';
@@ -16,7 +15,11 @@ import { el, formatMoney } from './dom.js';
 const PREVIEW_SCALE = 3;
 
 /** Création du personnage : sexe, apparence de base, peau, cheveux, corpulence. */
-export function showCreationScreen(root: HTMLElement, pseudo: string): Promise<CharacterSelf> {
+export function showCreationScreen(
+  root: HTMLElement,
+  pseudo: string,
+  create: (input: CreateCharacterRequest) => Promise<CharacterSelf>,
+): Promise<CharacterSelf> {
   return new Promise((resolve) => {
     const choice: CreateCharacterRequest = { sex: 'male', baseLook: 0, skinTone: 2, hairColor: 0, bodyType: 1 };
 
@@ -101,7 +104,7 @@ export function showCreationScreen(root: HTMLElement, pseudo: string): Promise<C
       submit.disabled = true;
       error.textContent = '';
       try {
-        const character = await api.createCharacter(choice);
+        const character = await create(choice);
         screen.remove();
         resolve(character);
       } catch (err) {

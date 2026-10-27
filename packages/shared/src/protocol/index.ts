@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { HOME_ACTIONS } from '../config/balance.js';
 import { BASE_LOOKS, BODY_TYPES, HAIR_COLORS, PSEUDO_RULES, SEXES, SKIN_TONES } from '../config/characters.js';
 import type { GaugeSnapshot } from '../formulas/gauges.js';
+import type { HomeActionId } from '../formulas/homeActions.js';
 import type { TilePoint } from '../map/types.js';
 
 // Messages de validation en français.
@@ -19,8 +20,8 @@ export const createSessionSchema = z.object({
   pseudo: z
     .string()
     .trim()
-    .min(PSEUDO_RULES.minLength)
-    .max(PSEUDO_RULES.maxLength)
+    .min(PSEUDO_RULES.minLength, `Ton pseudo doit faire au moins ${PSEUDO_RULES.minLength} caractères.`)
+    .max(PSEUDO_RULES.maxLength, `Ton pseudo doit faire au plus ${PSEUDO_RULES.maxLength} caractères.`)
     .regex(PSEUDO_RULES.pattern, 'Lettres, chiffres, - et _ uniquement'),
 });
 export type CreateSessionRequest = z.infer<typeof createSessionSchema>;
@@ -100,8 +101,7 @@ export const moveSchema = z.object({
 });
 export type MoveMessage = z.infer<typeof moveSchema>;
 
-export const HOME_ACTION_IDS = Object.keys(HOME_ACTIONS) as (keyof typeof HOME_ACTIONS)[];
-export type HomeActionId = keyof typeof HOME_ACTIONS;
+export const HOME_ACTION_IDS = Object.keys(HOME_ACTIONS) as HomeActionId[];
 
 export const homeActionSchema = z.object({
   action: z.enum(HOME_ACTION_IDS as [HomeActionId, ...HomeActionId[]]),

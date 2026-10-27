@@ -2,12 +2,10 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   DEFAULT_DISTRICT_KEY,
   ECONOMY,
-  HOME_ACTIONS,
   HOUSING,
   ageAt,
-  applyGaugeEffects,
-  decayGauges,
   getDistrictMap,
+  resolveHomeAction,
   snapshotGauges,
   STARTING_GAUGES,
   type CharacterSelf,
@@ -158,26 +156,23 @@ export async function performHomeAction(
   actionId: HomeActionId,
   nowMs = Date.now(),
 ): Promise<CharacterSelf> {
-  const action = HOME_ACTIONS[actionId];
   return db.transaction(async (tx) => {
     const [row] = await tx.select().from(characters).where(eq(characters.id, characterId)).for('update');
     if (!row) throw new GameError('Personnage introuvable.', 404);
     if (!row.dwellingId) throw new GameError("Tu n'as pas de logement.");
-    if (row.moneyCents < action.costCents) throw new GameError("Pas assez d'argent.");
 
-    const current = decayGauges(storedGauges(row), nowMs - row.gaugesUpdatedAt.getTime());
-    const next = applyGaugeEffects(current, action.effects);
-
-    if (action.costCents > 0) {
+    const result = resolveHomeAction(actionId, storedGauges(row), row.gaugesUpdatedAt.getTime(), row.moneyCents, nowMs);
+    if (!result.ok) throw new GameError(result.error);
+    if (result.moneyDeltaCents !== 0) {
       await recordLedgerEntry(tx, {
         characterId,
-        amountCents: -action.costCents,
+        amountCents: result.moneyDeltaCents,
         reason: `home_action:${actionId}`,
       });
     }
     const [updated] = await tx
       .update(characters)
-      .set({ ...next, gaugesUpdatedAt: new Date(nowMs) })
+      .set({ ...result.gauges, gaugesUpdatedAt: new Date(nowMs) })
       .where(eq(characters.id, characterId))
       .returning();
     return toCharacterSelf(updated!, await loadDwelling(tx, row.dwellingId), nowMs);

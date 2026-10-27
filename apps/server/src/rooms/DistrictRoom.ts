@@ -8,6 +8,8 @@ import {
   MapGrid,
   MOVEMENT,
   SERVER,
+  advance,
+  type Mover,
   ServerMessage,
   districtJoinSchema,
   findPath,
@@ -27,7 +29,7 @@ import {
   savePosition,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
-import { advance, type Mover } from './movement.js';
+
 import { DistrictState, PlayerState } from './state.js';
 
 interface AuthData {

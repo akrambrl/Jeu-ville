@@ -43,7 +43,8 @@ export class Avatar {
         padding: { x: 4, y: 1 },
       })
       .setOrigin(0.5, 1)
-      .setResolution(2);
+      .setResolution(2)
+      .setVisible(name !== '');
     this.place();
   }
 
