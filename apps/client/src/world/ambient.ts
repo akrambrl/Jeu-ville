@@ -20,10 +20,14 @@ const TRAIN_CARS = 5;
 const TRAIN_CAR_LEN = 1.6;
 const TRAIN_GAP: [number, number] = [6, 20];
 const KIDS_PER_YARD = 6;
-/** Vendeurs de maïs chaud : combien autour de la gare et de l'arrêt de tram. */
-const CORN_VENDORS: { near: MapPoi['kind']; count: number }[] = [
-  { near: 'station', count: 2 },
-  { near: 'tram', count: 1 },
+/** Vendeurs ambulants : quoi, près de quel lieu, combien. */
+type VendorKind = 'corn' | 'chestnut';
+const VENDORS: { kind: VendorKind; near: MapPoi['kind']; count: number }[] = [
+  { kind: 'corn', near: 'station', count: 2 },
+  { kind: 'corn', near: 'tram', count: 1 },
+  { kind: 'chestnut', near: 'station', count: 1 },
+  { kind: 'chestnut', near: 'tram', count: 1 },
+  { kind: 'chestnut', near: 'townhall', count: 1 },
 ];
 const VENDOR_SEARCH_RADIUS = 6;
 const VENDOR_CALL_EVERY: [number, number] = [5, 11];
@@ -101,16 +105,16 @@ export class Ambient {
     }
   }
 
-  /** Vendeurs de maïs chaud (caddie-brasero) sur le parvis de la gare et près du tram. */
+  /** Vendeurs de maïs chaud et de marrons chauds autour de la gare, du tram et de la mairie. */
   async spawnVendors(pois: MapPoi[]): Promise<void> {
     const taken: TilePoint[] = [];
-    for (const { near, count } of CORN_VENDORS) {
+    for (const { kind, near, count } of VENDORS) {
       const poi = pois.find((p) => p.kind === near);
       if (!poi) continue;
       const spots = this.freeSidewalkNear(poi.entrance, taken).slice(0, count);
       for (const spot of spots) {
         taken.push(spot);
-        await this.addCornVendor(spot, poi.entrance);
+        await this.addVendor(kind, spot, poi.entrance);
       }
     }
   }
@@ -132,31 +136,33 @@ export class Ambient {
     return out.sort((a, b) => a.d - b.d).map((o) => o.p);
   }
 
-  private async addCornVendor(spot: TilePoint, lookAt: TilePoint): Promise<void> {
+  private async addVendor(kind: VendorKind, spot: TilePoint, lookAt: TilePoint): Promise<void> {
+    const style = VENDOR_STYLES[kind];
     const top = groundTop(this.grid.tileAt(spot.x, spot.y));
     // Le vendeur, à côté de son caddie, tourné vers le passage.
     const vendor = new Character3D((x, y) => this.grid.tileAt(x, y), spot.x - 0.25, spot.y);
-    await vendor.load(['character-male-c', 'character-male-e', 'character-female-d'][this.vendors.length % 3]!);
+    await vendor.load(style.models[this.vendors.length % style.models.length]!);
     const angle = Math.atan2(lookAt.x - spot.x, lookAt.y - spot.y);
     vendor.root.rotation.y = angle;
     vendor.setTarget(spot.x - 0.25, spot.y, false);
     this.group.add(vendor.root);
 
-    const cart = cornCart();
+    const cart = style.cart();
     cart.position.set(spot.x + 0.22, top, spot.y + 0.05);
     cart.rotation.y = angle;
     this.group.add(cart);
-    // Fumée du brasero.
+    // Fumée du brasero (ou de la cheminée).
+    const smokeFrom = style.smoke.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
     for (let k = 0; k < 4; k++) {
       const puff = new THREE.Mesh(SMOKE_GEOMETRY, new THREE.MeshBasicMaterial({ color: 0xdedede, transparent: true, opacity: 0, depthWrite: false }));
-      const base = new THREE.Vector3(spot.x + 0.22, top + 0.62, spot.y + 0.05);
+      const base = new THREE.Vector3(spot.x + 0.22, top, spot.y + 0.05).add(smokeFrom);
       this.group.add(puff);
       this.smoke.push({ mesh: puff, base, t: k / 4 });
     }
-    // Bulle « Maïs chaud ! ».
+    // Bulle « Maïs chaud ! » / « Chauds les marrons ! ».
     const el = document.createElement('div');
     el.className = 'speech';
-    el.textContent = '🌽 Maïs chaud !';
+    el.textContent = style.cry;
     const bubble = new CSS2DObject(el);
     bubble.position.set(0, 1.25, 0);
     bubble.visible = false;
@@ -313,6 +319,59 @@ function cornCart(): THREE.Group {
   }
   return g;
 }
+
+/** Brasero à marrons : bidon-poêle sur charrette à bras, poêle percée, cheminée et cornets en papier. */
+function chestnutCart(): THREE.Group {
+  const g = new THREE.Group();
+  const iron = new THREE.MeshStandardMaterial({ color: 0x26272b, metalness: 0.5, roughness: 0.6 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.8 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  // Charrette : plateau en bois, deux grandes roues, poignées courtes.
+  add(new THREE.BoxGeometry(0.4, 0.03, 0.28), wood, 0, 0.16, 0);
+  for (const z of [0.16, -0.16]) {
+    add(new THREE.CylinderGeometry(0.12, 0.12, 0.025, 14).rotateX(Math.PI / 2), iron, 0.05, 0.12, z);
+    add(new THREE.BoxGeometry(0.12, 0.02, 0.02), wood, -0.25, 0.16, z * 0.8);
+  }
+  add(new THREE.BoxGeometry(0.02, 0.16, 0.02), wood, 0.18, 0.08, 0); // béquille
+  // Poêle : bidon, foyer rougeoyant, poêle percée garnie de marrons.
+  add(new THREE.CylinderGeometry(0.12, 0.12, 0.26, 14), iron, 0.04, 0.3, 0);
+  add(new THREE.BoxGeometry(0.07, 0.05, 0.01), new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff4a00, emissiveIntensity: 0.9 }), 0.04, 0.24, 0.121);
+  add(new THREE.CylinderGeometry(0.15, 0.13, 0.03, 16), iron, 0.04, 0.445, 0);
+  const chestnut = new THREE.MeshStandardMaterial({ color: 0x5a2e14, roughness: 0.5 });
+  const nut = new THREE.SphereGeometry(0.022, 6, 5).scale(1, 0.7, 1);
+  for (let k = 0; k < 14; k++) {
+    const a = k * 2.4;
+    const r = 0.03 + (k % 4) * 0.025;
+    add(nut, chestnut, 0.04 + Math.cos(a) * r, 0.47, Math.sin(a) * r);
+  }
+  // Cheminée (la fumée sort d'ici).
+  add(new THREE.CylinderGeometry(0.02, 0.02, 0.32, 8), iron, -0.1, 0.55, -0.08);
+  // Cornets en papier journal sur le plateau.
+  const paper = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9 });
+  for (const z of [0.05, 0.1]) add(new THREE.ConeGeometry(0.025, 0.08, 8).rotateX(Math.PI), paper, -0.14, 0.215, z);
+  return g;
+}
+
+const VENDOR_STYLES: Record<VendorKind, { cry: string; models: string[]; cart: () => THREE.Group; smoke: THREE.Vector3 }> = {
+  corn: {
+    cry: '🌽 Maïs chaud !',
+    models: ['character-male-c', 'character-male-e', 'character-female-d'],
+    cart: cornCart,
+    smoke: new THREE.Vector3(0, 0.62, 0),
+  },
+  chestnut: {
+    cry: '🌰 Chauds les marrons !',
+    models: ['character-male-f', 'character-female-b', 'character-male-a'],
+    cart: chestnutCart,
+    smoke: new THREE.Vector3(-0.1, 0.74, -0.08),
+  },
+};
 
 function findYards(grid: MapGrid): TilePoint[][] {
   const seen = new Set<string>();
