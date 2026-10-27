@@ -92,6 +92,8 @@ export class Hud {
     attribution.append(
       'Carte : ',
       el('a', { href: 'https://www.openstreetmap.org/copyright', target: '_blank', rel: 'noopener', text: '© les contributeurs d’OpenStreetMap' }),
+      ' · 3D : ',
+      el('a', { href: 'https://www.kenney.nl', target: '_blank', rel: 'noopener', text: 'Kenney' }),
     );
     container.append(this.root);
     this.timer = window.setInterval(() => this.renderGauges(), LOCAL_REFRESH_MS);

@@ -14,7 +14,7 @@ export function showTutorialOnce(root: HTMLElement, cityName: string): void {
     el('div', { class: 'card' }, [
       el('h1', { text: `Bienvenue à ${cityName} !` }),
       el('ul', {}, [
-        el('li', { text: 'Touche (ou clique) le sol pour te déplacer. Glisse pour bouger la caméra, pince ou molette pour zoomer.' }),
+        el('li', { text: 'Touche (ou clique) le sol pour marcher. Glisse pour déplacer la vue ; à deux doigts (ou clic droit), tourne et zoome.' }),
         el('li', { text: 'Surveille tes jauges : faim, hygiène, apparence, santé. Elles baissent même quand tu n’es pas connecté.' }),
         el('li', { text: 'Le bouton 📍 Aller à… t’emmène chez toi, à la mairie, dans les squares… Chez toi, tu peux manger, te doucher et te changer.' }),
         el('li', { text: 'Ton bonheur dépend de tout le reste : garde-le haut !' }),

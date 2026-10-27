@@ -1,6 +1,5 @@
-import Phaser from 'phaser';
 import { MOVEMENT, getDistrictMap, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
-import { CityScene, type CitySceneData } from '../game/CityScene.js';
+import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
 import { Hud, type Destination } from '../ui/hud.js';
@@ -23,16 +22,25 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   const map = getDistrictMap(character.districtId);
   if (!map) return showFatal(ui, 'Quartier inconnu.', () => location.reload());
 
-  const scene = new CityScene();
   let homeDoor = character.home?.door ?? null;
+  const container = document.getElementById('game')!;
+  const view = new CityView(container, {
+    map,
+    link,
+    homeDoor,
+    onLocalPosition: (x, y) => {
+      const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
+      hud.setNearHome(near);
+    },
+  });
 
   const hud = new Hud(
     ui,
     {
-      onGoHome: () => homeDoor && scene.requestMove(homeDoor),
-      onGoTo: (point) => scene.requestMove(point),
+      onGoHome: () => homeDoor && view.requestMove(homeDoor),
+      onGoTo: (point) => view.requestMove(point),
       onHomeAction: (action) => link.homeAction(action),
-      onRecenter: () => scene.recenter(),
+      onRecenter: () => view.recenter(),
     },
     destinationsOf(map),
   );
@@ -45,25 +53,12 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   link.onNotice((n) => hud.notify(n.text, n.level));
   link.onDisconnected(() => showFatal(ui, 'Déconnecté du serveur.', () => location.reload()));
 
-  const sceneData: CitySceneData = {
-    map,
-    link,
-    homeDoor,
-    onLocalPosition: (x, y) => {
-      const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
-      hud.setNearHome(near);
-    },
-  };
-
-  const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    parent: 'game',
-    backgroundColor: '#a9c98e',
-    scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
-    render: { antialias: true, roundPixels: false },
-    input: { activePointers: 2 },
-  });
-  game.scene.add('city', scene, true, sceneData);
+  const loading = el('div', { class: 'loading', text: `Chargement de ${map.cityName}…` });
+  ui.append(loading);
+  view
+    .build()
+    .catch((err) => showFatal(ui, `Impossible d'afficher la ville : ${(err as Error).message}`, () => location.reload()))
+    .finally(() => loading.remove());
 
   showTutorialOnce(ui, map.cityName);
 }

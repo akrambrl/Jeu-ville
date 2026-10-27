@@ -17,12 +17,13 @@ et on demande à l'utilisateur plutôt que d'inventer.
 ## Stack
 
 - Monorepo **pnpm workspaces**, **TypeScript strict** partout.
-- `apps/client` : **Phaser 3.90** + **Vite** (rendu isométrique 2D, mobile + PC).
-  Interface (menus, HUD) en DOM/CSS par-dessus le canvas.
+- `apps/client` : **Three.js 0.170** (3D façon Sims : caméra libre, ombres) + **Vite**,
+  mobile + PC. Modèles 3D **Kenney (CC0)** dans `src/assets/models/` ; le reste
+  (façades, enseignes, sols) est dessiné en code. Interface (menus, HUD) en DOM/CSS.
 - `apps/server` : **Node.js** + **Colyseus 0.16** (temps réel) + **Fastify** (API REST :
   comptes, agence immobilière, achats, webhooks Stripe), sur le même serveur HTTP.
-  Versions majeures de Phaser et Colyseus figées volontairement : ne pas monter
-  de version sans accord.
+  Versions majeures de Three.js et Colyseus figées volontairement : ne pas monter
+  de version sans accord. N'utiliser que des assets libres de droits (CC0 de préférence).
 - `packages/shared` : types, schémas de messages (validation **zod**), formules
   de jeu pures et **configuration d'équilibrage**.
 - Base : **PostgreSQL** via **Drizzle ORM** (migrations versionnées).
@@ -113,8 +114,9 @@ l'argent réel, stores Apple/Google.
 ## Structure
 
 ```
-apps/client/src      game/ (scène, avatars) · render/ (textures voxel générées en code)
-                     ui/ (écrans DOM, HUD) · net/ (API REST)
+apps/client/src      world/ (vue 3D : sol, bâtiments, props, persos, tram/RER)
+                     ui/ (écrans DOM, HUD) · net/ (API REST, lien serveur/démo)
+                     demo/ (démo solo sans serveur) · assets/models/ (Kenney, CC0)
 apps/server/src      api/ (routes REST) · domain/ (logique métier) · rooms/ (Colyseus)
                      db/ (schéma Drizzle, migrations, seed) · drizzle/ (SQL généré)
 packages/shared/src  config/ (ÉQUILIBRAGE) · time/ · formulas/ · map/ · protocol/

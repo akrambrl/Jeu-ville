@@ -21,6 +21,8 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
 ## État d'avancement
 
 **Phase 1 — Prototype** ✅
+- **Vue 3D façon Sims** (Three.js) : soleil et ombres, caméra libre (glisser,
+  tourner, zoomer), persos 3D animés. Modèles 3D : Kenney (CC0).
 - Noisy-le-Sec, quartier Centre-Ville - Mairie, en **plan schématisé** généré depuis
   OpenStreetMap : rues droites aux vrais noms, îlots (pavillons, immeubles, cité,
   commerces, squares), mairie, églises et écoles à leur place approximative.
@@ -37,4 +39,4 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
 - Appart de départ (zone de 6 immeubles près de la mairie) : manger, se doucher, se changer.
 - 20 000 € de départ, chaque mouvement d'argent tracé dans un journal.
 
-Carte : © les contributeurs d’OpenStreetMap (ODbL).
+Carte : © les contributeurs d’OpenStreetMap (ODbL). Modèles 3D : Kenney (www.kenney.nl, CC0).

@@ -478,3 +478,58 @@ button.sheet-close {
   background: transparent;
   color: var(--muted);
 }
+
+/* ---------- Vue 3D ---------- */
+
+.world-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.name-tag,
+.poi-label,
+.home-tag {
+  font: 600 12px system-ui, sans-serif;
+  padding: 2px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.name-tag {
+  color: #fff;
+  background: rgba(20, 20, 30, 0.55);
+}
+
+.name-tag.self {
+  background: rgba(28, 120, 104, 0.9);
+}
+
+.poi-label {
+  color: #22313f;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.poi-label.major {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-tag {
+  color: #fff;
+  background: rgba(28, 120, 104, 0.95);
+}
+
+.loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--panel);
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
