@@ -4,6 +4,9 @@ import {
   ServerMessage,
   type Arrival,
   type BuyFoodMessage,
+  type BuyItemMessage,
+  type SetVehicleMessage,
+  type VehicleKind,
   type RideBusMessage,
   type CharacterSelf,
   type HomeActionId,
@@ -32,6 +35,22 @@ export class ColyseusLink implements DistrictLink {
 
   buyFood(placeId: string, itemId: string): void {
     this.room.send(ClientMessage.buyFood, { placeId, itemId } satisfies BuyFoodMessage);
+  }
+
+  buyItem(placeId: string, itemId: string): void {
+    this.room.send(ClientMessage.buyItem, { placeId, itemId } satisfies BuyItemMessage);
+  }
+
+  setVehicle(vehicle: VehicleKind | ''): void {
+    this.room.send(ClientMessage.setVehicle, { vehicle } satisfies SetVehicleMessage);
+  }
+
+  chargeScooter(): void {
+    this.room.send(ClientMessage.chargeScooter, {});
+  }
+
+  feedPet(): void {
+    this.room.send(ClientMessage.feedPet, {});
   }
 
   rideBus(to: TilePoint): void {

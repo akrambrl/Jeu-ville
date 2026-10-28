@@ -49,6 +49,10 @@ const FRONTS: Record<Storefront['kind'], Omit<FrontStyle, 'sign'>> = {
   pharmacy: { wall: '#f4f7f4', signBg: '#2f9e5b', signFg: '#ffffff', glass: '#bfe3d0', cross: true },
   fastfood: { wall: '#c8322b', signBg: '#8f1d18', signFg: '#ffd36b', glass: '#2c3b4d', awning: ['#c8322b', '#ffffff'] },
   police: { wall: '#eef1f5', signBg: '#1f3f8c', signFg: '#ffffff', glass: '#9fb6d6' },
+  cycles: { wall: '#2d6a4f', signBg: '#1b4332', signFg: '#d8f3dc', glass: '#3d5570', awning: ['#2d6a4f', '#f4efe6'] },
+  petshop: { wall: '#f2c14e', signBg: '#7b4b2a', signFg: '#fff3d6', glass: '#3d5570', awning: ['#e07a2f', '#fff3d6'] },
+  realestate: { wall: '#f4f1ea', signBg: '#1d3557', signFg: '#f1faee', glass: '#9fb6c9' },
+  jobcenter: { wall: '#eef3f8', signBg: '#2b59a3', signFg: '#ffffff', glass: '#9fb6d6' },
 };
 
 /** Quadrilatères regroupés par matériau, fusionnés en un maillage chacun. */

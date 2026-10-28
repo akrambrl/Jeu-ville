@@ -169,6 +169,10 @@ export interface MapPoi {
     | 'police'
     | 'supermarket'
     | 'gym'
+    | 'cycles'
+    | 'petshop'
+    | 'realestate'
+    | 'jobcenter'
     | 'square'
     | 'quarter';
   name: string;
@@ -235,7 +239,7 @@ export interface FacadeSign {
 export interface Storefront {
   x: number;
   y: number;
-  kind: 'bakery' | 'pharmacy' | 'fastfood' | 'police';
+  kind: 'bakery' | 'pharmacy' | 'fastfood' | 'police' | 'cycles' | 'petshop' | 'realestate' | 'jobcenter';
   /** Texte de l'enseigne (en capitales). */
   sign: string;
 }

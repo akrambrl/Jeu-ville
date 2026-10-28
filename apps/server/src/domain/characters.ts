@@ -14,10 +14,14 @@ import {
   type HomeActionId,
   type HomeInfo,
   type StoredGauges,
+  type StoredPet,
+  type PetSpecies,
+  type VehicleKind,
+  petHappinessBonus,
   type FoodPlaceKind,
 } from '@jeu-ville/shared';
 import type { Db, Tx } from '../db/client.js';
-import { characters, dwellings } from '../db/schema.js';
+import { characters, dwellings, pets, vehicles } from '../db/schema.js';
 import { STARTER_DWELLING_KIND } from '../db/seed.js';
 import { GameError } from './errors.js';
 import { recordLedgerEntry } from './ledger.js';
@@ -36,8 +40,31 @@ function homeInfo(row: CharacterRow, dwelling: DwellingRow | null): HomeInfo | n
   return { dwellingId: dwelling.id, buildingName: dwelling.buildingName, door: building.door };
 }
 
-export function toCharacterSelf(row: CharacterRow, dwelling: DwellingRow | null, nowMs: number): CharacterSelf {
+type VehicleRow = typeof vehicles.$inferSelect;
+type PetRow = typeof pets.$inferSelect;
+
+export function storedPet(row: PetRow | null): StoredPet | null {
+  if (!row) return null;
+  return {
+    species: row.species as PetSpecies,
+    coat: row.coat,
+    name: row.name,
+    hunger: row.hunger,
+    happiness: row.happiness,
+    updatedAt: row.gaugesUpdatedAt.getTime(),
+  };
+}
+
+export function toCharacterSelf(
+  row: CharacterRow,
+  dwelling: DwellingRow | null,
+  owned: { vehicles: VehicleRow[]; pet: PetRow | null },
+  nowMs: number,
+): CharacterSelf {
   const age = ageAt(row.createdAt.getTime(), nowMs);
+  const pet = storedPet(owned.pet);
+  const happinessBonus =
+    (dwelling ? HOUSING.starterApartment.happinessBonus : 0) + petHappinessBonus(pet, row.petLostAt?.getTime() ?? null, nowMs);
   return {
     id: row.id,
     name: row.name,
@@ -51,16 +78,25 @@ export function toCharacterSelf(row: CharacterRow, dwelling: DwellingRow | null,
     cityId: row.cityId,
     districtId: row.districtId,
     moneyCents: row.moneyCents,
-    gauges: snapshotGauges(
-      storedGauges(row),
-      row.gaugesUpdatedAt.getTime(),
-      nowMs,
-      dwelling ? HOUSING.starterApartment.happinessBonus : 0,
-    ),
+    gauges: snapshotGauges(storedGauges(row), row.gaugesUpdatedAt.getTime(), nowMs, happinessBonus),
     age: { years: age.years, dayOfYear: age.dayOfYear },
     home: homeInfo(row, dwelling),
+    vehicles: owned.vehicles.map((v) => ({ kind: v.kind as VehicleKind, battery: v.battery })),
+    activeVehicle: row.activeVehicle as VehicleKind | '',
+    pet,
+    happinessBonus,
     computedAt: nowMs,
   };
+}
+
+/** Vue privée complète (logement, véhicules, animal) d'une ligne de personnage. */
+export async function selfOf(db: Db | Tx, row: CharacterRow, nowMs: number): Promise<CharacterSelf> {
+  const [dwelling, owned, [pet]] = await Promise.all([
+    loadDwelling(db, row.dwellingId),
+    db.select().from(vehicles).where(eq(vehicles.characterId, row.id)),
+    db.select().from(pets).where(eq(pets.characterId, row.id)),
+  ]);
+  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null }, nowMs);
 }
 
 async function loadDwelling(db: Db | Tx, id: string | null): Promise<DwellingRow | null> {
@@ -77,7 +113,7 @@ export async function getCharacterByPlayer(db: Db, playerId: string): Promise<Ch
 export async function getCharacterSelf(db: Db, characterId: string, nowMs = Date.now()): Promise<CharacterSelf | null> {
   const [row] = await db.select().from(characters).where(eq(characters.id, characterId));
   if (!row) return null;
-  return toCharacterSelf(row, await loadDwelling(db, row.dwellingId), nowMs);
+  return selfOf(db, row, nowMs);
 }
 
 /**
@@ -147,7 +183,7 @@ export async function createCharacter(
       idempotencyKey: `starting_capital:${row.id}`,
     });
 
-    return toCharacterSelf({ ...row, moneyCents: balance }, { ...dwelling, tenantCharacterId: row.id }, now.getTime());
+    return toCharacterSelf({ ...row, moneyCents: balance }, { ...dwelling, tenantCharacterId: row.id }, { vehicles: [], pet: null }, now.getTime());
   });
 }
 
@@ -177,7 +213,7 @@ export async function performHomeAction(
       .set({ ...result.gauges, gaugesUpdatedAt: new Date(nowMs) })
       .where(eq(characters.id, characterId))
       .returning();
-    return toCharacterSelf(updated!, await loadDwelling(tx, row.dwellingId), nowMs);
+    return selfOf(tx, updated!, nowMs);
   });
 }
 
@@ -199,7 +235,7 @@ export async function buyFood(db: Db, characterId: string, kind: FoodPlaceKind, 
       .set({ ...result.gauges, gaugesUpdatedAt: new Date(nowMs) })
       .where(eq(characters.id, characterId))
       .returning();
-    return toCharacterSelf(updated!, await loadDwelling(tx, row.dwellingId), nowMs);
+    return selfOf(tx, updated!, nowMs);
   });
 }
 
@@ -210,7 +246,7 @@ export async function payFee(db: Db, characterId: string, amountCents: number, r
     if (!row) throw new GameError('Personnage introuvable.', 404);
     if (row.moneyCents < amountCents) throw new GameError("Pas assez d'argent.");
     await recordLedgerEntry(tx, { characterId, amountCents: -amountCents, reason });
-    return toCharacterSelf((await tx.select().from(characters).where(eq(characters.id, characterId)))[0]!, await loadDwelling(tx, row.dwellingId), Date.now());
+    return selfOf(tx, (await tx.select().from(characters).where(eq(characters.id, characterId)))[0]!, Date.now());
   });
 }
 

@@ -1,4 +1,4 @@
-import type { Arrival, CharacterSelf, HomeActionId, Notice, TilePoint } from '@jeu-ville/shared';
+import type { Arrival, CharacterSelf, HomeActionId, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
 
 /** Ce que tous les joueurs voient d'un personnage (voir apps/server/src/rooms/state.ts). */
 export interface PlayerView {
@@ -15,6 +15,8 @@ export interface PlayerView {
   bodyType: number;
   /** Animal qui suit le perso (« dog:2 »), ou '' (voir Passerby.pet). */
   pet: string;
+  /** Véhicule utilisé (« bike », « scooter ») ou ''. */
+  vehicle: string;
 }
 
 export interface PlayerHandlers {
@@ -36,6 +38,14 @@ export interface DistrictLink {
   buyFood(placeId: string, itemId: string): void;
   /** Prendre le bus (payant) jusqu'à l'entrée d'un lieu, ou chez soi. */
   rideBus(to: TilePoint): void;
+  /** Acheter dans une boutique (vélo, trottinette, adopter un animal) : il faut être devant. */
+  buyItem(placeId: string, itemId: string): void;
+  /** Monter sur un de ses véhicules, ou descendre (''). */
+  setVehicle(vehicle: VehicleKind | ''): void;
+  /** Recharger la trottinette (chez soi). */
+  chargeScooter(): void;
+  /** Donner des croquettes à son animal. */
+  feedPet(): void;
   /** Quelqu'un (soi compris) arrive en bus : jouer la cinématique. */
   onArrival(cb: (arrival: Arrival) => void): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */

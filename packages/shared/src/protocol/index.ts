@@ -7,6 +7,9 @@ import { HOME_ACTIONS } from '../config/balance.js';
 import { BASE_LOOKS, BODY_TYPES, HAIR_COLORS, PSEUDO_RULES, SEXES, SKIN_TONES } from '../config/characters.js';
 import type { GaugeSnapshot } from '../formulas/gauges.js';
 import type { HomeActionId } from '../formulas/homeActions.js';
+import type { StoredPet } from '../formulas/pets.js';
+import type { OwnedVehicle, VehicleKind } from '../formulas/vehicles.js';
+import { VEHICLES } from '../config/balance.js';
 import type { TilePoint } from '../map/types.js';
 
 // Messages de validation en français.
@@ -66,6 +69,12 @@ export interface CharacterSelf {
   gauges: GaugeSnapshot;
   age: { years: number; dayOfYear: number };
   home: HomeInfo | null;
+  vehicles: OwnedVehicle[];
+  /** Véhicule utilisé en ce moment ('' = à pied). */
+  activeVehicle: VehicleKind | '';
+  pet: StoredPet | null;
+  /** Bonus (ou malus) de bonheur hors jauges : animal, chagrin… */
+  happinessBonus: number;
   /** Instant serveur du calcul (ms epoch). */
   computedAt: number;
 }
@@ -95,6 +104,10 @@ export const ClientMessage = {
   homeAction: 'homeAction',
   buyFood: 'buyFood',
   rideBus: 'rideBus',
+  buyItem: 'buyItem',
+  setVehicle: 'setVehicle',
+  chargeScooter: 'chargeScooter',
+  feedPet: 'feedPet',
 } as const;
 
 export const moveSchema = z.object({
@@ -123,6 +136,21 @@ export const rideBusSchema = z.object({
   y: z.number().int(),
 });
 export type RideBusMessage = z.infer<typeof rideBusSchema>;
+
+/** Acheter `itemId` dans une boutique (cycles, animalerie) ; il faut être devant. */
+export const buyItemSchema = z.object({
+  placeId: z.string().min(1).max(64),
+  itemId: z.string().min(1).max(32),
+});
+export type BuyItemMessage = z.infer<typeof buyItemSchema>;
+
+const VEHICLE_KINDS = Object.keys(VEHICLES) as VehicleKind[];
+
+/** Monter sur un de ses véhicules, ou descendre (''). */
+export const setVehicleSchema = z.object({
+  vehicle: z.enum(['', ...VEHICLE_KINDS] as ['', ...VehicleKind[]]),
+});
+export type SetVehicleMessage = z.infer<typeof setVehicleSchema>;
 
 export const ServerMessage = {
   /** Vue privée du personnage (CharacterSelf). */

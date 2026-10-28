@@ -88,6 +88,10 @@ export const characters = pgTable(
     gaugesUpdatedAt: timestamp('gauges_updated_at', { withTimezone: true }).notNull(),
     posX: real('pos_x').notNull(),
     posY: real('pos_y').notNull(),
+    /** Véhicule utilisé ('' = à pied, sinon VehicleKind). */
+    activeVehicle: text('active_vehicle').notNull().default(''),
+    /** Dernière fois qu'un refuge a recueilli son animal (chagrin temporaire). */
+    petLostAt: timestamp('pet_lost_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('characters_money_non_negative', sql`${t.moneyCents} >= 0`)],
@@ -109,3 +113,34 @@ export const ledgerEntries = pgTable(
   },
   (t) => [index('ledger_character_idx').on(t.characterId, t.createdAt)],
 );
+
+/** Véhicules possédés (vélo, trottinette) : un de chaque type au plus. */
+export const vehicles = pgTable(
+  'vehicles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id),
+    kind: text('kind').notNull(),
+    battery: real('battery').notNull().default(100),
+    boughtAt: timestamp('bought_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('vehicles_character_kind_idx').on(t.characterId, t.kind)],
+);
+
+/** Animal de compagnie (un par personnage) : jauges paresseuses, comme celles du perso. */
+export const pets = pgTable('pets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id')
+    .notNull()
+    .unique()
+    .references(() => characters.id),
+  species: text('species').notNull(),
+  coat: smallint('coat').notNull(),
+  name: text('name').notNull(),
+  hunger: real('hunger').notNull(),
+  happiness: real('happiness').notNull(),
+  gaugesUpdatedAt: timestamp('gauges_updated_at', { withTimezone: true }).notNull(),
+  adoptedAt: timestamp('adopted_at', { withTimezone: true }).notNull().defaultNow(),
+});

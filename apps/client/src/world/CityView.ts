@@ -56,6 +56,10 @@ const LABEL_KINDS = new Set<MapPoi['kind']>([
   'square',
   'gym',
   'quarter',
+  'cycles',
+  'petshop',
+  'realestate',
+  'jobcenter',
 ]);
 /** Au-delà de cette distance caméra, les étiquettes secondaires sont masquées. */
 const LABEL_DISTANCE = 26;
@@ -480,11 +484,13 @@ export class CityView {
         this.scene.add(c.root);
         void c.load(modelForLook(lookOf(p)), (BODY_TYPES[p.bodyType] ?? BODY_TYPES[1]).width);
         this.syncPet(id, p.pet);
+        c.setVehicle(p.vehicle ?? '');
       },
       changed: (id, p) => {
         // Pendant l'arrivée en bus, le perso attend dans le bus.
         if (this.arrivals.some((a) => a.who === id && !a.landed)) return;
         this.avatars.get(id)?.setTarget(p.x, p.y, p.moving, p.dir);
+        this.avatars.get(id)?.setVehicle(p.vehicle ?? '');
         this.syncPet(id, p.pet);
       },
       removed: (id) => {

@@ -483,9 +483,26 @@ details.destination-section[open] > summary {
   margin-bottom: 6px;
 }
 
-.destination-row > button.destination {
+.destination-row > .destination {
   flex: 1 1 auto;
   min-width: 0;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.destination-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+button.destination-walk {
+  background: #1c7868;
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 button.destination-bus {
@@ -502,7 +519,7 @@ button.destination-bus:disabled {
   color: #6c7a80;
 }
 
-button.destination {
+.destination {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -595,4 +612,47 @@ button.sheet-close {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* ---------- Véhicule et animal ---------- */
+
+button.vehicle-toggle {
+  background: #fff;
+  color: var(--text);
+  font-size: 18px;
+  min-width: 52px;
+}
+
+button.vehicle-toggle.low {
+  background: #ffe1d6;
+}
+
+.pet-card {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.pet-name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pet-gauge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pet-gauge .gauge-bar {
+  flex: 1 1 auto;
+  min-width: 30px;
+}
+
+button.small {
+  padding: 4px 10px;
+  font-size: 13px;
 }

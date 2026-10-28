@@ -10,6 +10,8 @@ import {
   REAL_MS_PER_HOUR,
   STARTING_GAUGES,
   FOOD_MENUS,
+  PETS,
+  VEHICLES,
   applyGaugeEffects,
   decayGauges,
 } from '@jeu-ville/shared';
@@ -24,6 +26,10 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
     createCharacter: typeof import('./characters.js').createCharacter;
     performHomeAction: typeof import('./characters.js').performHomeAction;
     buyFood: typeof import('./characters.js').buyFood;
+    buyVehicle: typeof import('./possessions.js').buyVehicle;
+    adoptPet: typeof import('./possessions.js').adoptPet;
+    feedPet: typeof import('./possessions.js').feedPet;
+    enforcePetCare: typeof import('./possessions.js').enforcePetCare;
     ledgerBalance: typeof import('./characters.js').ledgerBalance;
     seedReferenceData: typeof import('../db/seed.js').seedReferenceData;
   };
@@ -41,6 +47,7 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
       seedReferenceData,
       ...(await import('./auth.js')),
       ...(await import('./characters.js')),
+      ...(await import('./possessions.js')),
     };
   });
 
@@ -97,6 +104,25 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
     expect(after.moneyCents).toBe(ECONOMY.startingMoneyCents - FOOD_MENUS.fastfood[1].costCents);
     expect(await mod.ledgerBalance(mod.db, c.id)).toBe(after.moneyCents);
     await expect(mod.buyFood(mod.db, c.id, 'bakery', 'menu')).rejects.toThrow(/pas au menu/);
+  });
+
+  it('un vélo ne se vend qu’une fois, même en cliquant deux fois très vite', async () => {
+    const c = await mod.createCharacter(mod.db, await newPlayer(), look);
+    const results = await Promise.allSettled([mod.buyVehicle(mod.db, c.id, 'bike'), mod.buyVehicle(mod.db, c.id, 'bike')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(await mod.ledgerBalance(mod.db, c.id)).toBe(ECONOMY.startingMoneyCents - VEHICLES.bike.priceCents);
+  });
+
+  it('un animal négligé part au refuge, avec une amende tracée une seule fois', async () => {
+    const c = await mod.createCharacter(mod.db, await newPlayer(), look);
+    await mod.adoptPet(mod.db, c.id, 'cat');
+    const later = Date.now() + (100 / PETS.hungerDecayPerRealHour + PETS.neglectHours + 1) * REAL_MS_PER_HOUR;
+    expect(await mod.enforcePetCare(mod.db, c.id, Date.now())).toBeNull();
+    expect(await mod.enforcePetCare(mod.db, c.id, later)).toMatch(/refuge/);
+    expect(await mod.enforcePetCare(mod.db, c.id, later)).toBeNull();
+    const expected = ECONOMY.startingMoneyCents - PETS.species.cat.priceCents - PETS.shelterFineCents;
+    expect(await mod.ledgerBalance(mod.db, c.id)).toBe(expected);
+    await expect(mod.feedPet(mod.db, c.id)).rejects.toThrow(/pas d'animal/);
   });
 
   it("reloge l'habitant d'un immeuble qui a disparu de la carte", async () => {

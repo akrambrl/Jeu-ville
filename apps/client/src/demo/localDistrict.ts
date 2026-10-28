@@ -38,16 +38,27 @@ import {
   type Notice,
   type StoredGauges,
   type TilePoint,
+  type OwnedVehicle,
+  type StoredPet,
+  type VehicleKind,
+  type ShopPlace,
+  PETS,
+  VEHICLES,
+  adoptPet,
+  drainBattery,
+  feedPet,
+  isPetNeglected,
+  petHappinessBonus,
+  petLook,
+  shopItems,
+  shopPlaces,
+  speedFactor,
+  walkPet,
 } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerHandlers, PlayerView } from '../net/link.js';
 
 const SAVE_KEY = 'jeu-ville.demo.save';
 const SELF_ID = 'moi';
-const PASSERBY_COUNT = 30;
-/** Longueur max (cases) du trajet d'un passant. */
-const PASSERBY_MAX_PATH = 80;
-/** Les passants marchent un peu moins vite que le joueur. */
-const PASSERBY_SPEED_FACTOR = 0.6;
 const SAVE_INTERVAL_MS = 5_000;
 /** Pas de simulation maximal (onglet en arrière-plan, gros ralentissement). */
 const MAX_TICK_MS = 1_000;
@@ -62,6 +73,11 @@ export interface DemoSave {
   gaugesUpdatedAt: number;
   pos: TilePoint;
   buildingId: string;
+  /** Ajouts du lot « cycles et animalerie » (absents des anciennes sauvegardes). */
+  vehicles?: OwnedVehicle[];
+  activeVehicle?: VehicleKind | '';
+  pet?: StoredPet | null;
+  petLostAt?: number | null;
 }
 
 export const demoStore = {
@@ -131,9 +147,13 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
     cityId: map.cityId,
     districtId: districtKey,
     moneyCents: save.moneyCents,
-    gauges: snapshotGauges(save.gauges, save.gaugesUpdatedAt, nowMs),
+    gauges: snapshotGauges(save.gauges, save.gaugesUpdatedAt, nowMs, petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs)),
     age: { years: Math.min(age.years, TIME.maxAge), dayOfYear: age.dayOfYear },
     home: building ? { dwellingId: `${building.id}:1`, buildingName: building.name, door: building.door } : null,
+    vehicles: save.vehicles ?? [],
+    activeVehicle: save.activeVehicle ?? '',
+    pet: save.pet ?? null,
+    happinessBonus: petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs),
     computedAt: nowMs,
   };
 }
@@ -149,6 +169,7 @@ export class LocalDistrict implements DistrictLink {
   /** Une case = une personne, comme sur le serveur. */
   private readonly occupancy = new TileOccupancy();
   private readonly food: FoodPlace[];
+  private readonly shops: ShopPlace[];
   private readonly walkable: TilePoint[];
   private handlers: PlayerHandlers | null = null;
   private selfCb: (self: CharacterSelf) => void = () => {};
@@ -162,6 +183,7 @@ export class LocalDistrict implements DistrictLink {
   ) {
     this.grid = new MapGrid(map);
     this.food = foodPlaces(map);
+    this.shops = shopPlaces(map);
     // Où apparaissent les passants : cases reliées aux rues (pas les cours fermées).
     this.walkable = reachableTiles(this.grid, map.spawn);
 
@@ -181,11 +203,21 @@ export class LocalDistrict implements DistrictLink {
       restUntil: 0,
       look: save.look,
       pet: '',
-      view: { id: SELF_ID, name: save.name, x: start.x, y: start.y, dir: 2, moving: false, pet: '', ...save.look },
+      view: {
+        id: SELF_ID,
+        name: save.name,
+        x: start.x,
+        y: start.y,
+        dir: 2,
+        moving: false,
+        pet: petLook(save.pet ?? null),
+        vehicle: save.activeVehicle ?? '',
+        ...save.look,
+      },
     });
     for (let i = 0; i < PASSERBY.countPerDistrict; i++) {
       const b = spawnPasserby(`passant-${i}`, this.occupancy, this.walkable, Date.now());
-      this.walkers.set(b.id, { ...b, view: { id: b.id, name: '', x: b.x, y: b.y, dir: 2, moving: false, pet: b.pet, ...b.look } });
+      this.walkers.set(b.id, { ...b, view: { id: b.id, name: '', x: b.x, y: b.y, dir: 2, moving: false, pet: b.pet, vehicle: '', ...b.look } });
     }
 
     // Temps réellement écoulé : si la page rame (téléphone modeste), on ne marche pas au ralenti.
@@ -195,7 +227,11 @@ export class LocalDistrict implements DistrictLink {
       this.tick(Math.min(MAX_TICK_MS, now - last));
       last = now;
     }, SERVER.roomTickMs);
-    window.setInterval(() => this.selfCb(this.self()), SERVER.selfSnapshotIntervalMs);
+    window.setInterval(() => {
+      this.checkPetCare();
+      this.selfCb(this.self());
+    }, SERVER.selfSnapshotIntervalMs);
+    window.setTimeout(() => this.checkPetCare(), 1000);
     window.setInterval(() => this.persist(), SAVE_INTERVAL_MS);
     window.addEventListener('pagehide', () => this.persist());
   }
@@ -248,6 +284,57 @@ export class LocalDistrict implements DistrictLink {
     this.selfCb(this.self());
   }
 
+  buyItem(placeId: string, itemId: string): void {
+    const me = this.walkers.get(SELF_ID)!;
+    const place = this.shops.find((p) => p.id === placeId);
+    if (!place || Math.hypot(me.x - place.x, me.y - place.y) > MOVEMENT.foodInteractionRange) {
+      return this.notice('Approche-toi de la boutique.');
+    }
+    const item = shopItems(place.kind).find((i) => i.id === itemId);
+    if (!item) return this.notice("Ce n'est pas vendu ici.");
+    if (item.type === 'vehicle' && (this.save.vehicles ?? []).some((v) => v.kind === item.vehicle)) {
+      return this.notice(`Tu as déjà un ${VEHICLES[item.vehicle].label.toLowerCase()}.`);
+    }
+    if (item.type === 'pet' && this.save.pet) return this.notice("Tu as déjà un animal : occupe-t'en bien !");
+    if (this.save.moneyCents < item.costCents) return this.notice("Pas assez d'argent.");
+    this.save.moneyCents -= item.costCents;
+    if (item.type === 'vehicle') {
+      this.save.vehicles = [...(this.save.vehicles ?? []), { kind: item.vehicle, battery: 100 }];
+      this.save.activeVehicle = item.vehicle;
+    } else {
+      this.save.pet = adoptPet(item.species, Math.random, Date.now());
+    }
+    this.commit();
+  }
+
+  setVehicle(vehicle: VehicleKind | ''): void {
+    if (vehicle) {
+      const owned = (this.save.vehicles ?? []).find((v) => v.kind === vehicle);
+      if (!owned) return this.notice("Tu n'as pas ce véhicule.");
+      if (owned.battery <= 0) return this.notice('Batterie vide : recharge-la chez toi.');
+    }
+    this.save.activeVehicle = vehicle;
+    this.commit();
+  }
+
+  chargeScooter(): void {
+    const me = this.walkers.get(SELF_ID)!;
+    const door = this.self().home?.door;
+    if (!door || Math.hypot(me.x - door.x, me.y - door.y) > MOVEMENT.homeInteractionRange) return this.notice('Rentre chez toi pour recharger.');
+    const scooter = (this.save.vehicles ?? []).find((v) => v.kind === 'scooter');
+    if (!scooter) return this.notice("Tu n'as pas de trottinette.");
+    scooter.battery = 100;
+    this.commit();
+  }
+
+  feedPet(): void {
+    if (!this.save.pet) return this.notice("Tu n'as pas d'animal.");
+    if (this.save.moneyCents < PETS.kibble.costCents) return this.notice("Pas assez d'argent.");
+    this.save.moneyCents -= PETS.kibble.costCents;
+    this.save.pet = feedPet(this.save.pet, Date.now());
+    this.commit();
+  }
+
   rideBus(to: TilePoint): void {
     const me = this.walkers.get(SELF_ID)!;
     if (!isTravelDestination(this.map, to, this.self().home?.door ?? null)) {
@@ -298,12 +385,57 @@ export class LocalDistrict implements DistrictLink {
 
   // ---------- Simulation ----------
 
+  private notice(text: string, level: Notice['level'] = 'error'): void {
+    this.noticeCb({ level, text });
+  }
+
+  /** Sauvegarde, met à jour ce que voient les autres (véhicule, animal) et la vue privée. */
+  private commit(): void {
+    const me = this.walkers.get(SELF_ID)!;
+    Object.assign(me.view, { vehicle: this.save.activeVehicle ?? '', pet: petLook(this.save.pet ?? null) });
+    this.handlers?.changed(SELF_ID, me.view);
+    this.persist();
+    this.selfCb(this.self());
+  }
+
+  /** Batterie de la trottinette et promenade de l'animal, à chaque pas du joueur. */
+  private afterSelfMove(moved: number, now: number): void {
+    if (moved <= 0) return;
+    if (this.save.pet) this.save.pet = walkPet(this.save.pet, moved, now);
+    const kind = this.save.activeVehicle;
+    const v = kind ? (this.save.vehicles ?? []).find((x) => x.kind === kind) : undefined;
+    if (!v) return;
+    v.battery = drainBattery(v, moved).battery;
+    if (v.battery <= 0) {
+      this.save.activeVehicle = '';
+      this.notice('Batterie de la trottinette vide : recharge-la chez toi.', 'info');
+      this.commit();
+    }
+  }
+
+  /** Animal négligé : un refuge le recueille, avec une amende. */
+  private checkPetCare(): void {
+    const pet = this.save.pet;
+    if (!pet || !isPetNeglected(pet, Date.now())) return;
+    const fine = Math.min(this.save.moneyCents, PETS.shelterFineCents);
+    this.save.moneyCents -= fine;
+    this.save.pet = null;
+    this.save.petLostAt = Date.now();
+    this.notice(`${pet.name} n'a pas été nourri depuis trop longtemps : un refuge l'a recueilli. Amende : ${fine / 100} €.`, 'info');
+    this.commit();
+  }
+
   private tick(dtMs: number): void {
     const now = Date.now();
     for (const [id, w] of this.walkers) {
       const wasMoving = w.view.moving;
       if (id === SELF_ID) {
-        if (w.path.length > 0) stepWalker(this.grid, this.occupancy, w, (w.speed * dtMs) / 1000, dtMs);
+        if (w.path.length > 0) {
+          const before = { x: w.x, y: w.y };
+          const vehicle = this.save.activeVehicle ?? '';
+          stepWalker(this.grid, this.occupancy, w, (w.speed * speedFactor(vehicle) * dtMs) / 1000, dtMs);
+          this.afterSelfMove(Math.hypot(w.x - before.x, w.y - before.y), now);
+        }
       } else {
         updatePasserby(this.grid, this.occupancy, w, dtMs, now);
       }

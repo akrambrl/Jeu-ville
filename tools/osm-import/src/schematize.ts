@@ -856,7 +856,17 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
   const center = pois.find((p) => p.kind === 'townhall') ?? { x: width / 2, y: height / 2 };
   const byDistance = (list: RawPoi[]) =>
     [...list].sort((a, b) => Math.hypot(a.x - center.x, a.y - center.y) - Math.hypot(b.x - center.x, b.y - center.y));
-  const wanted: { poi: RawPoi; kind: Storefront['kind']; sign: string; poiKind: MapPoi['kind'] }[] = [
+  // Commerces sans équivalent dans OSM (ou tenus par des bots, un par ville) : près de la mairie.
+  const nearTownhall = (kind: RawPoi['kind']): RawPoi[] => {
+    const real = byDistance(raw.pois.filter((p) => p.kind === kind));
+    if (real.length > 0) return real.slice(0, 1);
+    return [{ kind, name: '', x: center.x + PITCH, y: center.y }];
+  };
+  const wanted: { poi: RawPoi; kind: Storefront['kind']; sign: string; poiKind: MapPoi['kind']; name?: string }[] = [
+    ...nearTownhall('realestate').map((poi) => ({ poi, kind: 'realestate' as const, sign: 'IMMOBILIER', poiKind: 'realestate' as const, name: 'Agence immobilière' })),
+    ...nearTownhall('jobcenter').map((poi) => ({ poi, kind: 'jobcenter' as const, sign: 'EMPLOI', poiKind: 'jobcenter' as const, name: "Agence pour l'emploi" })),
+    ...nearTownhall('cycles').map((poi) => ({ poi, kind: 'cycles' as const, sign: 'CYCLES', poiKind: 'cycles' as const, name: 'Magasin de cycles' })),
+    ...nearTownhall('petshop').map((poi) => ({ poi, kind: 'petshop' as const, sign: 'ANIMALERIE', poiKind: 'petshop' as const, name: 'Animalerie' })),
     ...raw.pois
       .filter((p) => p.kind === 'bakery')
       .slice(0, MAX_BAKERIES)
@@ -877,7 +887,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     const t = tileAt(x, y);
     return (t === TILE.apartments || t === TILE.commercial) && shapes[y * width + x] === SHAPE.plain;
   };
-  for (const { poi, kind, sign, poiKind } of wanted) {
+  for (const { poi, kind, sign, poiKind, name } of wanted) {
     const ci = Math.floor(poi.x / PITCH);
     const cj = Math.floor(poi.y / PITCH);
     // Îlot du commerce réel, puis les îlots voisins (jusqu'à 2 de distance), du plus proche au plus loin.
@@ -904,7 +914,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
       }
       blockStorefronts.set(`${i},${j}`, (blockStorefronts.get(`${i},${j}`) ?? 0) + 1);
       const entrance = y === 6 ? { x: ox + x, y: oy + 7 } : { x: ox + 7, y: oy + y };
-      pois.push({ kind: poiKind, name: displayName(poi), x: ox + x, y: oy + y, entrance });
+      pois.push({ kind: poiKind, name: name ?? displayName(poi), x: ox + x, y: oy + y, entrance });
       break;
     }
   }

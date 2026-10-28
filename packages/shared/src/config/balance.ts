@@ -150,6 +150,44 @@ export const PASSERBY = {
   restMs: [1_000, 6_000],
 } as const;
 
+/** Véhicules légers (magasin de cycles) : plus rapides que la marche. */
+export const VEHICLES = {
+  bike: { label: 'Vélo', icon: '🚲', priceCents: 250 * CENTS_PER_EURO, speedFactor: 2 },
+  scooter: {
+    label: 'Trottinette électrique',
+    icon: '🛴',
+    priceCents: 450 * CENTS_PER_EURO,
+    speedFactor: 2.5,
+    /** Batterie consommée (%) par case parcourue ; rechargée chez soi. */
+    batteryPerTile: 0.25,
+  },
+} as const;
+
+/** Animaux de compagnie (animalerie). Il faut s'en occuper, sinon un refuge les recueille. */
+export const PETS = {
+  species: {
+    dog: { label: 'Chien', icon: '🐶', priceCents: 300 * CENTS_PER_EURO, names: ['Rex', 'Moka', 'Filou', 'Oreo', 'Simba', 'Pistache'] },
+    cat: { label: 'Chat', icon: '🐱', priceCents: 200 * CENTS_PER_EURO, names: ['Minou', 'Caramel', 'Nala', 'Pacha', 'Choupette', 'Tigrou'] },
+  },
+  /** Robes disponibles par espèce (rendu côté client). */
+  coats: 4,
+  maxPerCharacter: 1,
+  /** Faim de l'animal : vide en 24 h réelles ; son bonheur baisse en 48 h. */
+  hungerDecayPerRealHour: 100 / 24,
+  happinessDecayPerRealHour: 100 / 48,
+  kibble: { label: 'Croquettes', icon: '🦴', costCents: 3 * CENTS_PER_EURO, hunger: 60 },
+  /** Bonheur gagné par case de promenade avec son animal. */
+  walkHappinessPerTile: 0.5,
+  /** Ventre vide depuis plus longtemps que ça (h réelles) : recueilli par un refuge… */
+  neglectHours: 48,
+  /** … avec une amende. */
+  shelterFineCents: 150 * CENTS_PER_EURO,
+  /** Bonheur du joueur : jusqu'à +8 avec un animal heureux, −15 pendant 3 jours après l'avoir perdu. */
+  happinessBonus: 8,
+  lossPenalty: -15,
+  lossPenaltyHours: 72,
+} as const;
+
 export const MOVEMENT = {
   /** Vitesse de marche, en cases par seconde. */
   walkTilesPerSecond: 4,
@@ -183,4 +221,8 @@ export const CITY_LIMITS = {
   doctors: 2,
   /** Un commissariat par ville. */
   policeStations: 1,
+  /** Une agence immobilière par ville, tenue par un bot. */
+  realEstateAgencies: 1,
+  /** Une agence pour l'emploi par ville. */
+  jobCenters: 1,
 } as const;

@@ -1,4 +1,4 @@
-import { MOVEMENT, foodPlaceInReach, foodPlaces, getDistrictMap, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
+import { MOVEMENT, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -24,6 +24,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
 
   let homeDoor = character.home?.door ?? null;
   const food = foodPlaces(map);
+  const shops = shopPlaces(map);
   const container = document.getElementById('game')!;
   const view = new CityView(container, {
     map,
@@ -33,6 +34,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
       hud.setNearHome(near);
       hud.setNearFood(foodPlaceInReach(food, x, y));
+      hud.setNearShop(shopInReach(shops, x, y));
       hud.setPosition(x, y);
     },
   });
@@ -45,6 +47,10 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       onBusTo: (point) => link.rideBus(point),
       onHomeAction: (action) => link.homeAction(action),
       onBuyFood: (placeId, itemId) => link.buyFood(placeId, itemId),
+      onBuyItem: (placeId, itemId) => link.buyItem(placeId, itemId),
+      onSetVehicle: (vehicle) => link.setVehicle(vehicle),
+      onChargeScooter: () => link.chargeScooter(),
+      onFeedPet: () => link.feedPet(),
       onRecenter: () => view.recenter(),
     },
     destinationsOf(map),
@@ -78,6 +84,7 @@ const CATEGORIES = {
   outdoor: '🌳 Parcs et places',
   worship: '⛪ Lieux de culte',
   quarters: '🏘️ Quartiers',
+  shops: '🛍️ Boutiques et agences',
 } as const;
 
 const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; category: keyof typeof CATEGORIES }> = {
@@ -96,6 +103,10 @@ const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; category: k
   square: { icon: '⛲', kind: 'Place', category: 'outdoor' },
   worship: { icon: '⛪', kind: 'Lieu de culte', category: 'worship' },
   quarter: { icon: '🏘️', kind: 'Quartier', category: 'quarters' },
+  cycles: { icon: '🚲', kind: 'Vélos et trottinettes', category: 'shops' },
+  petshop: { icon: '🐾', kind: 'Animaux de compagnie', category: 'shops' },
+  realestate: { icon: '🔑', kind: 'Acheter ou louer', category: 'shops' },
+  jobcenter: { icon: '💼', kind: 'Offres d’emploi', category: 'shops' },
 };
 
 /** Lieux du quartier proposés dans « Aller à… ». */

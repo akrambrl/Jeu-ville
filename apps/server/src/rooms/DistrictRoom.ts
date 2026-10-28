@@ -10,6 +10,15 @@ import {
   SERVER,
   TileOccupancy,
   buyFoodSchema,
+  buyItemSchema,
+  setVehicleSchema,
+  shopItems,
+  shopPlaces,
+  speedFactor,
+  VEHICLES,
+  type ShopPlace,
+  type VehicleKind,
+  type CharacterSelf,
   rideBusSchema,
   busDropOff,
   isTravelDestination,
@@ -46,6 +55,16 @@ import {
   payFee,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
+import {
+  adoptPet,
+  buyVehicle,
+  chargeScooter,
+  enforcePetCare,
+  feedPet,
+  recordPetWalk,
+  recordRide,
+  setActiveVehicle,
+} from '../domain/possessions.js';
 
 import { DistrictState, PlayerState } from './state.js';
 
@@ -58,12 +77,20 @@ interface Session extends Walker {
   client: Client;
   /** Porte de l'immeuble du joueur (pour les actions « chez soi »). */
   homeDoor: { x: number; y: number } | null;
+  /** Véhicule utilisé et batterie (trottinette), d'après le dernier CharacterSelf. */
+  vehicle: VehicleKind | '';
+  battery: number;
+  hasPet: boolean;
+  /** Cases parcourues depuis la dernière sauvegarde (batterie, promenade). */
+  rideTiles: number;
+  petTiles: number;
 }
 
 export class DistrictRoom extends Room<DistrictState> {
   override state = new DistrictState();
   private grid!: MapGrid;
   private food: FoodPlace[] = [];
+  private shops: ShopPlace[] = [];
   /** Passants (bots) du quartier, simulés ici et vus par tous. */
   private readonly passersby: Passerby[] = [];
   /** Une case = une personne (joueurs, et bientôt bots ; stands des marchands). */
@@ -76,6 +103,7 @@ export class DistrictRoom extends Room<DistrictState> {
     if (!map) throw new Error(`Quartier inconnu : ${options.districtId}`);
     this.grid = new MapGrid(map);
     this.food = foodPlaces(map);
+    this.shops = shopPlaces(map);
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
     const tiles = reachableTiles(this.grid, map.spawn);
     for (let i = 0; i < PASSERBY.countPerDistrict; i++) {
@@ -90,6 +118,10 @@ export class DistrictRoom extends Room<DistrictState> {
     this.onMessage(ClientMessage.homeAction, (client, raw) => this.handleHomeAction(client, raw));
     this.onMessage(ClientMessage.buyFood, (client, raw) => this.handleBuyFood(client, raw));
     this.onMessage(ClientMessage.rideBus, (client, raw) => this.handleRideBus(client, raw));
+    this.onMessage(ClientMessage.buyItem, (client, raw) => this.handleBuyItem(client, raw));
+    this.onMessage(ClientMessage.setVehicle, (client, raw) => this.handleSetVehicle(client, raw));
+    this.onMessage(ClientMessage.chargeScooter, (client) => this.handleChargeScooter(client));
+    this.onMessage(ClientMessage.feedPet, (client) => this.handleFeedPet(client));
 
     this.setSimulationInterval((dt) => this.tick(dt), SERVER.roomTickMs);
     this.clock.setInterval(() => void this.pushSelfToAll(), SERVER.selfSnapshotIntervalMs);
@@ -111,6 +143,8 @@ export class DistrictRoom extends Room<DistrictState> {
       if (s.characterId === auth.characterId) s.client.leave();
     }
 
+    // Animal négligé pendant l'absence : recueilli par un refuge.
+    const petNotice = await enforcePetCare(db, auth.characterId);
     const [self, stored] = await Promise.all([
       getCharacterSelf(db, auth.characterId),
       getCharacterPosition(db, auth.characterId),
@@ -132,6 +166,11 @@ export class DistrictRoom extends Room<DistrictState> {
       tile: { x: pos.x, y: pos.y },
       blockedMs: 0,
       homeDoor: self.home?.door ?? null,
+      vehicle: '',
+      battery: 100,
+      hasPet: false,
+      rideTiles: 0,
+      petTiles: 0,
     };
     this.sessions.set(client.sessionId, session);
 
@@ -148,7 +187,86 @@ export class DistrictRoom extends Room<DistrictState> {
     p.bodyType = self.look.bodyType;
     this.state.players.set(client.sessionId, p);
 
-    client.send(ServerMessage.self, self);
+    this.sendSelf(session, self);
+    if (petNotice) this.notify(client, 'info', petNotice);
+  }
+
+  /** Envoie la vue privée au joueur et met à jour ce que les autres voient (véhicule, animal). */
+  private sendSelf(s: Session, self: CharacterSelf): void {
+    s.homeDoor = self.home?.door ?? null;
+    s.vehicle = self.activeVehicle;
+    s.battery = self.vehicles.find((v) => v.kind === self.activeVehicle)?.battery ?? 100;
+    s.hasPet = self.pet !== null;
+    const p = this.state.players.get(s.id);
+    if (p) {
+      p.vehicle = self.activeVehicle;
+      p.pet = self.pet ? `${self.pet.species}:${self.pet.coat}` : '';
+    }
+    s.client.send(ServerMessage.self, self);
+  }
+
+  /** Exécute une action de jeu ; les erreurs « métier » deviennent un message au joueur. */
+  private async act(client: Client, label: string, fn: (s: Session) => Promise<CharacterSelf | void>): Promise<void> {
+    const s = this.sessions.get(client.sessionId);
+    if (!s) return;
+    try {
+      const self = await fn(s);
+      if (self) this.sendSelf(s, self);
+    } catch (err) {
+      if (err instanceof GameError) return this.notify(client, 'error', err.message);
+      console.error(label, err);
+      this.notify(client, 'error', 'Erreur serveur, réessaie.');
+    }
+  }
+
+  /** Sauvegarde batterie et promenade accumulées pendant le trajet. */
+  private async flushTrip(s: Session, ridden: VehicleKind | ''): Promise<void> {
+    const ride = s.rideTiles;
+    const walk = s.petTiles;
+    s.rideTiles = 0;
+    s.petTiles = 0;
+    if (ride > 0 && ridden && 'batteryPerTile' in VEHICLES[ridden]) await recordRide(db, s.characterId, ridden, ride);
+    if (walk > 0) await recordPetWalk(db, s.characterId, walk);
+    if (ride > 0 || walk > 0) {
+      const self = await getCharacterSelf(db, s.characterId);
+      if (self && this.sessions.get(s.id) === s) this.sendSelf(s, self);
+    }
+  }
+
+  private handleBuyItem(client: Client, raw: unknown): Promise<void> {
+    return this.act(client, 'buyItem', async (s) => {
+      const parsed = buyItemSchema.safeParse(raw);
+      if (!parsed.success) return;
+      const place = this.shops.find((p) => p.id === parsed.data.placeId);
+      if (!place) throw new GameError('Cette boutique n’existe plus.');
+      if (Math.hypot(s.x - place.x, s.y - place.y) > MOVEMENT.foodInteractionRange) throw new GameError('Approche-toi de la boutique.');
+      const item = shopItems(place.kind).find((i) => i.id === parsed.data.itemId);
+      if (!item) throw new GameError("Ce n'est pas vendu ici.");
+      return item.type === 'vehicle' ? buyVehicle(db, s.characterId, item.vehicle) : adoptPet(db, s.characterId, item.species);
+    });
+  }
+
+  private handleSetVehicle(client: Client, raw: unknown): Promise<void> {
+    return this.act(client, 'setVehicle', async (s) => {
+      const parsed = setVehicleSchema.safeParse(raw);
+      if (!parsed.success) return;
+      await this.flushTrip(s, s.vehicle);
+      return setActiveVehicle(db, s.characterId, parsed.data.vehicle);
+    });
+  }
+
+  private handleChargeScooter(client: Client): Promise<void> {
+    return this.act(client, 'chargeScooter', async (s) => {
+      if (!s.homeDoor || Math.hypot(s.x - s.homeDoor.x, s.y - s.homeDoor.y) > MOVEMENT.homeInteractionRange) {
+        throw new GameError('Rentre chez toi pour recharger.');
+      }
+      await this.flushTrip(s, s.vehicle);
+      return chargeScooter(db, s.characterId);
+    });
+  }
+
+  private handleFeedPet(client: Client): Promise<void> {
+    return this.act(client, 'feedPet', (s) => feedPet(db, s.characterId));
   }
 
   override async onLeave(client: Client): Promise<void> {
@@ -156,7 +274,10 @@ export class DistrictRoom extends Room<DistrictState> {
     this.sessions.delete(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.occupancy.releaseAll(client.sessionId);
-    if (session) await this.persistPosition(session);
+    if (session) {
+      await this.flushTrip(session, session.vehicle);
+      await this.persistPosition(session);
+    }
   }
 
   override async onDispose(): Promise<void> {
@@ -169,12 +290,29 @@ export class DistrictRoom extends Room<DistrictState> {
   }
 
   private tick(dtMs: number): void {
-    const distance = (MOVEMENT.walkTilesPerSecond * dtMs) / 1000;
     for (const [sessionId, s] of this.sessions) {
       const p = this.state.players.get(sessionId);
       if (!p) continue;
       if (s.path.length > 0) {
+        const before = { x: s.x, y: s.y };
+        const distance = (MOVEMENT.walkTilesPerSecond * speedFactor(s.vehicle) * dtMs) / 1000;
         stepWalker(this.grid, this.occupancy, s, distance, dtMs);
+        const moved = Math.hypot(s.x - before.x, s.y - before.y);
+        if (s.hasPet) s.petTiles += moved;
+        const spec = s.vehicle ? VEHICLES[s.vehicle] : null;
+        if (spec && 'batteryPerTile' in spec) {
+          s.rideTiles += moved;
+          s.battery -= moved * spec.batteryPerTile;
+          if (s.battery <= 0) {
+            // Batterie à plat : on finit à pied.
+            const ridden = s.vehicle;
+            s.vehicle = '';
+            p.vehicle = '';
+            this.notify(s.client, 'info', 'Batterie de la trottinette vide : recharge-la chez toi.');
+            void this.flushTrip(s, ridden);
+          }
+        }
+        if (s.path.length === 0) void this.flushTrip(s, s.vehicle);
         p.x = s.x;
         p.y = s.y;
         p.dir = s.dir;
@@ -279,8 +417,10 @@ export class DistrictRoom extends Room<DistrictState> {
 
   private async pushSelfToAll(): Promise<void> {
     for (const s of this.sessions.values()) {
+      const petNotice = s.hasPet ? await enforcePetCare(db, s.characterId) : null;
+      if (petNotice) this.notify(s.client, 'info', petNotice);
       const self = await getCharacterSelf(db, s.characterId);
-      if (self) s.client.send(ServerMessage.self, self);
+      if (self) this.sendSelf(s, self);
     }
   }
 

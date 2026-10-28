@@ -241,6 +241,10 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (t.amenity === 'fast_food') return 'fastfood';
     if (t.amenity === 'police') return 'police';
     if (t.shop === 'supermarket') return 'supermarket';
+    if (t.shop === 'bicycle') return 'cycles';
+    if (t.office === 'estate_agent' || t.shop === 'estate_agent') return 'realestate';
+    if (t.shop === 'pet') return 'petshop';
+    if (t.office === 'employment_agency') return 'jobcenter';
     return null;
   };
   const defaultName: Partial<Record<RawPoi['kind'], string>> = { bakery: 'Boulangerie', market: 'Place du marché' };

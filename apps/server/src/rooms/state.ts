@@ -16,6 +16,8 @@ export class PlayerState extends Schema {
   @type('uint8') bodyType = 0;
   /** Animal qui suit le perso (« dog:2 »), ou ''. */
   @type('string') pet = '';
+  /** Véhicule utilisé (« bike », « scooter ») ou ''. */
+  @type('string') vehicle = '';
 }
 
 export class DistrictState extends Schema {

@@ -21,8 +21,10 @@ const COATS: Record<string, [number, number][]> = {
   ],
 };
 /** Distance (cases) à laquelle l'animal se tient derrière son maître. */
-const FOLLOW_DISTANCE = 0.55;
-const FOLLOW_SIDE = 0.25;
+const FOLLOW_DISTANCE = 0.5;
+const FOLLOW_SIDE = 0.4;
+/** Un peu plus gros que nature, pour bien le voir à côté des persos. */
+const PET_SCALE = 1.3;
 
 export class Pet3D {
   readonly root = new THREE.Group();
@@ -68,6 +70,7 @@ export class Pet3D {
     this.tail.position.set(0, 0.21 * s, -0.16 * s);
     add(new THREE.BoxGeometry(0.03, 0.03, cat ? 0.2 : 0.12), furMat, 0, cat ? 0.05 : 0.03, -0.05, this.tail).rotation.x = cat ? -0.9 : -0.6;
     this.root.add(this.tail);
+    this.root.scale.setScalar(PET_SCALE);
   }
 
   /** Suit le maître (position et orientation de sa racine 3D). */
