@@ -9,6 +9,8 @@ export interface DistrictSource {
   renames?: Record<string, string>;
   /** Cités (grands ensembles) : leurs îlots sont bâtis en barres et en tours. bbox comme ci-dessus. */
   estates?: { name: string; bbox: [number, number, number, number] }[];
+  /** Rues commerçantes (noms OSM) : boutiques en rez-de-chaussée et foule de passants. */
+  highStreets?: string[];
 }
 
 export const DISTRICTS: DistrictSource[] = [
@@ -24,6 +26,8 @@ export const DISTRICTS: DistrictSource[] = [
     renames: { Londeau: 'Cité du Londeau' },
     // Limites OSM du quartier Londeau (relation 12593930).
     estates: [{ name: 'Cité du Londeau', bbox: [2.4648, 48.8838, 2.4703, 48.8873] }],
+    // Boucheries, restaurants, fast-foods, taxiphones… et beaucoup de monde.
+    highStreets: ['Boulevard de la République'],
   },
 ];
 

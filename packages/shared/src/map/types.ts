@@ -72,6 +72,8 @@ export const DECOR = {
   statue: 'j',
   /** Fontaine. */
   fountain: 'o',
+  /** Terrasse de café (table, chaises, parasol) sur le trottoir. */
+  terrace: 'T',
   /** But de foot / cage (terrain de sport). */
   goal: 'g',
   /**
@@ -266,9 +268,35 @@ export interface FacadeSign {
 export interface Storefront {
   x: number;
   y: number;
-  kind: 'bakery' | 'pharmacy' | 'fastfood' | 'police' | 'cycles' | 'petshop' | 'realestate' | 'jobcenter';
+  kind:
+    | 'bakery'
+    | 'pharmacy'
+    | 'fastfood'
+    | 'police'
+    | 'cycles'
+    | 'petshop'
+    | 'realestate'
+    | 'jobcenter'
+    // Commerces de rue commerçante (décor ; les restaurants sont aussi des lieux où manger).
+    | 'butcher'
+    | 'taxiphone'
+    | 'restaurant'
+    | 'kebab'
+    | 'hairdresser'
+    | 'grocery'
+    | 'cafe'
+    | 'phone'
+    | 'bazaar';
   /** Texte de l'enseigne (en capitales). */
   sign: string;
+  /** Façade de la vitrine quand elle donne au nord ou à l'ouest (sinon : faces sud et est). */
+  face?: 'n' | 'w';
+}
+
+/** Rue commerçante animée : trottoirs où les passants du coin flânent. */
+export interface BusyStreet {
+  name: string;
+  sidewalks: TilePoint[];
 }
 
 /** Nom de rue écrit sur la chaussée. */
@@ -297,6 +325,7 @@ export interface DistrictMap {
   shapes: string[];
   /** Devantures des cases SHAPE.storefront. */
   storefronts: Storefront[];
+  busyStreets: BusyStreet[];
   /** Lignes de transport animées (purement visuelles pour l'instant). */
   transit: Transit;
   cycleways: Cycleway[];

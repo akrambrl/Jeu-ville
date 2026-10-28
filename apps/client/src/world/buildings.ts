@@ -53,6 +53,15 @@ const FRONTS: Record<Storefront['kind'], Omit<FrontStyle, 'sign'>> = {
   petshop: { wall: '#f2c14e', signBg: '#7b4b2a', signFg: '#fff3d6', glass: '#3d5570', awning: ['#e07a2f', '#fff3d6'] },
   realestate: { wall: '#f4f1ea', signBg: '#1d3557', signFg: '#f1faee', glass: '#9fb6c9' },
   jobcenter: { wall: '#eef3f8', signBg: '#2b59a3', signFg: '#ffffff', glass: '#9fb6d6' },
+  butcher: { wall: '#8c1f28', signBg: '#5e0f16', signFg: '#ffffff', glass: '#f4d9d2', awning: ['#b02a35', '#ffffff'] },
+  taxiphone: { wall: '#2b3a67', signBg: '#f2c14e', signFg: '#1b2440', glass: '#9fb6d6' },
+  restaurant: { wall: '#5a3e2b', signBg: '#2e1f15', signFg: '#f6d38a', glass: '#f3c97a', awning: ['#7a2e2e', '#f2e6d0'] },
+  kebab: { wall: '#d9822b', signBg: '#a3361f', signFg: '#fff3c4', glass: '#3a2d22', awning: ['#e3a33c', '#a3361f'] },
+  hairdresser: { wall: '#1f1f24', signBg: '#e8e8ec', signFg: '#1f1f24', glass: '#a9c4d6' },
+  grocery: { wall: '#3f7a3a', signBg: '#2a5426', signFg: '#f3f0c8', glass: '#d8e8b0', awning: ['#3f7a3a', '#f3f0c8'] },
+  cafe: { wall: '#2f4f4f', signBg: '#1c3030', signFg: '#f2e6d0', glass: '#e8c48a', awning: ['#a23b2a', '#f2e6d0'] },
+  phone: { wall: '#e6e9ef', signBg: '#e4572e', signFg: '#ffffff', glass: '#9fb6d6' },
+  bazaar: { wall: '#c96f9b', signBg: '#6b2a5c', signFg: '#ffe9f4', glass: '#f4d06f', awning: ['#f4d06f', '#6b2a5c'] },
 };
 
 /** Quadrilatères regroupés par matériau, fusionnés en un maillage chacun. */
@@ -153,6 +162,13 @@ export async function buildBuildings(grid: MapGrid, storefronts: Storefront[]): 
     }
   }
   await Promise.all(houseJobs);
+  // Enseignes drapeau des vitrines tournées au nord ou à l'ouest : visibles depuis la caméra.
+  for (const f of storefronts) {
+    if (!f.face) continue;
+    const prev = f.face === 'n' ? fronts.get(`${f.x - 1},${f.y}`) : fronts.get(`${f.x},${f.y - 1}`);
+    if (prev?.sign === f.sign && prev.face === f.face) continue;
+    addBladeSign(extras, f, groundTop(grid.tileAt(f.x, f.y)) + LEVEL_H * 1.25);
+  }
   group.add(quads.build(), rims.build(), extras);
   return { group, roofHeight };
 }
@@ -189,11 +205,12 @@ function addColumn(grid: MapGrid, quads: QuadBatch, extras: THREE.Group, x: numb
     const a = new THREE.Vector3(x + s.a[0], 0, y + s.a[1]);
     const b = new THREE.Vector3(x + s.b[0], 0, y + s.b[1]);
     const at = (p: THREE.Vector3, h: number) => new THREE.Vector3(p.x, h, p.z);
-    // Les vitrines et enseignes ne vont que sur les faces visibles (sud, est).
-    const front = s.dy === 1 || s.dx === 1;
+    // Les vitrines et enseignes vont sur les faces visibles (sud, est), ou sur la face indiquée.
+    const facing = frontStyle && shape === SHAPE.storefront ? front?.face : undefined;
+    const isFront = facing === 'n' ? s.dy === -1 : facing === 'w' ? s.dx === -1 : s.dy === 1 || s.dx === 1;
     const g0 = base;
     const g1 = base + LEVEL_H;
-    quads.add(front ? groundKey : facadeKey, front ? ground : upper, [at(a, g0), at(b, g0), at(b, g1), at(a, g1)], s.n, 1, 1);
+    quads.add(isFront ? groundKey : facadeKey, isFront ? ground : upper, [at(a, g0), at(b, g0), at(b, g1), at(a, g1)], s.n, 1, 1);
     if (levels > 1) quads.add(facadeKey, upper, [at(a, g1), at(b, g1), at(b, top), at(a, top)], s.n, 1, levels - 1);
   }
 
@@ -381,6 +398,30 @@ function addPitchedRoof(
     extras.add(dormer);
   }
   void grid;
+}
+
+/** Enseigne perpendiculaire à la façade (lisible des deux côtés). */
+function addBladeSign(extras: THREE.Group, f: Storefront, h: number): void {
+  const style = FRONTS[f.kind];
+  const tex = signTexture(f.sign, style.signBg, style.signFg);
+  const width = Math.max(0.55, f.sign.length * 0.07);
+  const board = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, width / 4),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, side: THREE.DoubleSide }),
+  );
+  const out = 0.5 + width / 2 + 0.02;
+  if (f.face === 'n') {
+    board.rotation.y = Math.PI / 2;
+    board.position.set(f.x, h, f.y - out);
+  } else {
+    board.position.set(f.x - out, h, f.y);
+  }
+  const arm = new THREE.Mesh(
+    new THREE.BoxGeometry(f.face === 'n' ? 0.03 : width + 0.04, 0.03, f.face === 'n' ? width + 0.04 : 0.03),
+    new THREE.MeshStandardMaterial({ color: 0x2b2f36 }),
+  );
+  arm.position.set(board.position.x, h + width / 8 + 0.02, board.position.z);
+  extras.add(board, arm);
 }
 
 function addSign(extras: THREE.Group, x: number, y: number, h: number, text: string, bg: string, fg: string, width: number, clock = false): void {

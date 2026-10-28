@@ -22,6 +22,8 @@ export interface Passerby extends Walker {
   look: PasserbyLook;
   /** Animal promené (« dog:2 » = chien, robe n°2), ou '' . */
   pet: string;
+  /** Flâneur d'une rue commerçante (index dans `busyStreets`) : il y reste. */
+  zone?: number;
 }
 
 /** Robes de chien disponibles (voir le rendu côté client). */
@@ -53,6 +55,7 @@ export function spawnPasserby(
   tiles: TilePoint[],
   nowMs: number,
   rand: () => number = Math.random,
+  zone?: number,
 ): Passerby {
   // Une case libre au hasard (quelques essais), sinon la première libre.
   let p: TilePoint | undefined;
@@ -80,6 +83,7 @@ export function spawnPasserby(
       bodyType: Math.floor(rand() * 3),
     },
     pet: rand() < PASSERBY.dogShare ? `dog:${Math.floor(rand() * DOG_COATS)}` : '',
+    ...(zone !== undefined ? { zone } : {}),
   };
 }
 
@@ -93,7 +97,8 @@ export function updatePasserby(
   rand: () => number = Math.random,
 ): void {
   if (b.path.length === 0 && nowMs >= b.restUntil) {
-    const target = pickNear(grid, b.tile, rand);
+    const zone = b.zone !== undefined ? grid.map.busyStreets[b.zone]?.sidewalks : undefined;
+    const target = zone ? pickInZone(zone, b.tile, rand) : pickNear(grid, b.tile, rand);
     const path = target && occ.isFree(target.x, target.y, b.id) ? pathAvoiding(grid, occ, b, target, PASSERBY.maxPathLength) : null;
     if (path) b.path = path;
     b.restUntil = nowMs + PASSERBY.restMs[0] + rand() * (PASSERBY.restMs[1] - PASSERBY.restMs[0]);
@@ -101,6 +106,16 @@ export function updatePasserby(
   if (b.path.length === 0) return;
   stepWalker(grid, occ, b, (b.speed * dtMs) / 1000, dtMs);
   if (b.path.length === 0) b.restUntil = nowMs + PASSERBY.restMs[0] + rand() * (PASSERBY.restMs[1] - PASSERBY.restMs[0]);
+}
+
+/** Rue commerçante : une autre case de trottoir pas trop loin (on va de vitrine en vitrine). */
+function pickInZone(zone: TilePoint[], from: TilePoint, rand: () => number): TilePoint | null {
+  for (let tries = 0; tries < 12; tries++) {
+    const t = zone[Math.floor(rand() * zone.length)]!;
+    const d = Math.hypot(t.x - from.x, t.y - from.y);
+    if (d >= 2 && d <= PASSERBY.busyTargetRadius) return t;
+  }
+  return null;
 }
 
 function pickNear(grid: MapGrid, from: TilePoint, rand: () => number): TilePoint | null {

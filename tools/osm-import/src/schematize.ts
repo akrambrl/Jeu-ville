@@ -69,6 +69,29 @@ const VENDOR_SEARCH_RADIUS = 6;
 /** Commerces de rez-de-chaussée par îlot, au plus. */
 const MAX_STOREFRONTS_PER_BLOCK = 3;
 
+type Side = 'n' | 's' | 'e' | 'w';
+/** Îlots qui deviennent des immeubles à boutiques au bord d'une rue commerçante. */
+const MAINSTREET_FROM = new Set<string>(['houses', 'gardens', 'apartments', 'tower', 'shops']);
+/** Boutiques d'une rue commerçante, dans l'ordre où elles se succèdent. */
+const SHOP_MIX: { kind: Storefront['kind']; sign: string; eat?: string }[] = [
+  { kind: 'butcher', sign: 'BOUCHERIE' },
+  { kind: 'kebab', sign: 'KEBAB', eat: 'Kebab du boulevard' },
+  { kind: 'taxiphone', sign: 'TAXIPHONE' },
+  { kind: 'cafe', sign: 'CAFÉ' },
+  { kind: 'hairdresser', sign: 'COIFFURE' },
+  { kind: 'grocery', sign: 'PRIMEUR' },
+  { kind: 'restaurant', sign: 'RESTAURANT', eat: 'Restaurant du boulevard' },
+  { kind: 'phone', sign: 'TÉLÉPHONIE' },
+  { kind: 'bazaar', sign: 'BAZAR' },
+  { kind: 'kebab', sign: 'TACOS', eat: 'Tacos du boulevard' },
+  { kind: 'grocery', sign: 'ÉPICERIE' },
+  { kind: 'hairdresser', sign: 'BARBIER' },
+  { kind: 'restaurant', sign: 'PIZZERIA', eat: 'Pizzeria du boulevard' },
+  { kind: 'butcher', sign: 'BOUCHERIE' },
+  { kind: 'cafe', sign: 'BRASSERIE' },
+  { kind: 'taxiphone', sign: 'TRANSFERT' },
+];
+
 /**
  * Pas de marques déposées dans le jeu (ces commerces deviendront rachetables
  * par des joueurs) : les enseignes de chaînes prennent un nom générique.
@@ -194,6 +217,7 @@ type BlockKind =
   | 'market'
   | 'plaza'
   | 'gym'
+  | 'mainstreet'
   | 'rail';
 
 interface Edge {
@@ -537,6 +561,22 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     kinds[cj]![ci] = BLOCK_POIS[p.kind]!;
   }
 
+  // Rues commerçantes : les îlots ordinaires qui les bordent deviennent des immeubles à boutiques.
+  const highStreets = new Set(d.highStreets ?? []);
+  const mainSides = new Map<string, { side: Side; street: string }[]>();
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const sides: { side: Side; street: string }[] = [];
+      for (const [side, e] of [['s', hEdges[j + 1]?.[i]], ['e', vEdges[i + 1]?.[j]], ['n', hEdges[j]?.[i]], ['w', vEdges[i]?.[j]]] as const) {
+        const street = edgeName(e);
+        if (street && highStreets.has(street)) sides.push({ side, street });
+      }
+      if (sides.length === 0 || claimed.has(`${i},${j}`) || !MAINSTREET_FROM.has(kinds[j]![i]!)) continue;
+      kinds[j]![i] = 'mainstreet';
+      mainSides.set(`${i},${j}`, sides);
+    }
+  }
+
   // ---------- 3. Remplissage des îlots ----------
 
   const pois: MapPoi[] = [];
@@ -646,6 +686,26 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           deco(4, 4, DECOR.tree);
           deco(3, 4, DECOR.bench);
           starterCandidates.push({ i, j });
+          break;
+        }
+        case 'mainstreet': {
+          // Immeubles de rapport autour d'une cour, halls d'entrée au sud et à l'est.
+          // Côté nord ou ouest, la caméra ne voit pas la façade : boutiques en rez-de-chaussée
+          // bas devant un immeuble moins haut, pour que leurs enseignes drapeau dépassent.
+          const sides = (mainSides.get(`${i},${j}`) ?? []).map((m) => m.side);
+          const hidden = sides.includes('n') || sides.includes('w');
+          const lv = hidden ? 3 : 4 + (r(3) < 0.5 ? 0 : 1);
+          fill(1, 1, 6, 6, TILE.grass);
+          for (let y = 1; y <= 6; y++) {
+            for (let x = 1; x <= 6; x++) {
+              if (!(x <= 2 || x >= 5 || y <= 2 || y >= 5)) continue;
+              const annex = (sides.includes('n') && y === 1) || (sides.includes('w') && x === 1);
+              at(x, y, TILE.apartments, annex ? 1 : lv);
+            }
+          }
+          shape(2, 6, SHAPE.entrance);
+          shape(6, 2, SHAPE.entrance);
+          deco(3, 3, DECOR.tree);
           break;
         }
         case 'tower': {
@@ -963,6 +1023,65 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
       break;
     }
   }
+
+  // ---------- 4b. Rues commerçantes : une boutique après l'autre, terrasses, foule ----------
+
+  const busy = new Map<string, Map<string, TilePoint>>();
+  {
+    let mix = 0;
+    const eaten = new Set<string>();
+    for (const [key, sides] of mainSides) {
+      const [i, j] = key.split(',').map(Number) as [number, number];
+      const ox = i * PITCH + 2;
+      const oy = j * PITCH + 2;
+      for (const { side, street } of sides) {
+        // Façade le long de la rue (cases de bâtiment) et trottoir devant chacune.
+        const along = [1, 2, 3, 4, 5, 6];
+        const facade = along.map((k) =>
+          side === 's' ? { x: k, y: 6 } : side === 'n' ? { x: k, y: 1 } : side === 'e' ? { x: 6, y: k } : { x: 1, y: k },
+        );
+        const walk = (p: TilePoint): TilePoint =>
+          side === 's' ? { x: p.x, y: 7 } : side === 'n' ? { x: p.x, y: 0 } : side === 'e' ? { x: 7, y: p.y } : { x: 0, y: p.y };
+        const sidewalks = busy.get(street) ?? new Map<string, TilePoint>();
+        busy.set(street, sidewalks);
+        for (let k = 0; k < BLOCK; k++) {
+          const p = side === 's' ? { x: k, y: 7 } : side === 'n' ? { x: k, y: 0 } : side === 'e' ? { x: 7, y: k } : { x: 0, y: k };
+          const t = { x: ox + p.x, y: oy + p.y };
+          if (tileAt(t.x, t.y) === TILE.pedestrian) sidewalks.set(`${t.x},${t.y}`, t);
+        }
+        // Un local reste libre côté sud et côté est (agence immobilière).
+        const free = (p: TilePoint) =>
+          canHost(ox + p.x, oy + p.y) && !(side === 's' && p.x === 5) && !(side === 'e' && p.y === 5);
+        for (let k = 0; k < facade.length; k++) {
+          if (!free(facade[k]!)) continue;
+          const shop = SHOP_MIX[mix++ % SHOP_MIX.length]!;
+          const tiles = [facade[k]!];
+          if (k + 1 < facade.length && free(facade[k + 1]!)) tiles.push(facade[++k]!);
+          for (const p of tiles) {
+            setShape(ox + p.x, oy + p.y, SHAPE.storefront);
+            storefronts.push({
+              x: ox + p.x,
+              y: oy + p.y,
+              kind: shop.kind,
+              sign: shop.sign,
+              ...(side === 'n' || side === 'w' ? { face: side } : {}),
+            });
+          }
+          const front = walk(tiles[0]!);
+          if (shop.eat && !eaten.has(shop.eat)) {
+            eaten.add(shop.eat);
+            pois.push({ kind: 'fastfood', name: shop.eat, x: ox + tiles[0]!.x, y: oy + tiles[0]!.y, entrance: { x: ox + front.x, y: oy + front.y } });
+          }
+          // Terrasse devant les cafés et restaurants.
+          if ((shop.kind === 'cafe' || shop.kind === 'restaurant') && tiles.length === 2) {
+            const t = walk(tiles[1]!);
+            if (decor[(oy + t.y) * width + ox + t.x] === DECOR.none) setDecor(ox + t.x, oy + t.y, DECOR.terrace);
+          }
+        }
+      }
+    }
+  }
+  const busyStreets = [...busy].map(([name, tiles]) => ({ name, sidewalks: [...tiles.values()] }));
 
   // ---------- 5. Tram : tracé ordonné, arrêts et abris ----------
 
@@ -1294,7 +1413,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           [hEdges[j + 1]?.[i], vEdges[i + 1]?.[j], hEdges[j]?.[i], vEdges[i]?.[j]].map(edgeName).find((n) => n) ?? d.districtName;
         const south = edgeName(hEdges[j + 1]?.[i]) ?? any;
         const east = edgeName(vEdges[i + 1]?.[j]) ?? any;
-        if ((kind === 'apartments' || kind === 'tower') && !starterSet.has(`${i},${j}`)) {
+        if ((kind === 'apartments' || kind === 'tower' || kind === 'mainstreet') && !starterSet.has(`${i},${j}`)) {
           // Deux appartements (T2 et T4) par hall d'entrée, côté sud et côté est.
           for (const side of [
             { id: 's', facade: { x: ox + 2, y: oy + 6 }, door: { x: ox + 2, y: oy + BLOCK - 1 }, street: south },
@@ -1315,7 +1434,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           }
           // Rez-de-chaussée commerçant le long des grands axes.
           for (const [lx, ly, side, edge] of [[5, 6, 's', hEdges[j + 1]?.[i]], [6, 5, 'e', vEdges[i + 1]?.[j]]] as const) {
-            if (!edge?.street || edge.code !== TILE.majorRoad) continue;
+            if (!edge?.street || (edge.code !== TILE.majorRoad && kind !== 'mainstreet')) continue;
             const facade = { x: ox + lx, y: oy + ly };
             if (!BUILDING_CODES.has(tileAt(facade.x, facade.y) ?? '') || shapes[facade.y * width + facade.x] !== SHAPE.plain) continue;
             const door = side === 's' ? { x: facade.x, y: facade.y + 1 } : { x: facade.x + 1, y: facade.y };
@@ -1406,6 +1525,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     decor: rows(decor),
     shapes: rows(shapes),
     storefronts,
+    busyStreets,
     transit: { tram, rail, bus, busStops },
     cycleways,
     vendors,

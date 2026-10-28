@@ -16,6 +16,7 @@ export function makeGrid(rows: string[]): MapGrid {
     decor: rows.map((r) => '.'.repeat(r.length)),
     shapes: rows.map((r) => '.'.repeat(r.length)),
     storefronts: [],
+    busyStreets: [],
     transit: { tram: null, rail: null, bus: [], busStops: [] },
     cycleways: [],
     vendors: [],

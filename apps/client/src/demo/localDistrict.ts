@@ -273,8 +273,13 @@ export class LocalDistrict implements DistrictLink {
         ...save.look,
       },
     });
-    for (let i = 0; i < PASSERBY.countPerDistrict; i++) {
-      const b = spawnPasserby(`passant-${i}`, this.occupancy, this.walkable, Date.now());
+    // Passants du quartier, puis flâneurs des rues commerçantes.
+    const spawns = [
+      ...Array.from({ length: PASSERBY.countPerDistrict }, () => ({ tiles: this.walkable, zone: undefined as number | undefined })),
+      ...map.busyStreets.flatMap((s, zone) => Array.from({ length: PASSERBY.perBusyStreet }, () => ({ tiles: s.sidewalks, zone }))),
+    ];
+    for (const [i, s] of spawns.entries()) {
+      const b = spawnPasserby(`passant-${i}`, this.occupancy, s.tiles, Date.now(), Math.random, s.zone);
       this.walkers.set(b.id, { ...b, view: { id: b.id, name: '', x: b.x, y: b.y, dir: 2, moving: false, pet: b.pet, vehicle: '', ...b.look } });
     }
 

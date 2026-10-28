@@ -20,6 +20,7 @@ export async function buildProps(grid: MapGrid): Promise<THREE.Group> {
   const trees: Record<'tree-large' | 'tree-small', THREE.Matrix4[]> = { 'tree-large': [], 'tree-small': [] };
   const lamps: THREE.Matrix4[] = [];
   const benches: THREE.Matrix4[] = [];
+  const terraces: THREE.Matrix4[] = [];
   const cars: { x: number; y: number; police: boolean; h: number }[] = [];
   const rot = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
@@ -37,6 +38,8 @@ export async function buildProps(grid: MapGrid): Promise<THREE.Group> {
         );
       } else if (d === DECOR.lamp) {
         lamps.push(new THREE.Matrix4().makeTranslation(x - 0.38, top, y - 0.38));
+      } else if (d === DECOR.terrace) {
+        terraces.push(new THREE.Matrix4().makeTranslation(x, top, y));
       } else if (d === DECOR.bench) {
         benches.push(new THREE.Matrix4().makeTranslation(x, top, y));
       } else if (d === DECOR.car || d === DECOR.policeCar) {
@@ -101,6 +104,27 @@ export async function buildProps(grid: MapGrid): Promise<THREE.Group> {
   const back = new THREE.BoxGeometry(0.6, 0.18, 0.04).translate(0, 0.33, -0.09);
   const legs = new THREE.BoxGeometry(0.5, 0.18, 0.16).translate(0, 0.09, 0);
   group.add(instanced(seat, wood, benches), instanced(back, wood, benches), instanced(legs, dark, benches));
+
+  // Terrasses de café : table ronde, deux chaises, parasol.
+  const metal = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.4, roughness: 0.5 });
+  const cloth = new THREE.MeshStandardMaterial({ color: 0xb23a2e, roughness: 0.8, side: THREE.DoubleSide });
+  const tableTop = new THREE.CylinderGeometry(0.16, 0.16, 0.03, 12).translate(0, 0.3, 0);
+  const tableLeg = new THREE.CylinderGeometry(0.02, 0.04, 0.3, 6).translate(0, 0.15, 0);
+  const chairs = mergeBoxes([
+    [0.13, 0.03, 0.13, -0.28, 0.18, 0],
+    [0.03, 0.16, 0.13, -0.34, 0.27, 0],
+    [0.13, 0.03, 0.13, 0.28, 0.18, 0],
+    [0.03, 0.16, 0.13, 0.34, 0.27, 0],
+  ]);
+  const pole2 = new THREE.CylinderGeometry(0.012, 0.012, 0.75, 6).translate(0, 0.375, 0);
+  const parasol = new THREE.ConeGeometry(0.42, 0.16, 8, 1, true).translate(0, 0.8, 0);
+  group.add(
+    instanced(tableTop, metal, terraces),
+    instanced(tableLeg, dark, terraces),
+    instanced(chairs, wood, terraces),
+    instanced(pole2, dark, terraces),
+    instanced(parasol, cloth, terraces),
+  );
 
   // Voitures garées.
   const civil = ['sedan', 'suv', 'hatchback-sports', 'van', 'taxi'];
@@ -274,4 +298,22 @@ function haloTexture(): THREE.CanvasTexture {
     c.fillStyle = g;
     c.fillRect(0, 0, 64, 64);
   });
+}
+
+/** Plusieurs pavés [largeur, hauteur, profondeur, x, y, z] fusionnés en une géométrie. */
+function mergeBoxes(boxes: [number, number, number, number, number, number][]): THREE.BufferGeometry {
+  const parts = boxes.map(([w, h, d, x, y, z]) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).toNonIndexed());
+  const count = parts.reduce((n, g) => n + g.attributes.position!.count, 0);
+  const pos = new Float32Array(count * 3);
+  const nor = new Float32Array(count * 3);
+  let o = 0;
+  for (const g of parts) {
+    pos.set(g.attributes.position!.array as Float32Array, o * 3);
+    nor.set(g.attributes.normal!.array as Float32Array, o * 3);
+    o += g.attributes.position!.count;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return geo;
 }

@@ -128,8 +128,13 @@ export class DistrictRoom extends Room<DistrictState> {
     this.shops = shopPlaces(map);
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
     const tiles = reachableTiles(this.grid, map.spawn);
-    for (let i = 0; i < PASSERBY.countPerDistrict; i++) {
-      const b = spawnPasserby(`bot-${i}`, this.occupancy, tiles, Date.now());
+    // Passants du quartier, puis flâneurs des rues commerçantes.
+    const spawns = [
+      ...Array.from({ length: PASSERBY.countPerDistrict }, () => ({ tiles, zone: undefined as number | undefined })),
+      ...map.busyStreets.flatMap((s, zone) => Array.from({ length: PASSERBY.perBusyStreet }, () => ({ tiles: s.sidewalks, zone }))),
+    ];
+    for (const [i, s] of spawns.entries()) {
+      const b = spawnPasserby(`bot-${i}`, this.occupancy, s.tiles, Date.now(), Math.random, s.zone);
       this.passersby.push(b);
       const p = new PlayerState();
       Object.assign(p, { id: b.id, name: '', x: b.x, y: b.y, dir: b.dir, pet: b.pet, ...b.look });

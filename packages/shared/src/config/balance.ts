@@ -139,6 +139,10 @@ export const TRAVEL = {
 /** Passants (bots) qui se promènent dans le quartier, serveur comme démo solo. */
 export const PASSERBY = {
   countPerDistrict: 30,
+  /** Passants en plus, qui flânent sur chaque rue commerçante (voir `busyStreets`). */
+  perBusyStreet: 36,
+  /** Sur une rue commerçante : rayon (cases) où un flâneur choisit sa prochaine vitrine. */
+  busyTargetRadius: 12,
   /** Ils marchent un peu moins vite que les joueurs. */
   speedFactor: 0.6,
   maxPathLength: 80,
