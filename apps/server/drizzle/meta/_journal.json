@@ -36,6 +36,13 @@
       "when": 1793189778961,
       "tag": "0004_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793194079602,
+      "tag": "0005_errands",
+      "breakpoints": true
     }
   ]
 }

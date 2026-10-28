@@ -86,6 +86,8 @@ export interface CharacterSelf {
   job: { employerId: string; employerName: string; jobType: JobType } | null;
   /** Expérience par métier. */
   jobXp: Partial<Record<JobType, number>>;
+  /** Missions du quotidien déjà faites aujourd'hui (ErrandOffer.id). */
+  errandsDoneToday: string[];
   /** Instant serveur du calcul (ms epoch). */
   computedAt: number;
 }
@@ -195,7 +197,13 @@ export const ClientMessage = {
   serve: 'serve',
   /** Parler à un passant (bot) : il s'arrête et se tourne vers le joueur. */
   talk: 'talk',
+  /** Missions du quotidien : accepter une demande d'aide, ou laisser tomber. */
+  acceptErrand: 'acceptErrand',
+  abandonErrand: 'abandonErrand',
 } as const;
+
+export const acceptErrandSchema = z.object({ offerId: z.string().min(1).max(32) });
+export type AcceptErrandMessage = z.infer<typeof acceptErrandSchema>;
 
 export const talkSchema = z.object({
   botId: z.string().min(1).max(32),
@@ -294,6 +302,8 @@ export const ServerMessage = {
   listings: 'listings',
   /** Mission en cours pendant un service (MissionView). */
   mission: 'mission',
+  /** Mission du quotidien en cours (ErrandView). */
+  errand: 'errand',
 } as const;
 
 /** Ce que le joueur voit de sa mission ; c'est le serveur qui vérifie et qui paie. */

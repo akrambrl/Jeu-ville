@@ -20,3 +20,11 @@ describe('temps de jeu', () => {
     expect(ageAt(0, 44 * TIME.realMsPerGameYear).reachedMaxAge).toBe(false);
   });
 });
+
+describe('jour réel', () => {
+  it('change à minuit, heure de Paris', async () => {
+    const { realDayKey } = await import('./index.js');
+    expect(realDayKey(Date.UTC(2026, 9, 28, 22, 30))).toBe('2026-10-28'); // 23 h 30 à Paris (UTC+1)
+    expect(realDayKey(Date.UTC(2026, 9, 28, 23, 30))).toBe('2026-10-29'); // 0 h 30 à Paris
+  });
+});

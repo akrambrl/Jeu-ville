@@ -97,6 +97,9 @@ export const characters = pgTable(
     homePropertyId: text('home_property_id'),
     /** Dernier déménagement (une fois toutes les deux semaines au plus). */
     movedAt: timestamp('moved_at', { withTimezone: true }),
+    /** Bonté (missions du quotidien) : bonus de bonheur qui s'estompe depuis `kindnessUpdatedAt`. */
+    kindness: real('kindness').notNull().default(0),
+    kindnessUpdatedAt: timestamp('kindness_updated_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('characters_money_non_negative', sql`${t.moneyCents} >= 0`)],
@@ -242,4 +245,25 @@ export const chatReports = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('chat_reports_reporter_message_idx').on(t.reporterId, t.messageId), index('chat_reports_status_idx').on(t.status)],
+);
+
+/** Missions du quotidien réussies : une fois par demande et par joueur (récompense idempotente). */
+export const errandsDone = pgTable(
+  'errands_done',
+  {
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id),
+    /** ErrandOffer.id (« 2026-10-28:3 »), propre au quartier. */
+    offerId: text('offer_id').notNull(),
+    districtId: text('district_id').notNull(),
+    /** Jour réel (Paris) : pour la limite quotidienne. */
+    day: text('day').notNull(),
+    type: text('type').notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('errands_done_offer_idx').on(t.characterId, t.districtId, t.offerId),
+    index('errands_done_day_idx').on(t.characterId, t.day),
+  ],
 );

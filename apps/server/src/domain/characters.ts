@@ -19,6 +19,8 @@ import {
   type VehicleKind,
   petHappinessBonus,
   homeHappiness,
+  kindnessAt,
+  realDayKey,
   employers,
   type JobType,
   type BusinessType,
@@ -26,7 +28,7 @@ import {
   type FoodPlaceKind,
 } from '@jeu-ville/shared';
 import type { Db, Tx } from '../db/client.js';
-import { characters, dwellings, jobExperience, jobs, pets, properties, vehicles } from '../db/schema.js';
+import { characters, dwellings, errandsDone, jobExperience, jobs, pets, properties, vehicles } from '../db/schema.js';
 import { STARTER_DWELLING_KIND } from '../db/seed.js';
 import { GameError } from './errors.js';
 import { recordLedgerEntry } from './ledger.js';
@@ -81,13 +83,16 @@ export function toCharacterSelf(
     properties: PropertyRow[];
     job?: { employerId: string; jobType: string } | null;
     xp?: { jobType: string; xp: number }[];
+    /** Missions du quotidien faites aujourd'hui (ErrandOffer.id). */
+    errandsToday?: string[];
   },
   nowMs: number,
 ): CharacterSelf {
   const age = ageAt(row.createdAt.getTime(), nowMs);
   const pet = storedPet(owned.pet);
   const housing = row.homePropertyId ? homeHappiness(homeSpot(row)) : dwelling ? HOUSING.starterApartment.happinessBonus : 0;
-  const happinessBonus = housing + petHappinessBonus(pet, row.petLostAt?.getTime() ?? null, nowMs);
+  const happinessBonus =
+    housing + petHappinessBonus(pet, row.petLostAt?.getTime() ?? null, nowMs) + kindnessAt(row.kindness, row.kindnessUpdatedAt.getTime(), nowMs);
   return {
     id: row.id,
     name: row.name,
@@ -122,21 +127,27 @@ export function toCharacterSelf(
         }
       : null,
     jobXp: Object.fromEntries((owned.xp ?? []).map((x) => [x.jobType, x.xp])),
+    errandsDoneToday: owned.errandsToday ?? [],
     computedAt: nowMs,
   };
 }
 
 /** Vue privée complète (logement, véhicules, animal) d'une ligne de personnage. */
 export async function selfOf(db: Db | Tx, row: CharacterRow, nowMs: number): Promise<CharacterSelf> {
-  const [dwelling, owned, [pet], held, [job], xp] = await Promise.all([
+  const [dwelling, owned, [pet], held, [job], xp, errands] = await Promise.all([
     loadDwelling(db, row.dwellingId),
     db.select().from(vehicles).where(eq(vehicles.characterId, row.id)),
     db.select().from(pets).where(eq(pets.characterId, row.id)),
     db.select().from(properties).where(or(eq(properties.ownerCharacterId, row.id), eq(properties.tenantCharacterId, row.id))),
     db.select().from(jobs).where(eq(jobs.characterId, row.id)),
     db.select().from(jobExperience).where(eq(jobExperience.characterId, row.id)),
+    db
+      .select({ offerId: errandsDone.offerId })
+      .from(errandsDone)
+      .where(and(eq(errandsDone.characterId, row.id), eq(errandsDone.districtId, row.districtId), eq(errandsDone.day, realDayKey(nowMs)))),
   ]);
-  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null, properties: held, job: job ?? null, xp }, nowMs);
+  const errandsToday = errands.map((e) => e.offerId);
+  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null, properties: held, job: job ?? null, xp, errandsToday }, nowMs);
 }
 
 async function loadDwelling(db: Db | Tx, id: string | null): Promise<DwellingRow | null> {

@@ -48,6 +48,15 @@ import {
   drainBattery,
   feedPet,
   holdForTalk,
+  ERRANDS,
+  Errand,
+  addKindness,
+  dailyErrandOffers,
+  errandReward,
+  kindnessAt,
+  realDayKey,
+  type ErrandOffer,
+  type ErrandView,
   DIALOGUE,
   isPetNeglected,
   petHappinessBonus,
@@ -84,6 +93,8 @@ const SAVE_KEY = 'jeu-ville.demo.save';
 const SELF_ID = 'moi';
 /** Identifiant du joueur dans la démo (vue du quartier, auteur de ses messages de chat). */
 export const SELF_PLAYER_ID = SELF_ID;
+/** Identifiant d'un habitant qui demande de l'aide (comme sur le serveur). */
+const giverId = (offer: ErrandOffer) => `giver-${offer.id}`;
 const SAVE_INTERVAL_MS = 5_000;
 /** Pas de simulation maximal (onglet en arrière-plan, gros ralentissement). */
 const MAX_TICK_MS = 1_000;
@@ -110,6 +121,10 @@ export interface DemoSave {
   /** Ajouts du lot « agence pour l'emploi ». */
   job?: { employerId: string; jobType: JobType } | null;
   jobXp?: Partial<Record<JobType, number>>;
+  /** Ajouts du lot « missions du quotidien ». */
+  errands?: { day: string; done: string[] };
+  kindness?: number;
+  kindnessUpdatedAt?: number;
 }
 
 /** Bien acheté ou loué dans la démo (comme une ligne `properties` du serveur). */
@@ -185,7 +200,10 @@ export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
 export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, nowMs = Date.now()): CharacterSelf {
   const homeSpot = save.homeSpotId ? (map.properties.find((p) => p.id === save.homeSpotId) ?? null) : null;
   const building = homeSpot ? null : map.starterBuildings.find((b) => b.id === save.buildingId);
-  const bonus = homeHappiness(homeSpot) + petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs);
+  const bonus =
+    homeHappiness(homeSpot) +
+    petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs) +
+    kindnessAt(save.kindness ?? 0, save.kindnessUpdatedAt ?? 0, nowMs);
   const age = ageAt(save.createdAt, nowMs);
   return {
     id: SELF_ID,
@@ -213,6 +231,7 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
     movedAt: save.movedAt ?? null,
     job: save.job ? { ...save.job, employerName: employers(map).find((e) => e.id === save.job!.employerId)?.name ?? '' } : null,
     jobXp: save.jobXp ?? {},
+    errandsDoneToday: save.errands?.day === realDayKey(nowMs) ? save.errands.done : [],
     computedAt: nowMs,
   };
 }
@@ -237,6 +256,12 @@ export class LocalDistrict implements DistrictLink {
   private businessHandlers: BusinessHandlers | null = null;
   private missionCb: (m: MissionView) => void = () => {};
   private shift: Shift | null = null;
+  /** Demandes d'aide du jour, mission du quotidien en cours. */
+  private offers: ErrandOffer[] = [];
+  private errandDay = '';
+  private errand: Errand | null = null;
+  private errandStep = 0;
+  private errandCb: (e: ErrandView) => void = () => {};
 
   constructor(
     private readonly map: DistrictMap,
@@ -294,8 +319,10 @@ export class LocalDistrict implements DistrictLink {
       this.tick(Math.min(MAX_TICK_MS, now - last));
       last = now;
     }, SERVER.roomTickMs);
+    this.refreshErrandOffers();
     window.setInterval(() => {
       this.checkPetCare();
+      this.refreshErrandOffers();
       this.selfCb(this.self());
     }, SERVER.selfSnapshotIntervalMs);
     window.setTimeout(() => this.checkPetCare(), 1000);
@@ -629,6 +656,97 @@ export class LocalDistrict implements DistrictLink {
     this.arrivalCb = cb;
   }
 
+  // ---------- Missions du quotidien ----------
+
+  /** Les demandeurs d'aide changent à minuit (heure de Paris), comme sur le serveur. */
+  private refreshErrandOffers(): void {
+    const day = realDayKey(Date.now());
+    if (day === this.errandDay) return;
+    for (const old of this.offers) {
+      const id = giverId(old);
+      this.walkers.delete(id);
+      this.occupancy.releaseAll(id);
+      this.handlers?.removed(id);
+    }
+    this.errandDay = day;
+    this.offers = dailyErrandOffers(this.map, this.walkable, day).filter((o) => this.occupancy.tryHold(giverId(o), o.giver.x, o.giver.y));
+    for (const o of this.offers) {
+      const id = giverId(o);
+      const { name: _name, x: _x, y: _y, ...look } = o.giver;
+      // Un demandeur reste sur place, tourné vers la rue (« parle » indéfiniment).
+      const w: DemoWalker = {
+        id,
+        x: o.giver.x,
+        y: o.giver.y,
+        dir: 2,
+        path: [],
+        tile: { x: o.giver.x, y: o.giver.y },
+        blockedMs: 0,
+        speed: 0,
+        restUntil: Infinity,
+        look: { ...look, bodyType: 1 },
+        pet: '',
+        talk: { until: Infinity, dir: 2 },
+        view: { id, name: '', x: o.giver.x, y: o.giver.y, dir: 2, moving: false, pet: '', vehicle: '', ...look, bodyType: 1 },
+      };
+      this.walkers.set(id, w);
+      this.handlers?.added(id, w.view);
+    }
+  }
+
+  acceptErrand(offerId: string): void {
+    const offer = this.offers.find((o) => o.id === offerId);
+    const me = this.walkers.get(SELF_ID)!;
+    if (!offer) return this.notice('Cette personne n’a plus besoin d’aide.');
+    if (this.errand) return this.notice('Tu es déjà en train d’aider quelqu’un.');
+    if (Math.hypot(offer.giver.x - me.x, offer.giver.y - me.y) > DIALOGUE.talkRange + 1) return this.notice('Approche-toi d’abord.');
+    const done = this.self().errandsDoneToday;
+    if (done.includes(offer.id)) return this.notice('Tu as déjà aidé cette personne aujourd’hui.');
+    if (done.length >= ERRANDS.perDay) return this.notice('Tu as déjà beaucoup aidé aujourd’hui : reviens demain !');
+    const home = this.self().home?.door ?? null;
+    if (offer.type === 'tools' && !home) return this.notice('Il te faut un logement pour avoir des outils.');
+    this.errand = new Errand(offer, home, Date.now());
+    this.errandStep = 0;
+    this.errandCb(this.errand.view(Date.now()));
+  }
+
+  abandonErrand(): void {
+    if (!this.errand) return;
+    this.errand = null;
+    this.errandCb({ kind: 'none' });
+  }
+
+  onErrand(cb: (errand: ErrandView) => void): void {
+    this.errandCb = cb;
+  }
+
+  private tickErrand(now: number): void {
+    const errand = this.errand;
+    if (!errand) return;
+    const me = this.walkers.get(SELF_ID)!;
+    const result = errand.tick({ x: me.x, y: me.y }, now);
+    if (result === 'failed') {
+      this.errand = null;
+      this.errandCb({ kind: 'failed', offerId: errand.offer.id, type: errand.offer.type, reason: 'Trop tard…' });
+    } else if (result === 'done') {
+      this.errand = null;
+      const reward = errandReward(errand.offer.type);
+      const day = realDayKey(now);
+      const done = this.save.errands?.day === day ? this.save.errands.done : [];
+      if (!done.includes(errand.offer.id)) {
+        this.save.errands = { day, done: [...done, errand.offer.id] };
+        this.save.moneyCents += reward.cents;
+        this.save.kindness = addKindness(this.save.kindness ?? 0, this.save.kindnessUpdatedAt ?? 0, now, reward.kindness);
+        this.save.kindnessUpdatedAt = now;
+        this.commit();
+      }
+      this.errandCb({ kind: 'done', offerId: errand.offer.id, type: errand.offer.type, rewardCents: reward.cents, kindness: reward.kindness });
+    } else if (errand.stepIndex !== this.errandStep) {
+      this.errandStep = errand.stepIndex;
+      this.errandCb(errand.view(now));
+    }
+  }
+
   subscribePlayers(handlers: PlayerHandlers): void {
     this.handlers = handlers;
     for (const [id, w] of this.walkers) handlers.added(id, w.view);
@@ -690,6 +808,7 @@ export class LocalDistrict implements DistrictLink {
 
   private tick(dtMs: number): void {
     const now = Date.now();
+    this.tickErrand(now);
     for (const [id, w] of this.walkers) {
       const wasMoving = w.view.moving;
       if (id === SELF_ID) {

@@ -6,11 +6,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type StreetVendor, type TilePoint } from '@jeu-ville/shared';
+import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type StreetVendor, type TilePoint, ERRAND_TYPES, type ErrandOffer, type ErrandView } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerView } from '../net/link.js';
 import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
 import { Character3D } from './characters.js';
+import { ErrandScene } from './errandScene.js';
 import { buildGround, groundTop } from './ground.js';
 import { Pet3D } from './pets.js';
 import { buildProps } from './props.js';
@@ -100,6 +101,7 @@ export class CityView {
   private readonly grid: MapGrid;
   private readonly clock = new THREE.Clock();
   private readonly avatars = new Map<string, Character3D>();
+  private readonly errandScene: ErrandScene;
   /** Dernière vue de chaque perso (pour savoir à qui on parle). */
   private readonly views = new Map<string, PlayerView>();
   private readonly pets = new Map<string, Pet3D>();
@@ -190,6 +192,15 @@ export class CityView {
     this.marker.add(tileHighlight, this.markerRing, this.markerArrow);
     this.marker.visible = false;
     this.scene.add(this.marker);
+    this.errandScene = new ErrandScene(
+      this.scene,
+      this.grid,
+      () => this.avatars.get(this.opts.link.sessionId),
+      (offerId, hidden) => {
+        const giver = this.avatars.get(`giver-${offerId}`);
+        if (giver) giver.root.visible = !hidden;
+      },
+    );
 
     this.daylight = daylightAt(this.now());
     this.applyDaylight();
@@ -251,11 +262,10 @@ export class CityView {
   private missionBeam: THREE.Mesh | null = null;
 
   /** Adresse de livraison : colis flottant et colonne de lumière (null : aucune). */
-  setMissionTarget(point: TilePoint | null): void {
+  setMissionTarget(point: TilePoint | null, label = '📦 Livraison'): void {
     if (!this.missionTag) {
       const el = document.createElement('div');
       el.className = 'mission-tag';
-      el.textContent = '📦 Livraison';
       this.missionTag = new CSS2DObject(el);
       this.missionBeam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.25, 0.25, 3, 16, 1, true),
@@ -263,6 +273,7 @@ export class CityView {
       );
       this.scene.add(this.missionTag, this.missionBeam);
     }
+    this.missionTag.element.textContent = label;
     this.missionTag.visible = !!point;
     this.missionBeam!.visible = !!point;
     if (point) {
@@ -271,6 +282,20 @@ export class CityView {
       this.missionBeam!.position.set(point.x, top + 1.5, point.y);
     }
   }
+  /** Mission du quotidien : cible, zone de recherche, ce qui nous suit. */
+  setErrand(view: ErrandView, offer: ErrandOffer | undefined): void {
+    this.errandScene.set(view, offer);
+    const target = view.kind === 'active' ? view.target : null;
+    this.setMissionTarget(target, view.kind === 'active' ? `${ERRAND_TYPES[view.type].icon} ${ERRAND_TYPES[view.type].title}` : undefined);
+  }
+
+  /** Signes au-dessus des habitants (« ❗ » : a besoin d'aide), par identifiant d'avatar. */
+  setMarks(marks: Map<string, string | null>): void {
+    this.marks = marks;
+    for (const [id, text] of marks) this.avatars.get(id)?.setMark(text);
+  }
+
+  private marks = new Map<string, string | null>();
   private readonly businessSigns = new Map<string, THREE.Mesh>();
 
   /** Étiquette « Chez moi » au-dessus de la porte (après un déménagement…). */
@@ -323,6 +348,7 @@ export class CityView {
       }
     }
     this.ambient?.update(dt, { x: this.controls.target.x, y: this.controls.target.z });
+    this.errandScene.update(dt);
     const self = this.avatars.get(this.opts.link.sessionId);
     this.updateMarker(dt, self);
     this.updateArrivals(dt);
@@ -632,6 +658,8 @@ export class CityView {
         this.avatars.set(id, c);
         this.scene.add(c.root);
         void c.load(lookOf(p), (BODY_TYPES[p.bodyType] ?? BODY_TYPES[1]).width);
+        const mark = this.marks.get(id);
+        if (mark) c.setMark(mark);
         this.syncPet(id, p.pet);
         c.setVehicle(p.vehicle ?? '');
       },

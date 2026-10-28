@@ -6,11 +6,19 @@
 import { DIALOGUE } from '@jeu-ville/shared';
 import { el } from './dom.js';
 
+export interface DialogueChoice {
+  label: string;
+  primary?: boolean;
+  act: () => void;
+}
+
 export class DialogueBox {
   readonly root: HTMLElement;
   private readonly nameEl = el('div', { class: 'dialogue-name' });
   private readonly textEl = el('div', { class: 'dialogue-text' });
   private readonly nextEl = el('div', { class: 'dialogue-next', text: '▼' });
+  private readonly choicesEl = el('div', { class: 'dialogue-choices' });
+  private choices: DialogueChoice[] = [];
   private lines: string[] = [];
   private index = 0;
   private shown = 0;
@@ -18,7 +26,7 @@ export class DialogueBox {
   private onClose: (() => void) | null = null;
 
   constructor() {
-    this.root = el('div', { class: 'dialogue', role: 'dialog', 'aria-live': 'polite' }, [this.nameEl, this.textEl, this.nextEl]);
+    this.root = el('div', { class: 'dialogue', role: 'dialog', 'aria-live': 'polite' }, [this.nameEl, this.textEl, this.choicesEl, this.nextEl]);
     this.root.hidden = true;
     this.root.addEventListener('click', () => this.advance());
   }
@@ -27,9 +35,14 @@ export class DialogueBox {
     return !this.root.hidden;
   }
 
-  /** Affiche une conversation ; `onClose` est appelé à la fin. */
-  open(name: string, lines: string[], onClose?: () => void): void {
+  /**
+   * Affiche une conversation ; `onClose` est appelé à la fin. Avec `choices`,
+   * la dernière réplique propose des boutons (le choix ferme la boîte).
+   */
+  open(name: string, lines: string[], onClose?: () => void, choices: DialogueChoice[] = []): void {
     this.lines = lines;
+    this.choices = choices;
+    this.choicesEl.replaceChildren();
     this.index = 0;
     this.nameEl.textContent = name;
     this.onClose = onClose ?? null;
@@ -63,13 +76,27 @@ export class DialogueBox {
     const line = this.lines[this.index] ?? '';
     this.shown = line.length;
     this.textEl.textContent = line;
-    this.nextEl.hidden = false;
-    this.nextEl.textContent = this.index < this.lines.length - 1 ? '▼' : '✕';
+    const last = this.index >= this.lines.length - 1;
+    this.nextEl.hidden = last && this.choices.length > 0;
+    this.nextEl.textContent = last ? '✕' : '▼';
+    if (last && this.choices.length > 0 && this.choicesEl.childElementCount === 0) {
+      for (const c of this.choices) {
+        const b = el('button', { class: c.primary ? 'primary small' : 'small', text: c.label });
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.close();
+          c.act();
+        });
+        this.choicesEl.append(b);
+      }
+    }
   }
 
   private advance(): void {
     const line = this.lines[this.index] ?? '';
     if (this.shown < line.length) return this.finishLine();
+    // Dernière réplique avec choix : il faut choisir.
+    if (this.index >= this.lines.length - 1 && this.choices.length > 0) return;
     this.index++;
     if (this.index >= this.lines.length) return this.close();
     this.type();

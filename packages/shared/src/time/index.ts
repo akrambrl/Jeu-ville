@@ -33,3 +33,11 @@ export function ageAt(createdAtMs: number, nowMs: number): GameAge {
 }
 
 export const REAL_MS_PER_HOUR = 60 * 60 * 1000;
+
+/** Fuseau des « journées » réelles du jeu (missions du quotidien…). */
+export const GAME_TIME_ZONE = 'Europe/Paris';
+
+/** Jour réel à Paris (« 2026-10-28 ») : ce qui se renouvelle chaque jour change à minuit. */
+export function realDayKey(nowMs: number): string {
+  return new Intl.DateTimeFormat('fr-CA', { timeZone: GAME_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(nowMs);
+}

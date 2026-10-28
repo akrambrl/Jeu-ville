@@ -39,6 +39,14 @@ import {
   spawnPasserby,
   updatePasserby,
   holdForTalk,
+  Errand,
+  acceptErrandSchema,
+  dailyErrandOffers,
+  errandReward,
+  realDayKey,
+  type ErrandOffer,
+  type ErrandView,
+  type TilePoint,
   talkSchema,
   DIALOGUE,
   type Passerby,
@@ -69,6 +77,7 @@ import {
   payFee,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
+import { checkErrandAllowed, completeErrand } from '../domain/errands.js';
 import { applyJob, payMission, quitJob } from '../domain/jobs.js';
 import { acquireProperty, moveIn, openBusiness, openBusinesses, releaseProperty, takenSpots } from '../domain/realEstate.js';
 import {
@@ -104,7 +113,13 @@ interface Session extends Walker {
   job: { employerId: string; jobType: 'courier' | 'counter' } | null;
   jobXp: Partial<Record<'courier' | 'counter', number>>;
   shift: Shift | null;
+  /** Mission du quotidien en cours, et son étape (pour renvoyer la vue quand elle change). */
+  errand: Errand | null;
+  errandStep: number;
 }
+
+/** Identifiant (dans le quartier) d'un habitant qui demande de l'aide. */
+const giverId = (offer: ErrandOffer) => `giver-${offer.id}`;
 
 export class DistrictRoom extends Room<DistrictState> {
   override state = new DistrictState();
@@ -119,6 +134,11 @@ export class DistrictRoom extends Room<DistrictState> {
   private readonly occupancy = new TileOccupancy();
   /** Sessions par sessionId Colyseus. */
   private readonly sessions = new Map<string, Session>();
+  /** Cases reliées aux rues (passants, demandeurs d'aide, objets perdus). */
+  private walkable: TilePoint[] = [];
+  /** Demandes d'aide du jour (missions du quotidien) et jour concerné. */
+  private offers: ErrandOffer[] = [];
+  private errandDay = '';
 
   override onCreate(options: DistrictJoinOptions): void {
     const map = getDistrictMap(options.districtId);
@@ -146,6 +166,15 @@ export class DistrictRoom extends Room<DistrictState> {
 
     this.onMessage(ClientMessage.move, (client, raw) => this.handleMove(client, raw));
     this.onMessage(ClientMessage.talk, (client, raw) => this.handleTalk(client, raw));
+    this.walkable = tiles;
+    this.refreshErrandOffers();
+    this.onMessage(ClientMessage.acceptErrand, (client, raw) => void this.handleAcceptErrand(client, raw));
+    this.onMessage(ClientMessage.abandonErrand, (client) => {
+      const s = this.sessions.get(client.sessionId);
+      if (!s?.errand) return;
+      s.errand = null;
+      client.send(ServerMessage.errand, { kind: 'none' } satisfies ErrandView);
+    });
     this.onMessage(ClientMessage.homeAction, (client, raw) => this.handleHomeAction(client, raw));
     this.onMessage(ClientMessage.buyFood, (client, raw) => this.handleBuyFood(client, raw));
     this.onMessage(ClientMessage.rideBus, (client, raw) => this.handleRideBus(client, raw));
@@ -258,6 +287,8 @@ export class DistrictRoom extends Room<DistrictState> {
       job: null,
       jobXp: {},
       shift: null,
+      errand: null,
+      errandStep: 0,
     };
     this.sessions.set(client.sessionId, session);
 
@@ -420,6 +451,7 @@ export class DistrictRoom extends Room<DistrictState> {
       const result = s.shift.tick({ x: s.x, y: s.y }, now);
       if (result) this.missionDone(s, result);
     }
+    this.tickErrands(now);
     for (const b of this.passersby) {
       updatePasserby(this.grid, this.occupancy, b, dtMs, now);
       const p = this.state.players.get(b.id);
@@ -591,7 +623,78 @@ export class DistrictRoom extends Room<DistrictState> {
     }
   }
 
+  /** Nouvelles demandes d'aide à minuit (heure de Paris) : les demandeurs changent. */
+  private refreshErrandOffers(): void {
+    const day = realDayKey(Date.now());
+    if (day === this.errandDay) return;
+    for (const old of this.offers) {
+      this.state.players.delete(giverId(old));
+      this.occupancy.releaseAll(giverId(old));
+    }
+    this.errandDay = day;
+    this.offers = dailyErrandOffers(this.grid.map, this.walkable, day).filter((o) => this.occupancy.tryHold(giverId(o), o.giver.x, o.giver.y));
+    for (const o of this.offers) {
+      const p = new PlayerState();
+      const { name: _name, ...look } = o.giver;
+      Object.assign(p, { ...look, id: giverId(o), name: '', dir: 2, bodyType: 1 });
+      this.state.players.set(p.id, p);
+    }
+  }
+
+  private async handleAcceptErrand(client: Client, raw: unknown): Promise<void> {
+    const s = this.sessions.get(client.sessionId);
+    const parsed = acceptErrandSchema.safeParse(raw);
+    if (!s || !parsed.success) return;
+    const offer = this.offers.find((o) => o.id === parsed.data.offerId);
+    if (!offer) return this.notify(client, 'error', 'Cette personne n’a plus besoin d’aide.');
+    if (s.errand) return this.notify(client, 'error', 'Tu es déjà en train d’aider quelqu’un.');
+    if (Math.hypot(offer.giver.x - s.x, offer.giver.y - s.y) > DIALOGUE.talkRange + 1) return this.notify(client, 'error', 'Approche-toi d’abord.');
+    if (offer.type === 'tools' && !s.homeDoor) return this.notify(client, 'error', 'Il te faut un logement pour avoir des outils.');
+    try {
+      await checkErrandAllowed(db, s.characterId, this.districtKey, offer.id);
+    } catch (err) {
+      return this.notify(client, 'error', err instanceof GameError ? err.message : 'Impossible pour le moment.');
+    }
+    if (this.sessions.get(client.sessionId) !== s || s.errand) return;
+    s.errand = new Errand(offer, s.homeDoor, Date.now());
+    s.errandStep = 0;
+    client.send(ServerMessage.errand, s.errand.view(Date.now()));
+  }
+
+  /** Avancement des missions du quotidien (appelé à chaque tick). */
+  private tickErrands(now: number): void {
+    for (const s of this.sessions.values()) {
+      const errand = s.errand;
+      if (!errand) continue;
+      const result = errand.tick({ x: s.x, y: s.y }, now);
+      if (result === 'failed') {
+        s.errand = null;
+        s.client.send(ServerMessage.errand, { kind: 'failed', offerId: errand.offer.id, type: errand.offer.type, reason: 'Trop tard…' } satisfies ErrandView);
+      } else if (result === 'done') {
+        s.errand = null;
+        void completeErrand(db, s.characterId, this.districtKey, errand.offer, now)
+          .then((self) => {
+            if (this.sessions.get(s.id) !== s) return;
+            this.sendSelf(s, self);
+            const reward = errandReward(errand.offer.type);
+            s.client.send(ServerMessage.errand, {
+              kind: 'done',
+              offerId: errand.offer.id,
+              type: errand.offer.type,
+              rewardCents: reward.cents,
+              kindness: reward.kindness,
+            } satisfies ErrandView);
+          })
+          .catch((err) => console.error('completeErrand', err));
+      } else if (errand.stepIndex !== s.errandStep) {
+        s.errandStep = errand.stepIndex;
+        s.client.send(ServerMessage.errand, errand.view(now));
+      }
+    }
+  }
+
   private async pushSelfToAll(): Promise<void> {
+    this.refreshErrandOffers();
     await this.refreshBusinesses();
     for (const s of this.sessions.values()) {
       const petNotice = s.hasPet ? await enforcePetCare(db, s.characterId) : null;

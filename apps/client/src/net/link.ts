@@ -1,4 +1,4 @@
-import type { Arrival, BusinessType, CharacterSelf, HomeActionId, MissionView, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
+import type { Arrival, ErrandView, BusinessType, CharacterSelf, HomeActionId, MissionView, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
 
 /** Ce que tous les joueurs voient d'un personnage (voir apps/server/src/rooms/state.ts). */
 export interface PlayerView {
@@ -75,6 +75,10 @@ export interface DistrictLink {
   stopShift(): void;
   serve(items: string[]): void;
   onMission(cb: (mission: MissionView) => void): void;
+  /** Missions du quotidien : aider un habitant (il faut être à côté de lui). */
+  acceptErrand(offerId: string): void;
+  abandonErrand(): void;
+  onErrand(cb: (errand: ErrandView) => void): void;
   /** Quelqu'un (soi compris) arrive en bus : jouer la cinématique. */
   onArrival(cb: (arrival: Arrival) => void): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */

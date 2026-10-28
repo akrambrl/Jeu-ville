@@ -39,7 +39,6 @@ describe.skipIf(!hasDb)('personnages (base réelle)', () => {
     const { runMigrations } = await import('../db/migrate.js');
     const { seedReferenceData } = await import('../db/seed.js');
     await runMigrations();
-    await client.pool.query('truncate ledger_entries, characters, dwellings, players, districts, cities cascade');
     await seedReferenceData(client.db);
     mod = {
       db: client.db,

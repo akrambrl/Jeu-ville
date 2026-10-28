@@ -19,6 +19,9 @@ const SCOOTER_DECK = 0.085;
 const BUBBLE_MS = 6000;
 /** Hauteur de la bulle au-dessus de la tête (cases), au-dessus du nom et des étiquettes. */
 const BUBBLE_LIFT = 0.9;
+/** Hauteur du signe au-dessus de la tête, sans nom / au-dessus du nom (cases). */
+const MARK_LIFT = 0.15;
+const MARK_LIFT_LABELED = 0.5;
 
 /** Rotation d'un os autour de l'axe gauche-droite du corps (degrés, + = vers l'arrière). */
 type Pose = Record<string, number>;
@@ -128,6 +131,24 @@ export class Character3D {
       this.bubble?.removeFromParent();
       this.bubble = null;
     }, ms);
+  }
+
+  private mark: CSS2DObject | null = null;
+
+  /** Petit signe permanent au-dessus de la tête (« ❗ » d'un demandeur d'aide, objet porté), ou rien. */
+  setMark(text: string | null): void {
+    if ((this.mark?.element.textContent ?? null) === text) return;
+    this.mark?.element.remove();
+    this.mark?.removeFromParent();
+    this.mark = null;
+    if (!text) return;
+    const el = document.createElement('div');
+    el.className = 'avatar-mark';
+    el.textContent = text;
+    this.mark = new CSS2DObject(el);
+    this.mark.center.set(0.5, 1);
+    this.mark.position.set(0, this.height + (this.label ? MARK_LIFT_LABELED : MARK_LIFT), 0);
+    this.root.add(this.mark);
   }
 
   setLabel(text: string, self: boolean): void {
@@ -265,6 +286,7 @@ export class Character3D {
   dispose(): void {
     window.clearTimeout(this.bubbleTimer);
     this.bubble?.element.remove();
+    this.mark?.element.remove();
     this.label?.element.remove();
     this.root.removeFromParent();
   }

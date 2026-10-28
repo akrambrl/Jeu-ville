@@ -3,6 +3,8 @@ import {
   ClientMessage,
   ServerMessage,
   type Arrival,
+  type AcceptErrandMessage,
+  type ErrandView,
   type BuyFoodMessage,
   type BuyItemMessage,
   type BusinessType,
@@ -55,6 +57,18 @@ export class ColyseusLink implements DistrictLink {
 
   chargeScooter(): void {
     this.room.send(ClientMessage.chargeScooter, {});
+  }
+
+  acceptErrand(offerId: string): void {
+    this.room.send(ClientMessage.acceptErrand, { offerId } satisfies AcceptErrandMessage);
+  }
+
+  abandonErrand(): void {
+    this.room.send(ClientMessage.abandonErrand, {});
+  }
+
+  onErrand(cb: (errand: ErrandView) => void): void {
+    this.room.onMessage(ServerMessage.errand, cb);
   }
 
   talk(botId: string): void {

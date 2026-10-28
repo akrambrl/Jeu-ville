@@ -1,4 +1,4 @@
-import { MOVEMENT, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
+import { ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -9,6 +9,7 @@ import { showTutorialOnce } from '../ui/tutorial.js';
 import { DialogueBox } from '../ui/dialogue.js';
 import { Conversations } from './conversations.js';
 import { ChatPanel } from '../ui/chat.js';
+import { ErrandPanel, rewardText } from '../ui/errands.js';
 import type { ChatLink } from '../net/chat.js';
 
 export function showFatal(ui: HTMLElement, message: string, retry: () => void): void {
@@ -45,6 +46,15 @@ export function startGame(
     !!p && Math.hypot(x - p.x, y - p.y) <= MOVEMENT.foodInteractionRange;
   let position = { x: 0, y: 0 };
   let current = character;
+  // Missions du quotidien : les demandes du jour se calculent comme sur le serveur.
+  const walkable = reachableTiles(new MapGrid(map), map.spawn);
+  let offersDay = '';
+  let offers: ErrandOffer[] = [];
+  const todaysOffers = () => {
+    const day = realDayKey(Date.now());
+    if (day !== offersDay) [offersDay, offers] = [day, dailyErrandOffers(map, walkable, day)];
+    return offers;
+  };
   const container = document.getElementById('game')!;
   const view = new CityView(container, {
     map,
@@ -76,9 +86,44 @@ export function startGame(
       })
     : null;
   if (chat) ui.append(chat.root, chat.toggle);
-  const conversations = new Conversations(map, link, view, dialogue, (name) =>
-    chat ? chat.mention(name) : dialogue.open(name, [`${name} est un vrai joueur, comme toi !`]),
+  let errand: ErrandView | null = null;
+  /** « ❗ » au-dessus de ceux qui ont encore besoin d'aide aujourd'hui. */
+  const refreshMarks = () => {
+    const done = new Set(current.errandsDoneToday);
+    view.setMarks(new Map(todaysOffers().map((o) => [`giver-${o.id}`, done.has(o.id) ? null : '❗'])));
+  };
+  const errandPanel = new ErrandPanel({
+    goTo: (point) => view.requestMove(point),
+    abandon: () => link.abandonErrand(),
+  });
+  ui.append(errandPanel.root);
+  link.onErrand((e) => {
+    const offer = e.kind === 'none' ? undefined : todaysOffers().find((o) => o.id === e.offerId);
+    errand = e.kind === 'active' ? e : null;
+    errandPanel.show(e);
+    view.setErrand(e, offer);
+    if (e.kind === 'done') {
+      const cfg = ERRAND_TYPES[e.type];
+      dialogue.open(offer?.giver.name ?? cfg.title, [...cfg.thanks, `🎉 ${rewardText(e.type)}`]);
+    } else if (e.kind === 'failed') {
+      hud.notify(`${ERRAND_TYPES[e.type].title} : ${e.reason}`, 'error');
+    }
+    refreshMarks();
+  });
+  const conversations = new Conversations(
+    map,
+    link,
+    view,
+    dialogue,
+    (name) => (chat ? chat.mention(name) : dialogue.open(name, [`${name} est un vrai joueur, comme toi !`])),
+    {
+      offers: todaysOffers,
+      active: () => errand,
+      doneToday: () => current.errandsDoneToday,
+      accept: (offerId) => link.acceptErrand(offerId),
+    },
   );
+  refreshMarks();
 
   const hud = new Hud(
     ui,
@@ -97,7 +142,7 @@ export function startGame(
       onStartShift: () => link.startShift(),
       onRecenter: () => view.recenter(),
     },
-    destinationsOf(map),
+    [...helpDestinations(todaysOffers()), ...destinationsOf(map)],
   );
   hud.setSelf(character);
 
@@ -137,6 +182,7 @@ export function startGame(
     homeDoor = self.home?.door ?? null;
     view.setHomeDoor(homeDoor);
     hud.setSelf(self);
+    refreshMarks();
   });
   link.onNotice((n) => hud.notify(n.text, n.level));
   link.onArrival((a) => view.playArrival(a));
@@ -199,6 +245,17 @@ function destinationsOf(map: DistrictMap): Destination[] {
       const worship = p.religion ? WORSHIP_INFO[p.religion] : null;
       return { icon: worship?.icon ?? info.icon, name: p.name, kind: worship?.kind ?? info.kind, category: CATEGORIES[info.category], point: p.entrance };
     });
+}
+
+/** Habitants qui demandent de l'aide aujourd'hui (missions du quotidien), en tête de « Aller à… ». */
+function helpDestinations(offers: ErrandOffer[]): Destination[] {
+  return offers.map((o) => ({
+    icon: ERRAND_TYPES[o.type].icon,
+    name: o.giver.name,
+    kind: `${ERRAND_TYPES[o.type].title} · ${rewardText(o.type)}`,
+    category: '🤝 Coups de main du jour',
+    point: { x: o.giver.x, y: o.giver.y },
+  }));
 }
 
 /** Lieux de culte : icône et type selon la religion. */
