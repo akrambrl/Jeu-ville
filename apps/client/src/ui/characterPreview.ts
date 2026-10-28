@@ -1,8 +1,7 @@
 /** Aperçu 3D du personnage dans l'écran de création (il tourne doucement). */
 import * as THREE from 'three';
 import { BODY_TYPES, type CharacterLook } from '@jeu-ville/shared';
-import { cloneModel, loadModel } from '../world/assets.js';
-import { modelForLook } from '../world/characters.js';
+import { loadPerson } from '../world/people.js';
 
 export class CharacterPreview {
   readonly canvas: HTMLCanvasElement;
@@ -40,17 +39,17 @@ export class CharacterPreview {
 
   async show(look: CharacterLook): Promise<void> {
     const id = ++this.request;
-    const gltf = await loadModel('characters', modelForLook(look));
+    const { body, clips } = await loadPerson(look);
     if (id !== this.request) return;
     this.holder.clear();
-    const body = cloneModel(gltf);
     const box = new THREE.Box3().setFromObject(body);
     const s = 1 / (box.max.y - box.min.y);
     const width = (BODY_TYPES[look.bodyType] ?? BODY_TYPES[1]).width;
     body.scale.set(s * width, s, s * width);
+    body.position.y = -box.min.y * s;
     this.holder.add(body);
     this.mixer = new THREE.AnimationMixer(body);
-    const idle = gltf.animations.find((a) => a.name === 'idle');
+    const idle = clips.find((a) => a.name === 'idle');
     if (idle) this.mixer.clipAction(idle).play();
   }
 

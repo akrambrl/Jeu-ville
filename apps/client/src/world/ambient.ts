@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { DECOR, TILE, type DistrictMap, type MapGrid, type StreetVendor, type TilePoint } from '@jeu-ville/shared';
 import { Character3D } from './characters.js';
+import { randomLook, type PersonLook } from './people.js';
 import { groundTop } from './ground.js';
 import { TransitRiders, type RiderStop } from './riders.js';
 import { signTexture } from './textures.js';
@@ -134,7 +135,7 @@ export class Ambient {
     const top = groundTop(this.grid.tileAt(spot.x, spot.y));
     // Le vendeur, à côté de son caddie, tourné vers le passage.
     const vendor = new Character3D((x, y) => this.grid.tileAt(x, y), spot.x - 0.25, spot.y);
-    await vendor.load(style.models[this.vendors.length % style.models.length]!);
+    await vendor.load(style.looks[this.vendors.length % style.looks.length]!);
     const angle = Math.atan2(lookAt.x - spot.x, lookAt.y - spot.y);
     vendor.root.rotation.y = angle;
     vendor.setTarget(spot.x - 0.25, spot.y, false);
@@ -194,14 +195,13 @@ export class Ambient {
   }
 
   private updateKids(dt: number, focus: TilePoint): void {
-    const letters = ['a', 'b', 'c', 'd', 'e', 'f'];
     for (const yard of this.yards) {
       const d = Math.hypot(yard.center.x - focus.x, yard.center.y - focus.y);
       if (yard.kids.length === 0 && d < KIDS_ACTIVE_RADIUS) {
         for (let k = 0; k < Math.min(KIDS_PER_YARD, yard.tiles.length); k++) {
           const start = yard.tiles[Math.floor(Math.random() * yard.tiles.length)]!;
           const c = new Character3D((x, y) => this.grid.tileAt(x, y), start.x, start.y, 0.5);
-          void c.load(`character-${k % 2 ? 'female' : 'male'}-${letters[Math.floor(Math.random() * 6)]}`);
+          void c.load({ ...randomLook(), sex: k % 2 ? 'female' : 'male', baseLook: KID_OUTFITS[Math.floor(Math.random() * KID_OUTFITS.length)]! });
           this.group.add(c.root);
           yard.kids.push({ c, target: start, wait: Math.random() * 2, run: false });
         }
@@ -395,16 +395,27 @@ function chestnutCart(): THREE.Group {
   return g;
 }
 
-const VENDOR_STYLES: Record<VendorKind, { cry: string; models: string[]; cart: () => THREE.Group; smoke: THREE.Vector3 }> = {
+/** Tenues de BASE_LOOKS qui vont aux enfants (pas de costume ni de bleu de travail). */
+const KID_OUTFITS = [0, 1, 3];
+
+const VENDOR_STYLES: Record<VendorKind, { cry: string; looks: PersonLook[]; cart: () => THREE.Group; smoke: THREE.Vector3 }> = {
   corn: {
     cry: '🌽 Maïs chaud !',
-    models: ['character-male-c', 'character-male-e', 'character-female-d'],
+    looks: [
+      { sex: 'male', baseLook: 5, skinTone: 4, hairColor: 0 },
+      { sex: 'male', baseLook: 1, skinTone: 3, hairColor: 1 },
+      { sex: 'female', baseLook: 0, skinTone: 5, hairColor: 0 },
+    ],
     cart: cornCart,
     smoke: new THREE.Vector3(0, 0.62, 0),
   },
   chestnut: {
     cry: '🌰 Chauds les marrons !',
-    models: ['character-male-f', 'character-female-b', 'character-male-a'],
+    looks: [
+      { sex: 'male', baseLook: 0, skinTone: 2, hairColor: 5 },
+      { sex: 'female', baseLook: 1, skinTone: 1, hairColor: 2 },
+      { sex: 'male', baseLook: 5, skinTone: 5, hairColor: 0 },
+    ],
     cart: chestnutCart,
     smoke: new THREE.Vector3(-0.1, 0.74, -0.08),
   },

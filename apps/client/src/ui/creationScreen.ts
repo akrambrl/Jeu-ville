@@ -2,6 +2,8 @@ import {
   BASE_LOOKS,
   BODY_TYPES,
   ECONOMY,
+  HAIR_COLORS,
+  SKIN_TONES,
   TIME,
   type CharacterSelf,
   type CreateCharacterRequest,
@@ -12,10 +14,12 @@ import { el, formatMoney } from './dom.js';
 const PREVIEW_W = 260;
 const PREVIEW_H = 200;
 
-/**
- * Création du personnage : sexe, style (un modèle 3D par style) et corpulence.
- * La couleur de peau et de cheveux reviendra avec la personnalisation des persos 3D.
- */
+const SKIN_LABELS = ['Très claire', 'Claire', 'Mate', 'Hâlée', 'Foncée', 'Très foncée'];
+const HAIR_LABELS = ['Noirs', 'Bruns', 'Châtains', 'Blonds', 'Roux', 'Gris'];
+
+const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
+
+/** Création du personnage : sexe, tenue (un modèle 3D par tenue), peau, cheveux et corpulence. */
 export function showCreationScreen(
   root: HTMLElement,
   pseudo: string,
@@ -30,14 +34,22 @@ export function showCreationScreen(
     /** Groupe de boutons à sélection unique. */
     const group = <K extends keyof CreateCharacterRequest>(
       key: K,
-      options: { value: CreateCharacterRequest[K]; label: string }[],
+      options: { value: CreateCharacterRequest[K]; label: string; color?: number }[],
+      onPick?: () => void,
     ) => {
-      const container = el('div', { class: 'choices' });
+      const swatch = options.some((o) => o.color !== undefined);
+      const container = el('div', { class: swatch ? 'swatches' : 'choices' });
       const buttons = options.map((opt) => {
-        const b = el('button', { type: 'button', text: opt.label });
+        const b = el('button', { type: 'button', text: swatch ? '' : opt.label });
+        if (opt.color !== undefined) {
+          b.style.background = hex(opt.color);
+          b.setAttribute('aria-label', opt.label);
+          b.title = opt.label;
+        }
         b.addEventListener('click', () => {
           choice[key] = opt.value;
           buttons.forEach((x) => x.classList.toggle('selected', x === b));
+          onPick?.();
           redraw();
         });
         if (choice[key] === opt.value) b.classList.add('selected');
@@ -46,6 +58,14 @@ export function showCreationScreen(
       container.append(...buttons);
       return container;
     };
+
+    // Les noms des tenues dépendent du sexe choisi.
+    const outfitGroup = () =>
+      group(
+        'baseLook',
+        BASE_LOOKS.map((l, i) => ({ value: i, label: l[choice.sex].label })),
+      );
+    const outfits = el('div', {}, [outfitGroup()]);
 
     const error = el('div', { class: 'error' });
     const submit = el('button', { class: 'primary', type: 'button', text: 'Créer mon perso' });
@@ -57,14 +77,25 @@ export function showCreationScreen(
       }),
       el('div', { class: 'preview' }, [preview.canvas]),
       el('label', { text: 'Sexe' }),
-      group('sex', [
-        { value: 'male', label: 'Homme' },
-        { value: 'female', label: 'Femme' },
-      ]),
-      el('label', { text: 'Style' }),
       group(
-        'baseLook',
-        BASE_LOOKS.map((l, i) => ({ value: i, label: l.label })),
+        'sex',
+        [
+          { value: 'male', label: 'Homme' },
+          { value: 'female', label: 'Femme' },
+        ],
+        () => outfits.replaceChildren(outfitGroup()),
+      ),
+      el('label', { text: 'Tenue' }),
+      outfits,
+      el('label', { text: 'Peau' }),
+      group(
+        'skinTone',
+        SKIN_TONES.map((color, i) => ({ value: i, label: SKIN_LABELS[i] ?? '', color })),
+      ),
+      el('label', { text: 'Cheveux' }),
+      group(
+        'hairColor',
+        HAIR_COLORS.map((color, i) => ({ value: i, label: HAIR_LABELS[i] ?? '', color })),
       ),
       el('label', { text: 'Corpulence' }),
       group(

@@ -1,5 +1,5 @@
 /**
- * Chargement des modèles 3D (Kenney, CC0). Les fichiers sont importés par Vite,
+ * Chargement des modèles 3D (Kenney et Quaternius, CC0). Les fichiers sont importés par Vite,
  * ce qui permet aussi de les embarquer dans la démo autonome (data URI).
  * Chaque pack a sa propre palette `colormap.png`, référencée en relatif dans les
  * GLB : on la redirige vers l'URL du bon fichier.
@@ -21,7 +21,7 @@ const paletteUrls = import.meta.glob('../assets/models/**/colormap.png', { query
   string
 >;
 
-export type Pack = 'houses' | 'characters' | 'cars' | 'nature';
+export type Pack = 'houses' | 'people' | 'cars' | 'nature';
 
 const loaders = new Map<Pack, GLTFLoader>();
 function loaderFor(pack: Pack): GLTFLoader {

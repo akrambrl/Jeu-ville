@@ -16,7 +16,9 @@
     "db:migrate": "pnpm --filter @jeu-ville/server db:migrate",
     "db:generate": "pnpm --filter @jeu-ville/server db:generate",
     "map:fetch": "pnpm --filter @jeu-ville/osm-import fetch",
-    "map:build": "pnpm --filter @jeu-ville/osm-import build-map"
+    "map:build": "pnpm --filter @jeu-ville/osm-import build-map",
+    "characters:fetch": "pnpm --filter @jeu-ville/character-import download",
+    "characters:build": "pnpm --filter @jeu-ville/character-import build"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

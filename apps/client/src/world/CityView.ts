@@ -10,7 +10,7 @@ import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type Dis
 import type { DistrictLink, PlayerView } from '../net/link.js';
 import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
-import { Character3D, modelForLook } from './characters.js';
+import { Character3D } from './characters.js';
 import { buildGround, groundTop } from './ground.js';
 import { Pet3D } from './pets.js';
 import { buildProps } from './props.js';
@@ -542,7 +542,7 @@ export class CityView {
         c.setLabel(p.name, id === link.sessionId);
         this.avatars.set(id, c);
         this.scene.add(c.root);
-        void c.load(modelForLook(lookOf(p)), (BODY_TYPES[p.bodyType] ?? BODY_TYPES[1]).width);
+        void c.load(lookOf(p), (BODY_TYPES[p.bodyType] ?? BODY_TYPES[1]).width);
         this.syncPet(id, p.pet);
         c.setVehicle(p.vehicle ?? '');
       },

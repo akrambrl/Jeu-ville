@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type { MapGrid, TilePoint } from '@jeu-ville/shared';
 import { Character3D } from './characters.js';
+import { randomLook } from './people.js';
 
 /** Un arrêt est peuplé quand la caméra regarde à moins de cette distance (cases). */
 const ACTIVE_RADIUS = 24;
@@ -17,7 +18,6 @@ const ARRIVAL_EVERY: [number, number] = [6, 14];
 /** Voyageurs qui descendent à chaque arrêt d'un véhicule (au plus). */
 const MAX_ALIGHTING = 2;
 const WALK_SPEED = 1.1;
-const MODELS = ['male-a', 'male-b', 'male-d', 'male-f', 'female-a', 'female-b', 'female-c', 'female-e', 'female-f'];
 
 export interface RiderStop {
   id: string;
@@ -108,7 +108,7 @@ export class TransitRiders {
 
   private spawn(s: StopState, from: TilePoint, to: TilePoint | null, then: Rider['then']): void {
     const c = new Character3D((x, y) => this.grid.tileAt(x, y), from.x, from.y);
-    void c.load(`character-${MODELS[Math.floor(Math.random() * MODELS.length)]}`);
+    void c.load(randomLook());
     this.group.add(c.root);
     s.riders.push({ c, target: to, then });
   }

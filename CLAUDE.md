@@ -18,7 +18,7 @@ et on demande à l'utilisateur plutôt que d'inventer.
 
 - Monorepo **pnpm workspaces**, **TypeScript strict** partout.
 - `apps/client` : **Three.js 0.170** (3D façon Sims : caméra libre, ombres) + **Vite**,
-  mobile + PC. Modèles 3D **Kenney (CC0)** dans `src/assets/models/` ; le reste
+  mobile + PC. Modèles 3D **Kenney** et persos **Quaternius** (CC0) dans `src/assets/models/` ; le reste
   (façades, enseignes, sols) est dessiné en code. Interface (menus, HUD) en DOM/CSS.
 - `apps/server` : **Node.js** + **Colyseus 0.16** (temps réel) + **Fastify** (API REST :
   comptes, agence immobilière, achats, webhooks Stripe), sur le même serveur HTTP.
@@ -116,12 +116,13 @@ l'argent réel, stores Apple/Google.
 ```
 apps/client/src      world/ (vue 3D : sol, bâtiments, props, persos, tram/RER)
                      ui/ (écrans DOM, HUD) · net/ (API REST, lien serveur/démo)
-                     demo/ (démo solo sans serveur) · assets/models/ (Kenney, CC0)
+                     demo/ (démo solo sans serveur) · assets/models/ (Kenney, Quaternius, CC0)
 apps/server/src      api/ (routes REST) · domain/ (logique métier) · rooms/ (Colyseus)
                      db/ (schéma Drizzle, migrations, seed) · drizzle/ (SQL généré)
 packages/shared/src  config/ (ÉQUILIBRAGE) · time/ · formulas/ · map/ · protocol/
 packages/shared/maps cartes de quartier JSON générées depuis OSM
 tools/osm-import     OSM → grille isométrique
+tools/character-import  personnages Quaternius (CC0) → GLB allégés (assets/models/people)
 ```
 
 - Identifiant de quartier = clé globale `<ville>:<quartier>` (ex. `noisy-le-sec:centre-ville-mairie`).
@@ -138,4 +139,5 @@ pnpm test                     # tests ; ceux sur base réelle utilisent TEST_DAT
 pnpm typecheck
 pnpm db:generate              # après modification de apps/server/src/db/schema.ts
 pnpm map:fetch && pnpm map:build   # re-télécharger / régénérer les cartes OSM
+pnpm characters:fetch && pnpm characters:build   # re-télécharger / régénérer les personnages 3D
 ```

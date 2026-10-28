@@ -1,6 +1,6 @@
 /**
  * Animaux de compagnie en 3D (chien, chat), modelés en volumes simples dans le
- * style des persos Kenney. Ils suivent leur maître, pattes et queue animées.
+ * style du jeu. Ils suivent leur maître, pattes et queue animées.
  */
 import * as THREE from 'three';
 
