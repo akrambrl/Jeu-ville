@@ -131,7 +131,12 @@ export const ChatServerMessage = {
   notice: 'notice',
 } as const;
 
-export const chatSaySchema = z.object({ text: z.string().min(1).max(1000) });
+export const chatSaySchema = z.object({
+  text: z.string().min(1).max(1000),
+  /** Réponse à ce message (ChatLine.id), s'il est encore dans l'historique. */
+  replyToId: z.string().min(1).max(64).optional(),
+});
+export type ChatSayMessage = z.infer<typeof chatSaySchema>;
 export const chatReportSchema = z.object({ messageId: z.string().min(1).max(64) });
 export const chatBlockSchema = z.object({ characterId: z.string().uuid(), blocked: z.boolean() });
 
@@ -147,6 +152,15 @@ export interface ChatLine {
   at: number;
   /** Bot de la démo solo (pas un vrai joueur). */
   bot?: boolean;
+  /** Message auquel celui-ci répond (extrait). */
+  replyTo?: ChatReply;
+}
+
+export interface ChatReply {
+  id: string;
+  name: string;
+  /** Début du message cité. */
+  text: string;
 }
 
 export const districtJoinSchema = z.object({

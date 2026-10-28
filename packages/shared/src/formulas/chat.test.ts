@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT } from '../config/chat.js';
-import { canSendChat, cleanChatText, maskBannedWords } from './chat.js';
+import { canSendChat, cleanChatText, maskBannedWords, replyExcerpt } from './chat.js';
 
 describe('chat', () => {
   it('nettoie le texte', () => {
@@ -20,5 +20,14 @@ describe('chat', () => {
     const burst = Array.from({ length: CHAT.burstMessages }, (_, i) => i * CHAT.minIntervalMs);
     expect(canSendChat(burst, burst.at(-1)! + CHAT.minIntervalMs)).toBe(false);
     expect(canSendChat(burst, burst[0]! + CHAT.burstWindowMs + 1)).toBe(true);
+  });
+
+  it('cite le début du message auquel on répond', () => {
+    const line = { id: 'm1', characterId: 'c', name: 'Inès', districtId: 'd', text: 'x'.repeat(200), at: 0 };
+    const reply = replyExcerpt(line);
+    expect(reply).toMatchObject({ id: 'm1', name: 'Inès' });
+    expect(reply.text).toHaveLength(CHAT.replyExcerptLength);
+    expect(reply.text.endsWith('…')).toBe(true);
+    expect(replyExcerpt({ ...line, text: 'court' }).text).toBe('court');
   });
 });

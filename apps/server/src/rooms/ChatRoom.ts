@@ -16,6 +16,7 @@ import {
   chatSaySchema,
   cleanChatText,
   maskBannedWords,
+  replyExcerpt,
   type ChatLine,
   type Notice,
 } from '@jeu-ville/shared';
@@ -70,7 +71,17 @@ export class ChatRoom extends Room {
     if (!canSendChat(recent, now)) return this.notify(client, 'error', 'Doucement ! Attends un peu avant de réécrire.');
     recent.push(now);
     this.sentAt.set(me.characterId, recent);
-    const line: ChatLine = { id: randomUUID(), characterId: me.characterId, name: me.name, districtId: me.districtId, text, at: now };
+    // Réponse : on cite le message d'origine s'il est encore dans l'historique.
+    const original = parsed.data.replyToId ? this.history.find((l) => l.id === parsed.data.replyToId) : undefined;
+    const line: ChatLine = {
+      id: randomUUID(),
+      characterId: me.characterId,
+      name: me.name,
+      districtId: me.districtId,
+      text,
+      at: now,
+      ...(original ? { replyTo: replyExcerpt(original) } : {}),
+    };
     this.history.push(line);
     if (this.history.length > CHAT.historySize) this.history.shift();
     this.broadcast(ChatServerMessage.line, line);

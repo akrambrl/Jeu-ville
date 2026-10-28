@@ -12,7 +12,9 @@ import {
   canSendChat,
   cleanChatText,
   maskBannedWords,
+  replyExcerpt,
   type ChatLine,
+  type ChatSayMessage,
   type Notice,
 } from '@jeu-ville/shared';
 
@@ -29,7 +31,8 @@ export interface ChatLink {
   /** false dans la démo : il n'y a que des bots. */
   readonly realPlayers: boolean;
   subscribe(handlers: ChatHandlers): void;
-  say(text: string): void;
+  /** Envoie un message, éventuellement en réponse à `replyToId`. */
+  say(text: string, replyToId?: string): void;
   report(messageId: string): void;
   block(characterId: string, blocked: boolean): void;
 }
@@ -49,8 +52,8 @@ export class ColyseusChat implements ChatLink {
     this.room.onMessage(ChatServerMessage.notice, h.notice);
   }
 
-  say(text: string): void {
-    this.room.send(ChatClientMessage.say, { text });
+  say(text: string, replyToId?: string): void {
+    this.room.send(ChatClientMessage.say, { text, ...(replyToId ? { replyToId } : {}) } satisfies ChatSayMessage);
   }
 
   report(messageId: string): void {
@@ -70,6 +73,8 @@ export class DemoChat implements ChatLink {
   private handlers: ChatHandlers | null = null;
   private readonly sentAt: number[] = [];
   private count = 0;
+  /** Messages récents (pour citer celui auquel on répond). */
+  private readonly recent: ChatLine[] = [];
 
   constructor(
     readonly selfId: string,
@@ -86,7 +91,7 @@ export class DemoChat implements ChatLink {
     h.blocked([]);
   }
 
-  say(raw: string): void {
+  say(raw: string, replyToId?: string): void {
     const text = maskBannedWords(cleanChatText(raw));
     if (!text) return;
     const now = Date.now();
@@ -95,7 +100,8 @@ export class DemoChat implements ChatLink {
       return;
     }
     this.sentAt.push(now);
-    this.emit({ characterId: this.selfId, name: this.selfName, text });
+    const original = replyToId ? this.recent.find((l) => l.id === replyToId) : undefined;
+    this.emit({ characterId: this.selfId, name: this.selfName, text, ...(original ? { replyTo: replyExcerpt(original) } : {}) });
   }
 
   report(): void {
@@ -118,7 +124,10 @@ export class DemoChat implements ChatLink {
     }, min + Math.random() * (max - min));
   }
 
-  private emit(l: Pick<ChatLine, 'characterId' | 'name' | 'text'> & { bot?: boolean }): void {
-    this.handlers?.line({ id: `demo-${++this.count}`, districtId: this.districtId, at: Date.now(), ...l });
+  private emit(l: Pick<ChatLine, 'characterId' | 'name' | 'text' | 'bot' | 'replyTo'>): void {
+    const line: ChatLine = { id: `demo-${++this.count}`, districtId: this.districtId, at: Date.now(), ...l };
+    this.recent.push(line);
+    if (this.recent.length > CHAT.historySize) this.recent.shift();
+    this.handlers?.line(line);
   }
 }

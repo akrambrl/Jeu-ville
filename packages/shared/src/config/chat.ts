@@ -8,6 +8,8 @@ export const CHAT = {
   /** Au plus `burstMessages` messages par fenêtre de `burstWindowMs`. */
   burstMessages: 5,
   burstWindowMs: 20_000,
+  /** Longueur de l'extrait cité quand on répond à un message. */
+  replyExcerptLength: 80,
   /** Joueurs qu'on peut bloquer au maximum. */
   maxBlocked: 200,
   /** Démo solo : un bot du quartier parle toutes les [min, max] ms. */

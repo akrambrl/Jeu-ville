@@ -1,7 +1,7 @@
 /**
  * Chat général, à droite de l'écran (style Habbo) : fixe sur grand écran,
  * repliable sur téléphone (bouton 💬 avec le nombre de messages non lus).
- * Toucher le message d'un autre joueur : le signaler ou le bloquer.
+ * Toucher un message : y répondre (il sera cité), le signaler ou bloquer son auteur.
  */
 import { CHAT, type ChatLine, type Notice } from '@jeu-ville/shared';
 import type { ChatLink } from '../net/chat.js';
@@ -30,6 +30,9 @@ export class ChatPanel {
   }) as HTMLInputElement;
   private readonly blockedBar = el('div', { class: 'chat-blocked' });
   private readonly badge = el('span', { class: 'chat-badge' });
+  private readonly replyBar = el('div', { class: 'chat-reply-bar' });
+  /** Message auquel on est en train de répondre. */
+  private replyTo: ChatLine | null = null;
   private blocked = new Set<string>();
   /** Noms vus dans le chat (pour la liste des joueurs bloqués). */
   private readonly names = new Map<string, string>();
@@ -49,14 +52,17 @@ export class ChatPanel {
       e.preventDefault();
       const text = this.input.value.trim();
       if (!text) return;
-      this.link.say(text);
+      this.link.say(text, this.replyTo?.id);
       this.input.value = '';
+      this.setReply(null);
     });
+    this.replyBar.hidden = true;
     const subtitle = link.realPlayers ? 'Tous les joueurs connectés' : 'Démo : seulement des bots 🤖';
     this.root = el('aside', { class: 'chat' }, [
       el('div', { class: 'chat-head' }, [el('div', {}, [el('strong', { text: '💬 Chat général' }), el('small', { text: subtitle })]), close]),
       this.blockedBar,
       this.list,
+      this.replyBar,
       form,
     ]);
     this.toggle = el('button', { class: 'chat-toggle', 'aria-label': 'Ouvrir le chat' }, [el('span', { text: '💬' }), this.badge]);
@@ -130,14 +136,24 @@ export class ChatPanel {
     const time = new Date(line.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const name = el('span', { class: 'chat-name', text: `${line.bot ? '🤖 ' : ''}${line.name}` });
     name.style.color = nameColor(line.name);
-    const row = el('div', { class: `chat-line${mine ? ' mine' : ''}` }, [
+    const row = el('div', { class: `chat-line${mine ? ' mine' : ''}`, 'data-id': line.id }, [
       el('div', { class: 'chat-meta' }, [name, el('small', { text: time })]),
-      el('div', { class: 'chat-text', text: line.text }),
     ]);
-    if (!mine && !line.bot) {
-      row.addEventListener('click', () => this.toggleActions(row, line));
-      row.title = 'Toucher pour signaler ou bloquer';
+    if (line.replyTo) {
+      const quoted = line.replyTo;
+      const quote = el('div', { class: 'chat-quote', title: 'Voir le message d’origine' }, [
+        el('strong', { text: `↩️ ${quoted.name}` }),
+        el('span', { text: quoted.text }),
+      ]);
+      quote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.flash(quoted.id);
+      });
+      row.append(quote);
     }
+    row.append(el('div', { class: 'chat-text', text: line.text }));
+    row.addEventListener('click', () => this.toggleActions(row, line));
+    row.title = 'Toucher pour répondre';
     return row;
   }
 
@@ -145,18 +161,58 @@ export class ChatPanel {
     const existing = row.querySelector('.chat-actions');
     this.list.querySelectorAll('.chat-actions').forEach((a) => a.remove());
     if (existing) return;
+    const reply = el('button', { class: 'small', text: '↩️ Répondre' });
+    reply.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.setReply(line);
+      row.querySelector('.chat-actions')?.remove();
+    });
+    const buttons: HTMLElement[] = [reply];
+    // Signaler / bloquer : seulement les vrais joueurs, pas soi-même.
+    if (line.characterId !== this.link.selfId && !line.bot) buttons.push(this.reportButton(row, line), this.blockButton(line));
+    row.append(el('div', { class: 'chat-actions' }, buttons));
+  }
+
+  private reportButton(row: HTMLElement, line: ChatLine): HTMLElement {
     const report = el('button', { class: 'small', text: '🚩 Signaler' });
     report.addEventListener('click', (e) => {
       e.stopPropagation();
       this.link.report(line.id);
       row.querySelector('.chat-actions')?.remove();
     });
+    return report;
+  }
+
+  private blockButton(line: ChatLine): HTMLElement {
     const block = el('button', { class: 'small', text: `🚫 Bloquer ${line.name}` });
     block.addEventListener('click', (e) => {
       e.stopPropagation();
       this.link.block(line.characterId, true);
     });
-    row.append(el('div', { class: 'chat-actions' }, [report, block]));
+    return block;
+  }
+
+  /** Commence (ou annule, null) une réponse à un message. */
+  private setReply(line: ChatLine | null): void {
+    this.replyTo = line;
+    this.replyBar.replaceChildren();
+    this.replyBar.hidden = !line;
+    if (!line) return;
+    const cancel = el('button', { class: 'chat-reply-cancel', text: '✕', 'aria-label': 'Annuler la réponse' });
+    cancel.addEventListener('click', () => this.setReply(null));
+    const excerpt = line.text.length > CHAT.replyExcerptLength ? `${line.text.slice(0, CHAT.replyExcerptLength - 1)}…` : line.text;
+    this.replyBar.append(el('div', {}, [el('strong', { text: `↩️ Réponse à ${line.name}` }), el('span', { text: excerpt })]), cancel);
+    this.input.focus();
+  }
+
+  /** Fait défiler jusqu'au message `id` et le met en évidence un instant. */
+  private flash(id: string): void {
+    const row = this.list.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+    if (!row) return this.opts.notify({ level: 'info', text: 'Ce message n’est plus affiché.' });
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.remove('flash');
+    void row.offsetWidth;
+    row.classList.add('flash');
   }
 
   private renderBlockedBar(): void {
