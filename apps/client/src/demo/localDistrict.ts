@@ -125,6 +125,8 @@ export interface DemoSave {
   errands?: { day: string; done: string[] };
   kindness?: number;
   kindnessUpdatedAt?: number;
+  /** Taille de la carte de la sauvegarde (« 192x162 ») : si elle change, on répare. */
+  mapSize?: string;
 }
 
 /** Bien acheté ou loué dans la démo (comme une ligne `properties` du serveur). */
@@ -134,6 +136,8 @@ interface DemoHolding {
   leaseStart: number | null;
   rentPaid: number;
   business: { type: BusinessType; name: string; openedAt: number; paid: number } | null;
+  /** Prix payé à l'achat (remboursé si le bien disparaît de la carte). */
+  paidCents?: number;
 }
 
 const HOME_KINDS = new Set(['apartment', 'house']);
@@ -180,6 +184,7 @@ export function createDemoSave(map: DistrictMap, name: string, input: CreateChar
     gaugesUpdatedAt: now,
     pos: building.door,
     buildingId: building.id,
+    mapSize: `${map.width}x${map.height}`,
   };
 }
 
@@ -187,7 +192,25 @@ export function createDemoSave(map: DistrictMap, name: string, input: CreateChar
  * Une sauvegarde peut viser un immeuble qui n'existe plus (carte régénérée) :
  * on réattribue alors un appart de départ, devant lequel le perso réapparaît.
  */
-export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
+export function repairDemoSave(map: DistrictMap, loaded: DemoSave): DemoSave {
+  const size = `${map.width}x${map.height}`;
+  let save = loaded;
+  if (save.mapSize !== size) {
+    // Carte régénérée (ville resserrée…) : les biens disparus sont remboursés, on rentre chez soi.
+    const spots = new Set(map.properties.map((p) => p.id));
+    const gone = (save.holdings ?? []).filter((h) => !spots.has(h.spotId));
+    const refund = gone.filter((h) => h.relation === 'owner').reduce((sum, h) => sum + (h.paidCents ?? legacyPrice(h.spotId)), 0);
+    save = {
+      ...save,
+      mapSize: size,
+      moneyCents: save.moneyCents + refund,
+      holdings: (save.holdings ?? []).filter((h) => spots.has(h.spotId)),
+      homeSpotId: save.homeSpotId && spots.has(save.homeSpotId) ? save.homeSpotId : null,
+    };
+    const building = map.starterBuildings.find((b) => b.id === save.buildingId) ?? map.starterBuildings[0]!;
+    const homeSpot = map.properties.find((p) => p.id === save.homeSpotId);
+    return { ...save, buildingId: building.id, pos: homeSpot?.door ?? building.door };
+  }
   const home = map.starterBuildings.find((b) => b.id === save.buildingId);
   if (home) {
     // Carte agrandie : l'ancienne position peut tomber dans un bâtiment.
@@ -196,6 +219,16 @@ export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
   const building = map.starterBuildings[Math.floor(Math.random() * map.starterBuildings.length)]!;
   return { ...save, buildingId: building.id, pos: building.door };
 }
+
+/** Prix d'achat estimé d'un bien d'une ancienne sauvegarde (avant que le prix payé soit noté). */
+function legacyPrice(spotId: string): number {
+  const kind = spotId.startsWith('apt-') ? 'apartment' : spotId.startsWith('house-') ? 'house' : 'local';
+  const rooms = kind === 'apartment' ? Number(spotId.split('-').at(-1)) || 2 : kind === 'house' ? LEGACY_HOUSE_ROOMS : 1;
+  return salePriceCents({ kind, rooms, centrality: LEGACY_CENTRALITY } as PropertySpot);
+}
+/** Valeurs moyennes pour estimer ce prix. */
+const LEGACY_HOUSE_ROOMS = 4;
+const LEGACY_CENTRALITY = 0.5;
 
 export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, nowMs = Date.now()): CharacterSelf {
   const homeSpot = save.homeSpotId ? (map.properties.find((p) => p.id === save.homeSpotId) ?? null) : null;
@@ -473,7 +506,14 @@ export class LocalDistrict implements DistrictLink {
     if (this.save.moneyCents < cost) return this.notice("Pas assez d'argent.");
     this.save.moneyCents -= cost;
     const now = Date.now();
-    holdings.push({ spotId, relation: mode === 'buy' ? 'owner' : 'tenant', leaseStart: mode === 'rent' ? now : null, rentPaid: mode === 'rent' ? 1 : 0, business: null });
+    holdings.push({
+      spotId,
+      relation: mode === 'buy' ? 'owner' : 'tenant',
+      leaseStart: mode === 'rent' ? now : null,
+      rentPaid: mode === 'rent' ? 1 : 0,
+      business: null,
+      ...(mode === 'buy' ? { paidCents: cost } : {}),
+    });
     if (HOME_KINDS.has(spot.kind) && canMove(this.save.movedAt ?? null, now)) {
       this.save.homeSpotId = spotId;
       this.save.movedAt = now;

@@ -8,13 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { TILE, type DistrictMap, type Religion } from '@jeu-ville/shared';
 import { DISTRICTS, mapFileName, osmFileName, type DistrictSource } from './districts.js';
 import { parseOsm, type OsmData, type OsmWay, type Tags } from './osm.js';
-import { assembleRings, fillRings, makeProjection, strokeLine, type Pt } from './raster.js';
+import { assembleRings, fillRings, makeProjection, nearestNamed, strokeLine, type Pt } from './raster.js';
 import { schematize, type RawBusRoute, type RawBusStop, type RawPoi } from './schematize.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, '..', '..', 'packages', 'shared', 'maps');
 
-const CELL_SIZE_METERS = 8;
+const CELL_SIZE_METERS = 10.4;
 
 /** Nom donné à un lieu de culte que la carte OSM ne nomme pas. */
 const WORSHIP_NAMES: Record<Religion, string> = {
@@ -228,6 +228,9 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
 
   // 4. Lieux notables.
   const pois: RawPoi[] = [];
+  /** Rue réelle (OSM) la plus proche d'un point : l'« adresse » d'un lieu qui n'en a pas. */
+  const named = roads.map((w) => ({ name: w.tags.name, pts: wayPoints(w) }));
+  const nearestStreet = (p: Pt) => nearestNamed(named, p);
   const addPoi = (kind: RawPoi['kind'], name: string | undefined, p: Pt | null, tags: Tags = {}) => {
     if (!name || !p) return;
     if (kind === 'station' && !/gare/i.test(name)) name = `Gare de ${name}`;
@@ -241,6 +244,7 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
       brand: tags.brand,
       cuisine: tags.cuisine,
       school: tags['school:FR'],
+      street: d.addresses?.[tags.name ?? ''] ?? tags['addr:street'] ?? nearestStreet(p),
       ...(kind === 'worship' ? { religion: religionOf(tags) } : {}),
     });
   };

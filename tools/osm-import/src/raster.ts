@@ -127,3 +127,22 @@ export function assembleRings(segments: string[][]): string[][] {
   }
   return rings;
 }
+
+/** Nom de la ligne nommée (rue…) la plus proche du point `p`, ou undefined. */
+export function nearestNamed(lines: { name?: string; pts: Pt[] }[], p: Pt): string | undefined {
+  let best: { name: string; d: number } | undefined;
+  for (const line of lines) {
+    if (!line.name) continue;
+    for (let k = 1; k < line.pts.length; k++) {
+      const a = line.pts[k - 1]!;
+      const b = line.pts[k]!;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = dx * dx + dy * dy;
+      const u = len ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len)) : 0;
+      const d = Math.hypot(p.x - a.x - u * dx, p.y - a.y - u * dy);
+      if (!best || d < best.d) best = { name: line.name, d };
+    }
+  }
+  return best?.name;
+}

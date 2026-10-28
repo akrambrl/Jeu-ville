@@ -319,6 +319,8 @@ button:disabled {
 .overlay {
   position: absolute;
   inset: 0;
+  /* Fenêtres modales (bienvenue, erreurs) : au-dessus de tout, chat compris. */
+  z-index: 40;
   background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;

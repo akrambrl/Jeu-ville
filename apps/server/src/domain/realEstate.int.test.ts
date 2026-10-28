@@ -107,6 +107,22 @@ describe.skipIf(!hasDb)('agence immobilière (base réelle)', () => {
     await expect(mod.openBusiness(mod.db, c.id, key, nextSpot('local').id, 'snack', 'Nique')).rejects.toThrow(/pas autorisé/);
   });
 
+  it('carte régénérée : un bien acheté qui n’existe plus est remboursé une fois', async () => {
+    const c = await newCharacter();
+    const spot = nextSpot('local', ECONOMY.startingMoneyCents);
+    await mod.acquireProperty(mod.db, c.id, DEFAULT_DISTRICT_KEY, spot.id, 'buy', randomUUID());
+    // Simule une nouvelle carte où ce bien a disparu : on renomme son emplacement.
+    await mod.pool.query('update properties set spot_id = $1 where id = $2', ['disparu-1', `${DEFAULT_DISTRICT_KEY}:${spot.id}`]);
+    await mod.pool.query('update ledger_entries set reason = $1 where character_id = $2 and reason = $3', ['property_buy:disparu-1', c.id, `property_buy:${spot.id}`]);
+    const { seedReferenceData } = await import('../db/seed.js');
+    await seedReferenceData(mod.db);
+    await seedReferenceData(mod.db);
+    const self = (await mod.getCharacterSelf(mod.db, c.id))!;
+    expect(self.moneyCents).toBe(ECONOMY.startingMoneyCents);
+    expect(self.properties).toEqual([]);
+    expect(await mod.ledgerBalance(mod.db, c.id)).toBe(self.moneyCents);
+  });
+
   it('un déménagement toutes les deux semaines au plus', async () => {
     const c = await newCharacter();
     await mod.acquireProperty(mod.db, c.id, key, nextSpot('apartment').id, 'rent', randomUUID());

@@ -31,7 +31,7 @@ import {
   type Transit,
 } from '@jeu-ville/shared';
 import type { DistrictSource } from './districts.js';
-import type { Pt } from './raster.js';
+import { nearestNamed, type Pt } from './raster.js';
 
 /** Pas de la grille : 2 cases de rue + un îlot de 8 cases (trottoirs compris). */
 const PITCH = 10;
@@ -68,6 +68,10 @@ const VENDORS: { kind: StreetVendor['kind']; near: MapPoi['kind']; count: number
 const VENDOR_SEARCH_RADIUS = 6;
 /** Commerces de rez-de-chaussée par îlot, au plus. */
 const MAX_STOREFRONTS_PER_BLOCK = 3;
+/** Un lieu qui ne trouve pas son îlot (déjà pris) se cherche une place jusqu'à cette distance (en îlots). */
+const POI_SEARCH_BLOCKS = 2;
+/** Idem pour les commerces de rez-de-chaussée (il leur faut un immeuble). */
+const STOREFRONT_SEARCH_BLOCKS = 3;
 
 type Side = 'n' | 's' | 'e' | 'w';
 /** Îlots qui deviennent des immeubles à boutiques au bord d'une rue commerçante. */
@@ -173,6 +177,8 @@ export interface RawPoi {
   school?: string;
   /** Lieu de culte : religion (tag `religion`). */
   religion?: Religion;
+  /** Rue réelle du lieu (adresse OSM, sinon la rue la plus proche). */
+  street?: string;
 }
 
 export interface RawBusStop {
@@ -549,8 +555,12 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     if (p.kind === 'school' && claimed.get(`${ci},${cj}`)?.kind === 'school') continue;
     // La gare se place juste au sud du faisceau ferré, face aux voies.
     if (p.kind === 'station' && railRow !== null) cj = Math.min(ny - 1, railRow + 1);
-    const spots: [number, number][] = [[ci, cj]];
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) spots.push([ci + dx, cj + dy]);
+    // L'îlot du lieu réel, puis les plus proches autour (jusqu'à 2 îlots de distance).
+    const spots: [number, number][] = [];
+    for (let dj = -POI_SEARCH_BLOCKS; dj <= POI_SEARCH_BLOCKS; dj++) {
+      for (let di = -POI_SEARCH_BLOCKS; di <= POI_SEARCH_BLOCKS; di++) spots.push([ci + di, cj + dj]);
+    }
+    spots.sort((a, b) => Math.hypot(a[0] - ci, a[1] - cj) - Math.hypot(b[0] - ci, b[1] - cj));
     const free = spots.find(
       ([i, j]) => i >= 0 && j >= 0 && i < nx && j < ny && j !== railRow && !claimed.has(`${i},${j}`),
     );
@@ -927,7 +937,17 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
               if (r(60 + x * 3 + y) < 0.45) deco(x, y, DECOR.car);
             }
           }
-          const street = edgeName(hEdges[j + 1]?.[i]) ?? edgeName(vEdges[i + 1]?.[j]);
+          // Nommé d'après la vraie rue du magasin, sinon la rue de l'îlot la plus proche.
+          const near = poiHere ?? { x: ox + 3, y: oy + 3 };
+          const street = poiHere?.street ?? [
+            { e: hEdges[j]?.[i], x: i * PITCH + 5, y: j * PITCH },
+            { e: hEdges[j + 1]?.[i], x: i * PITCH + 5, y: (j + 1) * PITCH },
+            { e: vEdges[i]?.[j], x: i * PITCH, y: j * PITCH + 5 },
+            { e: vEdges[i + 1]?.[j], x: (i + 1) * PITCH, y: j * PITCH + 5 },
+          ]
+            .filter((c) => edgeName(c.e))
+            .sort((a, b) => Math.hypot(a.x - near.x, a.y - near.y) - Math.hypot(b.x - near.x, b.y - near.y))
+            .map((c) => edgeName(c.e))[0];
           addPoi({ x: 3, y: 2 }, { x: 3, y: 4 }, street ? `Supermarché ${street.replace(/^(Rue|Avenue|Boulevard|Allée) (de la |du |des |de l'|de )?/, '')}` : undefined);
           break;
         }
@@ -997,7 +1017,9 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     const cj = Math.floor(poi.y / PITCH);
     // Îlot du commerce réel, puis les îlots voisins (jusqu'à 2 de distance), du plus proche au plus loin.
     const spots: [number, number][] = [];
-    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) spots.push([ci + di, cj + dj]);
+    for (let dj = -STOREFRONT_SEARCH_BLOCKS; dj <= STOREFRONT_SEARCH_BLOCKS; dj++) {
+      for (let di = -STOREFRONT_SEARCH_BLOCKS; di <= STOREFRONT_SEARCH_BLOCKS; di++) spots.push([ci + di, cj + dj]);
+    }
     spots.sort((a, b) => Math.hypot(a[0] - ci, a[1] - cj) - Math.hypot(b[0] - ci, b[1] - cj));
     for (const [i, j] of spots) {
       if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
@@ -1379,6 +1401,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     // À défaut de rue devant la porte, on prend une rue qui borde l'îlot.
     const anyStreet =
       [hEdges[b.j]?.[b.i], vEdges[b.i]?.[b.j], hEdges[b.j + 1]?.[b.i], vEdges[b.i + 1]?.[b.j]].map(edgeName).find((n) => n) ??
+      nearestNamed(raw.roads, { x: ox + 3, y: oy + 3 }) ??
       null;
     // Entrées côté sud et côté est (devant les halls) : face à la caméra.
     const sides = [

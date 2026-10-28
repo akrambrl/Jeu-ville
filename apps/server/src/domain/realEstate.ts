@@ -107,7 +107,7 @@ async function moveInto(tx: Tx, characterId: string, propertyId: string, nowMs: 
 }
 
 /** Plus de logement à soi : retour dans un appart de départ libre du quartier. */
-async function backToStarter(tx: Tx, characterId: string, districtKey: string): Promise<void> {
+export async function backToStarter(tx: Tx, characterId: string, districtKey: string): Promise<void> {
   const [fresh] = await tx
     .select()
     .from(dwellings)
