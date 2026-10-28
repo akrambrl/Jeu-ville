@@ -107,6 +107,10 @@ export const SHAPE = {
   townhallCenter: 'c',
   /** Clocher. */
   belfry: 'b',
+  /** Coupole de mosquée (couvre cette case et ses voisines est, sud, sud-est). */
+  dome: 'o',
+  /** Minaret. */
+  minaret: 'm',
   /** Commerce au rez-de-chaussée (détails dans `storefronts`). */
   storefront: 'B',
   /** Enseigne « ÉCOLE ». */
@@ -181,7 +185,11 @@ export interface MapPoi {
   y: number;
   /** Case marchable où l'on arrive quand on y va. */
   entrance: TilePoint;
+  /** Lieu de culte : religion (tag OSM `religion`), pour l'architecture et l'icône. */
+  religion?: Religion;
 }
+
+export type Religion = 'christian' | 'muslim' | 'jewish' | 'buddhist' | 'other';
 
 export interface Transit {
   /** Tracé du tram (centre des voies), du terminus à l'autre bout. */

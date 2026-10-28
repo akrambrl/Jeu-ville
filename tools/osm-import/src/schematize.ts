@@ -22,6 +22,7 @@ import {
   WALKABLE_TILES,
   type MapPoi,
   type PropertySpot,
+  type Religion,
   type StreetVendor,
   type StarterBuilding,
   type Storefront,
@@ -115,6 +116,13 @@ const SCHOOL_SIGNS: Record<SchoolLevel, string> = {
   lycee: 'LYCÉE',
 };
 
+/** Enseigne des lieux de culte sans clocher ni minaret. */
+const WORSHIP_SIGNS: Record<Exclude<Religion, 'christian' | 'muslim'>, string> = {
+  jewish: 'SYNAGOGUE',
+  buddhist: 'TEMPLE',
+  other: 'LIEU DE CULTE',
+};
+
 const STREET_CLASSES: Record<string, string> = {
   primary: TILE.majorRoad,
   secondary: TILE.majorRoad,
@@ -140,6 +148,8 @@ export interface RawPoi {
   cuisine?: string;
   /** Type d'établissement scolaire (tag `school:FR`). */
   school?: string;
+  /** Lieu de culte : religion (tag `religion`). */
+  religion?: Religion;
 }
 
 export interface RawBusStop {
@@ -563,6 +573,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           x: ox + center.x,
           y: oy + center.y,
           entrance: { x: ox + entrance.x, y: oy + entrance.y },
+          ...(poiHere.religion ? { religion: poiHere.religion } : {}),
         });
       };
 
@@ -695,6 +706,35 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
           break;
         }
         case 'worship': {
+          const religion = poiHere?.religion;
+          if (religion === 'muslim') {
+            // Mosquée : salle de prière carrée, coupole au centre, minaret à l'angle.
+            fill(2, 1, 5, 4, TILE.worship, 2);
+            shape(3, 2, SHAPE.dome);
+            at(6, 1, TILE.worship, 2);
+            shape(6, 1, SHAPE.minaret);
+            fill(2, 5, 5, 5, TILE.worship, 1);
+            shape(3, 5, SHAPE.facadeSign);
+            signs.push({ x: ox + 3, y: oy + 5, text: 'MOSQUÉE' });
+            shape(4, 5, SHAPE.entrance);
+            deco(1, 6, DECOR.tree);
+            deco(6, 6, DECOR.bench);
+            addPoi({ x: 3, y: 3 }, { x: 4, y: 6 });
+            break;
+          }
+          if (religion === 'jewish' || religion === 'buddhist' || religion === 'other') {
+            // Synagogue, temple… : édifice à toit en brisis, sans clocher, enseigne en façade.
+            fill(2, 1, 5, 4, TILE.worship, 3);
+            fill(2, 5, 5, 5, TILE.worship, 2);
+            shape(3, 5, SHAPE.facadeSign);
+            signs.push({ x: ox + 3, y: oy + 5, text: WORSHIP_SIGNS[religion] });
+            shape(4, 5, SHAPE.entrance);
+            deco(1, 6, DECOR.tree);
+            deco(6, 2, DECOR.tree);
+            deco(6, 6, DECOR.bench);
+            addPoi({ x: 3, y: 3 }, { x: 4, y: 6 });
+            break;
+          }
           // Église : nef à toit à deux pans (faîtage selon y), clocher à l'avant.
           fill(3, 1, 4, 4, TILE.worship, 3);
           for (let y = 1; y <= 4; y++) {

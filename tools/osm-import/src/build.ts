@@ -5,7 +5,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TILE, type DistrictMap } from '@jeu-ville/shared';
+import { TILE, type DistrictMap, type Religion } from '@jeu-ville/shared';
 import { DISTRICTS, mapFileName, osmFileName, type DistrictSource } from './districts.js';
 import { parseOsm, type OsmData, type OsmWay, type Tags } from './osm.js';
 import { assembleRings, fillRings, makeProjection, strokeLine, type Pt } from './raster.js';
@@ -15,6 +15,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, '..', '..', 'packages', 'shared', 'maps');
 
 const CELL_SIZE_METERS = 8;
+
+/** Nom donné à un lieu de culte que la carte OSM ne nomme pas. */
+const WORSHIP_NAMES: Record<Religion, string> = {
+  christian: 'Église',
+  muslim: 'Mosquée',
+  jewish: 'Synagogue',
+  buddhist: 'Temple bouddhiste',
+  other: 'Lieu de culte',
+};
 /** Seuil d'étages à partir duquel un bâtiment résidentiel compte comme immeuble. */
 const STARTER_MIN_LEVELS = 4;
 
@@ -224,7 +233,16 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     if (kind === 'station' && !/gare/i.test(name)) name = `Gare de ${name}`;
     if (p.x < 0 || p.y < 0 || p.x >= width || p.y >= height) return;
     if (pois.some((q) => q.kind === kind && q.name === name)) return;
-    pois.push({ kind, name, x: p.x, y: p.y, brand: tags.brand, cuisine: tags.cuisine, school: tags['school:FR'] });
+    pois.push({
+      kind,
+      name,
+      x: p.x,
+      y: p.y,
+      brand: tags.brand,
+      cuisine: tags.cuisine,
+      school: tags['school:FR'],
+      ...(kind === 'worship' ? { religion: religionOf(tags) } : {}),
+    });
   };
   const poiKind = (t: Tags): RawPoi['kind'] | null => {
     if (t.amenity === 'townhall') return 'townhall';
@@ -248,10 +266,14 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     return null;
   };
   const defaultName: Partial<Record<RawPoi['kind'], string>> = { bakery: 'Boulangerie', market: 'Place du marché' };
+  // Lieu de culte sans nom dans OSM (souvent le cas des mosquées et synagogues) : nom générique.
+  const religionOf = (t: Tags): Religion =>
+    t.religion === 'christian' || t.religion === 'muslim' || t.religion === 'jewish' || t.religion === 'buddhist' ? t.religion : 'other';
   for (const n of osm.nodes.values()) {
     const k = poiKind(n.tags);
     // Une boulangerie sans nom reste une boulangerie ; un marché sans nom, la place du marché.
-    if (k) addPoi(k, d.renames?.[n.tags.name ?? ''] ?? n.tags.name ?? defaultName[k], project(n.lat, n.lon), n.tags);
+    const unnamed = k === 'worship' ? WORSHIP_NAMES[religionOf(n.tags)] : k ? defaultName[k] : undefined;
+    if (k) addPoi(k, d.renames?.[n.tags.name ?? ''] ?? n.tags.name ?? unnamed, project(n.lat, n.lon), n.tags);
   }
   // Places piétonnes (« Place Jeanne d'Arc »…), souvent de simples chemins : centre de leurs points.
   for (const w of osm.ways.values()) {
@@ -294,7 +316,7 @@ function buildDistrict(d: DistrictSource, osm: OsmData): DistrictMap {
     const k = poiKind(a.tags);
     const ring = a.rings[0];
     if (!k || !ring || ring.length === 0) continue;
-    addPoi(k, a.tags.name, { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length }, a.tags);
+    addPoi(k, a.tags.name ?? (k === 'worship' ? WORSHIP_NAMES[religionOf(a.tags)] : undefined), { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length }, a.tags);
   }
 
   const rows: string[] = [];

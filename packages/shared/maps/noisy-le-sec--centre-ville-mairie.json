@@ -160,12 +160,12 @@
   "RRRRRRRRRRRRGGGGGGGGRRGGGGGGGGMMRRRRRRRRRRGGGGGGGGRRGGGGGGGGRRGGGGGGGGRRRRRRRRRRRRGGGGGGGGRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGMM",
   "RRRRRRRRRRRRGGGGGGGGRRGGGGGGGGMMRRRRRRRRRRGGGGGGGGRRGGGGGGGGRRGGGGGGGGRRRRRRRRRRRRGGGGGGGGRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGMM",
   "RRPPPPPPPPRRPPPPPPPPRRPPPPPPPPMMPPPPPPPPGGPPPPPPPPRRPPPPPPPPRRPPPPPPPPGGGGGPPGGGGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGGGGPPGGGRRPPPPPPPPRRPPPPPPPPGGPPPPPPPPGGPPPPPPPPRRPPPPPPPPGGPPPPPPPPRRPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPMM",
-  "RRPHHGGHHPRRPHHGGHHPRRPHHGGHHPMMPHHGGHHPGGPHHGGHHPRRPHHHHHHPRRPAAAAAAPGGGGGPPGGGGGPHHGGHHPGGPHHHHHHPGGPHHGGHHPGGGGGPPGGGRRPGGGGHHPRRPAAAAAAPGGPNNNNNNPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPGGPHHHHHHPGGPAAAAAAPGGPAAAAAAPGGPSSSSSSPGGPSSSSSSPMM",
-  "RRPHHGGHHPRRPHHGGHHPRRPHHGGHHPMMPHHGGHHPGGPHHGGHHPRRPHHHHHHPRRPAAAAAAPGGGGGPPGGGGGPHHGGHHPGGPHHHHHHPGGPHHGGHHPGGGGGPPGGGRRPGGGGHHPRRPAAAAAAPGGPNNNNNNPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPGGPHHHHHHPGGPAAAAAAPGGPAAAAAAPGGPSSSSSSPGGPSSSSSSPMM",
-  "RRPGGGGGGPRRPGGGGGGPRRPGGGGGGPMMPGGGGGGPGGPGGGGGGPRRPGGGGGGPRRPAAGGGGPGGPPPPPPPPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPPPPPPPPRRPGGGGGGPRRPGGGGGGPGGPNNNNNNPGGPGGGGGGPRRPGGGGGGPGGPGGGGGGPRRPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPSSYYSSPGGPSSYYSSPMM",
-  "RRPGGGGGGPRRPHHGGHHPRRPHHGGHHPMMPGGGGGGPGGPGGGGGGPRRPGGGGGGPRRPAAGGGGPGGPPPPPPPPGGPGGGGGGPGGPGGGGGGPGGPHHGGHHPGGPPPPPPPPRRPGGGGGGPRRPGGGGGGPGGPPPPPPPPGGPGGGGGGPRRPGGGGGGPGGPHHGGHHPRRPGGGGGGPGGPHHGGHHPGGPGGGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYSSPGGPSSYYSSPMM",
-  "RRPGGHHGGPRRPHHGGHHPRRPHHGGHHPMMPGGHHGGPGGPHHGGHHPRRPHHGGGGPRRPAAGGGGPGGGGGPPGGGGGPHHGGHHPGGPHHGGGGPGGPHHGGHHPGGGGGPPGGGRRPHHGGGGPRRPAAAAAAPGGPPPPPPPPGGPGGHHGGPRRPHHGGGGPGGPHHGGHHPRRPHHGGGGPGGPHHGGHHPGGPHHGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYYYPGGPSSYYYYPMM",
-  "RRPGGHHGGPRRPGGGGGGPRRPGGGGGGPMMPGGHHGGPGGPHHGGHHPRRPHHGGGGPRRPAAGGGGPGGGGGPPGGGGGPHHGGHHPGGPHHGGGGPGGPGGGGGGPGGGGGPPGGGRRPHHGGGGPRRPAAAAAAPGGPPPPPPPPGGPGGHHGGPRRPHHGGGGPGGPGGGGGGPRRPHHGGGGPGGPGGGGGGPGGPHHGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYYYPGGPSSYYYYPMM",
+  "RRPHHGGHHPRRPHHGGHHPRRPHHGGHHPMMPHHGGHHPGGPHHGGHHPRRPHHHHHHPRRPAAAAAAPGGGGGPPGGGGGPHHGGHHPGGPHHHHHHPGGPHHGGHHPGGGGGPPGGGRRPGGGGHHPRRPAAAAAAPGGPNNNNNNPGGPPVVVVPPRRPPVVVVVPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPGGPHHHHHHPGGPAAAAAAPGGPAAAAAAPGGPSSSSSSPGGPSSSSSSPMM",
+  "RRPHHGGHHPRRPHHGGHHPRRPHHGGHHPMMPHHGGHHPGGPHHGGHHPRRPHHHHHHPRRPAAAAAAPGGGGGPPGGGGGPHHGGHHPGGPHHHHHHPGGPHHGGHHPGGGGGPPGGGRRPGGGGHHPRRPAAAAAAPGGPNNNNNNPGGPPVVVVPPRRPPVVVVPPGGPHHGGHHPRRPHHHHHHPGGPHHGGHHPGGPHHHHHHPGGPAAAAAAPGGPAAAAAAPGGPSSSSSSPGGPSSSSSSPMM",
+  "RRPGGGGGGPRRPGGGGGGPRRPGGGGGGPMMPGGGGGGPGGPGGGGGGPRRPGGGGGGPRRPAAGGGGPGGPPPPPPPPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPPPPPPPPRRPGGGGGGPRRPGGGGGGPGGPNNNNNNPGGPPVVVVPPRRPPVVVVPPGGPGGGGGGPRRPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPGGGGGGPGGPSSYYSSPGGPSSYYSSPMM",
+  "RRPGGGGGGPRRPHHGGHHPRRPHHGGHHPMMPGGGGGGPGGPGGGGGGPRRPGGGGGGPRRPAAGGGGPGGPPPPPPPPGGPGGGGGGPGGPGGGGGGPGGPHHGGHHPGGPPPPPPPPRRPGGGGGGPRRPGGGGGGPGGPPPPPPPPGGPPVVVVPPRRPPVVVVPPGGPHHGGHHPRRPGGGGGGPGGPHHGGHHPGGPGGGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYSSPGGPSSYYSSPMM",
+  "RRPGGHHGGPRRPHHGGHHPRRPHHGGHHPMMPGGHHGGPGGPHHGGHHPRRPHHGGGGPRRPAAGGGGPGGGGGPPGGGGGPHHGGHHPGGPHHGGGGPGGPHHGGHHPGGGGGPPGGGRRPHHGGGGPRRPAAAAAAPGGPPPPPPPPGGPPVVVVPPRRPPVVVVPPGGPHHGGHHPRRPHHGGGGPGGPHHGGHHPGGPHHGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYYYPGGPSSYYYYPMM",
+  "RRPGGHHGGPRRPGGGGGGPRRPGGGGGGPMMPGGHHGGPGGPHHGGHHPRRPHHGGGGPRRPAAGGGGPGGGGGPPGGGGGPHHGGHHPGGPHHGGGGPGGPGGGGGGPGGGGGPPGGGRRPHHGGGGPRRPAAAAAAPGGPPPPPPPPGGPPPPPPPPRRPPPPPPPPGGPGGGGGGPRRPHHGGGGPGGPGGGGGGPGGPHHGGGGPGGPGGGGAAPGGPGGGGAAPGGPSSYYYYPGGPSSYYYYPMM",
   "RRPPPPPPPPRRPPPPPPPPRRPPPPPPPPMMPPPPPPPPGGPPPPPPPPRRPPPPPPPPRRPPPPPPPPGGGGGPPGGGGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGGGGPPGGGRRPPPPPPPPRRPPPPPPPPGGPPPPPPPPGGPPPPPPPPRRPPPPPPPPGGPPPPPPPPRRPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPGGPPPPPPPPMM",
   "RRGGGGGGGGRRRRRRRRRRRRGGGGGGGGMMGGGGGGGGRRGGGGGGGGRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGRRGGGGGGGGRRRRRRRRRRRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMGGGGGGGGGGGGGGGGGGMM",
   "RRGGGGGGGGRRRRRRRRRRRRGGGGGGGGMMGGGGGGGGRRGGGGGGGGRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRGGGGGGGGRRGGGGGGGGGGGGGGGGGGGGGGGGGGGGRRGGGGGGGGRRRRRRRRRRRRGGGGGGGGMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMGGGGGGGGGGGGGGGGGGMM",
@@ -384,12 +384,12 @@
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-  "000220022000022002200001100110000110011000022002200002222220000444444000000000000002200220000222222000011001100000000000000000011000044444400003333330000220022000022222200001100110000222222000011001100002222220000777777000088888800003333330000444444000",
-  "000220022000022002200001100110000110011000022002200002222220000444444000000000000002200220000222222000011001100000000000000000011000044444400003333330000220022000022222200001100110000222222000011001100002222220000777777000088888800003333330000444444000",
-  "000000000000000000000000000000000000000000000000000000000000000440000000000000000000000000000000000000000000000000000000000000000000000000000003333330000000000000000000000000000000000000000000000000000000000000000000000000000000000002200220000330033000",
-  "000000000000022001100001100110000000000000000000000000000000000440000000000000000000000000000000000000011001100000000000000000000000000000000000000000000000000000000000000001100110000000000000011001100000000000000000066000000006600002200220000330033000",
-  "000002200000022001100001100110000001100000022002200002200000000440000000000000000002200220000220000000011001100000000000000110000000044444400000000000000002200000022000000001100110000220000000011001100002200000000000066000000006600002200000000330000000",
-  "000002200000000000000000000000000001100000022002200002200000000440000000000000000002200220000220000000000000000000000000000110000000044444400000000000000002200000022000000000000000000220000000000000000002200000000000066000000006600002200000000330000000",
+  "000220022000022002200001100110000110011000022002200002222220000444444000000000000002200220000222222000011001100000000000000000011000044444400003333330000033330000002222200001100110000222222000011001100002222220000777777000088888800003333330000444444000",
+  "000220022000022002200001100110000110011000022002200002222220000444444000000000000002200220000222222000011001100000000000000000011000044444400003333330000033330000002222000001100110000222222000011001100002222220000777777000088888800003333330000444444000",
+  "000000000000000000000000000000000000000000000000000000000000000440000000000000000000000000000000000000000000000000000000000000000000000000000003333330000033330000002222000000000000000000000000000000000000000000000000000000000000000002200220000330033000",
+  "000000000000022001100001100110000000000000000000000000000000000440000000000000000000000000000000000000011001100000000000000000000000000000000000000000000033330000002222000001100110000000000000011001100000000000000000066000000006600002200220000330033000",
+  "000002200000022001100001100110000001100000022002200002200000000440000000000000000002200220000220000000011001100000000000000110000000044444400000000000000022220000001111000001100110000220000000011001100002200000000000066000000006600002200000000330000000",
+  "000002200000000000000000000000000001100000022002200002200000000440000000000000000002200220000220000000000000000000000000000110000000044444400000000000000000000000000000000000000000000220000000000000000002200000000000066000000006600002200000000330000000",
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
@@ -609,11 +609,11 @@
   "..z......z...............t......z......z.........................t......z......z......................z......z..z......z..z......z..z......z..z......z..z......z..z......z..z......z..z......z.....t.............................t...................t......",
   "ZZl.......ZZl.......ZZl.......ZZl.........l.......ZZl.......ZZl.........l.........l.........l.........l.........l.......ZZl.......ZZl.........l.........l.......ZZl.........l.......ZZl.........l.........l.........l.........l.........l.........l.......ZZ",
   "|.........|.........|.........|...................|.........|...........................................................|........u|................F............|...................|........................................................F.........F..|.",
-  "|.........|.........|.........|...................|.........|...........................................................|.........|.............................|...................|.u...................................................................|.",
-  "|....t..t.|....t..t.|....t..t.|....t..t.t....t..t.|....t..t.|.........t...b.....t....t..t.t....t..t..t...t..t.t...b.....|....t..t.|..........t.........t...t..t.|....t..t..t...t..t.|....t..t..t...t..t.t....t..t.t..........t........t....k.....t...k....|.",
-  "|.t...f...|.t...f...|.t...f...|.t...f.....t...f...|.t...f...|.t..bt..........b....t...f.....t...f.....t...f..........b..|.t...f...|.t..bt.....t.........t...f...|.t...f.....t...f...|.t...f.....t...f.....t...f.....t.t.......t.t.......t.........t.......|.",
+  "|.........|.........|.........|...................|.........|...........................................................|.........|...........................t.|...................|.u...................................................................|.",
+  "|....t..t.|....t..t.|....t..t.|....t..t.t....t..t.|....t..t.|.........t...b.....t....t..t.t....t..t..t...t..t.t...b.....|....t..t.|..........t.........t........|..........t...t..t.|....t..t..t...t..t.t....t..t.t..........t........t....k.....t...k....|.",
+  "|.t...f...|.t...f...|.t...f...|.t...f.....t...f...|.t...f...|.t..bt..........b....t...f.....t...f.....t...f..........b..|.t...f...|.t..bt.....t.........t.......|.t.........t...f...|.t...f.....t...f.....t...f.....t.t.......t.t.......t.........t.......|.",
   "|........t|........t|........t|........t.........t|........t|........t.......ttt.........t.........t.........t..ttt..ttt|........t|........t...vp..vct.........t|........t.........t|........t.........t.........t.........t.........t.........t.........t|.",
-  "|...f.....|...f.....|...f.....|...f...............|.........|............tt.............................f.......ttt..fff|.........|.......................f.....|.............f.....|.............f...................bt........bt..........t.k.......t.k.|.",
+  "|...f.....|...f.....|...f.....|...f...............|.........|............tt.............................f.......ttt..fff|.........|......................t....b.|..t....b.....f.....|.............f...................bt........bt..........t.k.......t.k.|.",
   "ZZ.......lZZ.......lZZ.......lZZ.......l.........lZZ.......lZZ.......l.........l.........l.........l.........l..fff..fffZZ.......lZZ.......l.........l.........lZZ.......l.........lZZ.......l.........l.........l.........l.........l.........l.........lZZ",
   "............z------z...............t..........................z------z..z------z..z------z..z------z..z------z..z------z.....t.........t.........t..........................z------z.....t......z------z..z------z..z------z..z------z.....t................",
   ".....t......z......z.....t...................t.........t......z......z..z......z..z......z..z......z..z......z..z......z...................................t.........t......z......z............z......z..z......z..z......z..z......z...............t......",
@@ -832,12 +832,12 @@
   "............................................................................................................................................................................................................................................................",
   "............................................................................................................................................................................................................................................................",
   "............................................................................................................................................................................................................................................................",
-  "...nn..nn....nn..nn....nn..nn....nn..nn....nn..nn....nnnnnn........................nn..nn....nnnnnn....nn..nn..................nn........................nn..nn....nnnnnn....nn..nn....nnnnnn....nn..nn....nnnnnn...........................................",
-  "...Ds..Ds....Ds..Ds....Ds..Ds....Ds..Ds....Ds..Ds....DsDsDs.........e..............Ds..Ds....DsDsDs....Ds..Ds..................Ds.........e..............Ds..Ds....DsDsDs....Ds..Ds....DsDsDs....Ds..Ds....DsDsDs.........e.........e.......S.........S.....",
+  "...nn..nn....nn..nn....nn..nn....nn..nn....nn..nn....nnnnnn........................nn..nn....nnnnnn....nn..nn..................nn.......................................m....nn..nn....nnnnnn....nn..nn....nnnnnn...........................................",
+  "...Ds..Ds....Ds..Ds....Ds..Ds....Ds..Ds....Ds..Ds....DsDsDs.........e..............Ds..Ds....DsDsDs....Ds..Ds..................Ds.........e..........................o.......Ds..Ds....DsDsDs....Ds..Ds....DsDsDs.........e.........e.......S.........S.....",
   ".................................................................................................................................................G..........................................................................................................",
   ".............nn..nn....nn..nn..........................................................................nn..nn................................................................nn..nn..............nn..nn.....................................................",
-  ".....nn......Ds..Ds....Ds..Ds......nn......nn..nn....nn............................nn..nn....nn........Ds..Ds..............nn..............................nn......nn........Ds..Ds....nn........Ds..Ds....nn...............................................",
-  ".....Ds............................Ds......Ds..Ds....Ds.........e..................Ds..Ds....Ds............................Ds.........e....................Ds......Ds..................Ds..................Ds............e.........e........................",
+  ".....nn......Ds..Ds....Ds..Ds......nn......nn..nn....nn............................nn..nn....nn........Ds..Ds..............nn..............................Ge........Ge......Ds..Ds....nn........Ds..Ds....nn...............................................",
+  ".....Ds............................Ds......Ds..Ds....Ds.........e..................Ds..Ds....Ds............................Ds.........e................................................Ds..................Ds............e.........e........................",
   "............................................................................................................................................................................................................................................................",
   "............................................................................................................................................................................................................................................................",
   "............................................................................................................................................................................................................................................................",
@@ -2977,6 +2977,16 @@
    "x": 236,
    "y": 144,
    "text": "LYCÉE"
+  },
+  {
+   "x": 155,
+   "y": 157,
+   "text": "SYNAGOGUE"
+  },
+  {
+   "x": 165,
+   "y": 157,
+   "text": "MOSQUÉE"
   },
   {
    "x": 236,
@@ -19071,111 +19081,6 @@
    "centrality": 0.63
   },
   {
-   "id": "house-153-154",
-   "kind": "house",
-   "name": "Maison, Rue de la Pierre Feuillère",
-   "door": {
-    "x": 153,
-    "y": 155
-   },
-   "facade": {
-    "x": 153,
-    "y": 154
-   },
-   "rooms": 5,
-   "centrality": 0.55
-  },
-  {
-   "id": "house-157-154",
-   "kind": "house",
-   "name": "Maison, Rue de la Pierre Feuillère",
-   "door": {
-    "x": 157,
-    "y": 155
-   },
-   "facade": {
-    "x": 157,
-    "y": 154
-   },
-   "rooms": 5,
-   "centrality": 0.53
-  },
-  {
-   "id": "house-155-158",
-   "kind": "house",
-   "name": "Maison, Rue de la Pierre Feuillère",
-   "door": {
-    "x": 155,
-    "y": 159
-   },
-   "facade": {
-    "x": 155,
-    "y": 158
-   },
-   "rooms": 5,
-   "centrality": 0.53
-  },
-  {
-   "id": "house-163-154",
-   "kind": "house",
-   "name": "Maison, Rue de Brément",
-   "door": {
-    "x": 163,
-    "y": 155
-   },
-   "facade": {
-    "x": 163,
-    "y": 154
-   },
-   "rooms": 5,
-   "centrality": 0.5
-  },
-  {
-   "id": "house-165-154",
-   "kind": "house",
-   "name": "Maison, Rue de Brément",
-   "door": {
-    "x": 165,
-    "y": 155
-   },
-   "facade": {
-    "x": 165,
-    "y": 154
-   },
-   "rooms": 5,
-   "centrality": 0.49
-  },
-  {
-   "id": "house-167-154",
-   "kind": "house",
-   "name": "Maison, Rue de Brément",
-   "door": {
-    "x": 167,
-    "y": 155
-   },
-   "facade": {
-    "x": 167,
-    "y": 154
-   },
-   "rooms": 5,
-   "centrality": 0.48
-  },
-  {
-   "id": "house-163-158",
-   "kind": "house",
-   "name": "Maison, Rue de Brément",
-   "door": {
-    "x": 163,
-    "y": 159
-   },
-   "facade": {
-    "x": 163,
-    "y": 158
-   },
-   "rooms": 5,
-   "centrality": 0.49
-  },
-  {
    "id": "house-173-154",
    "kind": "house",
    "name": "Maison, Square Stéphenson",
@@ -24021,7 +23926,8 @@
    "entrance": {
     "x": 176,
     "y": 68
-   }
+   },
+   "religion": "christian"
   },
   {
    "kind": "school",
@@ -24141,7 +24047,8 @@
    "entrance": {
     "x": 166,
     "y": 118
-   }
+   },
+   "religion": "christian"
   },
   {
    "kind": "school",
@@ -24181,7 +24088,8 @@
    "entrance": {
     "x": 76,
     "y": 128
-   }
+   },
+   "religion": "christian"
   },
   {
    "kind": "townhall",
@@ -24304,6 +24212,28 @@
    }
   },
   {
+   "kind": "worship",
+   "name": "Synagogue",
+   "x": 155,
+   "y": 155,
+   "entrance": {
+    "x": 156,
+    "y": 158
+   },
+   "religion": "jewish"
+  },
+  {
+   "kind": "worship",
+   "name": "Mosquée",
+   "x": 165,
+   "y": 155,
+   "entrance": {
+    "x": 166,
+    "y": 158
+   },
+   "religion": "muslim"
+  },
+  {
    "kind": "school",
    "name": "Collège Olympe de Gouges",
    "x": 235,
@@ -24351,7 +24281,8 @@
    "entrance": {
     "x": 216,
     "y": 178
-   }
+   },
+   "religion": "christian"
   },
   {
    "kind": "school",

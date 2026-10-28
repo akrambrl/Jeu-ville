@@ -1,4 +1,4 @@
-import { MOVEMENT, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
+import { MOVEMENT, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -133,7 +133,7 @@ const CATEGORIES = {
   services: '🏛️ Services publics et santé',
   schools: '🏫 Écoles et sport',
   outdoor: '🌳 Parcs et places',
-  worship: '⛪ Lieux de culte',
+  worship: '🛐 Lieux de culte',
   quarters: '🏘️ Quartiers',
   shops: '🛍️ Boutiques et agences',
 } as const;
@@ -170,6 +170,16 @@ function destinationsOf(map: DistrictMap): Destination[] {
     )
     .map((p) => {
       const info = POI_INFO[p.kind];
-      return { icon: info.icon, name: p.name, kind: info.kind, category: CATEGORIES[info.category], point: p.entrance };
+      const worship = p.religion ? WORSHIP_INFO[p.religion] : null;
+      return { icon: worship?.icon ?? info.icon, name: p.name, kind: worship?.kind ?? info.kind, category: CATEGORIES[info.category], point: p.entrance };
     });
 }
+
+/** Lieux de culte : icône et type selon la religion. */
+const WORSHIP_INFO: Record<Religion, { icon: string; kind: string }> = {
+  christian: { icon: '⛪', kind: 'Église' },
+  muslim: { icon: '🕌', kind: 'Mosquée' },
+  jewish: { icon: '🕍', kind: 'Synagogue' },
+  buddhist: { icon: '☸️', kind: 'Temple bouddhiste' },
+  other: { icon: '🛐', kind: 'Lieu de culte' },
+};

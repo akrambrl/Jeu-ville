@@ -231,6 +231,9 @@ function addColumn(grid: MapGrid, quads: QuadBatch, extras: THREE.Group, x: numb
   if (shape === SHAPE.facadeSign && code === TILE.supermarket) addSign(extras, x, y, top + 0.14, 'SUPERMARCHÉ', '#2f8f5b', '#ffffff', 1.6);
   const custom = grid.map.signs.find((g) => g.x === x && g.y === y)?.text;
   if (shape === SHAPE.facadeSign && code === TILE.civic && custom) addSign(extras, x, y, top - 0.15, custom, '#c2462e', '#ffffff', 1.1);
+  if (shape === SHAPE.facadeSign && code === TILE.worship && custom) {
+    addSign(extras, x, y, top - 0.15, custom, '#3f5a6b', '#f4efe2', Math.max(1, custom.length * 0.1));
+  }
   if (shape === SHAPE.schoolSign) {
     const text = custom ?? 'ÉCOLE';
     addSign(extras, x, y, top - 0.15, text, '#1f4e8c', '#ffffff', Math.max(0.9, text.length * 0.1));
@@ -286,6 +289,43 @@ function groundFloor(code: string, shape: string, front?: Storefront): FrontStyl
   return null;
 }
 
+/** Hauteur du brisis (toit de la mairie, de la gare, des lieux de culte sans nef). */
+const MANSARD_HEIGHT = 0.22;
+
+const DOME_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xe8edf0, roughness: 0.45, metalness: 0.15 });
+const FINIAL_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xd9b44a, roughness: 0.4, metalness: 0.5 });
+const MINARET_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xf1ece0, roughness: 0.8 });
+
+/** Coupole de mosquée, centrée sur quatre cases (celle-ci et ses voisines est, sud, sud-est). */
+function addDome(extras: THREE.Group, x: number, y: number, top: number): void {
+  const cx = x + 0.5;
+  const cy = y + 0.5;
+  const base = top + MANSARD_HEIGHT;
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.25, 24), MINARET_MATERIAL);
+  drum.position.set(cx, base + 0.125, cy);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.78, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), DOME_MATERIAL);
+  dome.position.set(cx, base + 0.25, cy);
+  const finial = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 8), FINIAL_MATERIAL);
+  finial.position.set(cx, base + 0.25 + 0.78 + 0.15, cy);
+  for (const m of [drum, dome, finial]) m.castShadow = true;
+  extras.add(drum, dome, finial);
+}
+
+/** Minaret : tour fine, balcon, toit pointu. */
+function addMinaret(extras: THREE.Group, x: number, y: number, top: number): void {
+  const height = 2.2;
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, height, 12), MINARET_MATERIAL);
+  tower.position.set(x, top + height / 2, y);
+  const balcony = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.1, 12), MINARET_MATERIAL);
+  balcony.position.set(x, top + height * 0.75, y);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.5, 12), DOME_MATERIAL);
+  cap.position.set(x, top + height + 0.25, y);
+  const finial = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.2, 6), FINIAL_MATERIAL);
+  finial.position.set(x, top + height + 0.6, y);
+  for (const m of [tower, balcony, cap, finial]) m.castShadow = true;
+  extras.add(tower, balcony, cap, finial);
+}
+
 /** Toits en pente : nef d'église (deux pans), brisis de mairie et de gare, flèche du clocher. */
 function addPitchedRoof(
   grid: MapGrid,
@@ -321,14 +361,19 @@ function addPitchedRoof(
     return;
   }
   if (shape === SHAPE.roofEast || shape === SHAPE.entrance) return;
+  if (shape === SHAPE.minaret) {
+    addMinaret(extras, x, y, top);
+    return;
+  }
   // Brisis (Mansart) : bloc en retrait sur les côtés en façade, empilé sur le toit.
   const inset = (dx: number, dy: number) => (same(x + dx, y + dy) ? 0 : 0.18);
   const w = 1 - inset(-1, 0) - inset(1, 0);
   const d = 1 - inset(0, -1) - inset(0, 1);
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, d), roofMat());
-  cap.position.set(x + (inset(-1, 0) - inset(1, 0)) / 2, top + 0.11, y + (inset(0, -1) - inset(0, 1)) / 2);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(w, MANSARD_HEIGHT, d), roofMat());
+  cap.position.set(x + (inset(-1, 0) - inset(1, 0)) / 2, top + MANSARD_HEIGHT / 2, y + (inset(0, -1) - inset(0, 1)) / 2);
   cap.castShadow = cap.receiveShadow = true;
   extras.add(cap);
+  if (shape === SHAPE.dome) addDome(extras, x, y, top);
   // Lucarne côté sud.
   if (!same(x, y + 1) && code === TILE.townhall && shape !== SHAPE.townhallCenter) {
     const dormer = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.12), new THREE.MeshStandardMaterial({ color: 0xe9e2d0 }));
