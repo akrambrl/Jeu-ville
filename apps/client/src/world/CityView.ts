@@ -231,6 +231,30 @@ export class CityView {
   }
 
   private homeTag: CSS2DObject | null = null;
+  private missionTag: CSS2DObject | null = null;
+  private missionBeam: THREE.Mesh | null = null;
+
+  /** Adresse de livraison : colis flottant et colonne de lumière (null : aucune). */
+  setMissionTarget(point: TilePoint | null): void {
+    if (!this.missionTag) {
+      const el = document.createElement('div');
+      el.className = 'mission-tag';
+      el.textContent = '📦 Livraison';
+      this.missionTag = new CSS2DObject(el);
+      this.missionBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.25, 0.25, 3, 16, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xffc94d, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      this.scene.add(this.missionTag, this.missionBeam);
+    }
+    this.missionTag.visible = !!point;
+    this.missionBeam!.visible = !!point;
+    if (point) {
+      const top = groundTop(this.grid.tileAt(point.x, point.y));
+      this.missionTag.position.set(point.x, top + 2.4, point.y);
+      this.missionBeam!.position.set(point.x, top + 1.5, point.y);
+    }
+  }
   private readonly businessSigns = new Map<string, THREE.Mesh>();
 
   /** Étiquette « Chez moi » au-dessus de la porte (après un déménagement…). */

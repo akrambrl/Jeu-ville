@@ -12,6 +12,13 @@ import {
   buyFoodSchema,
   buyItemSchema,
   openBusinessSchema,
+  applyJobSchema,
+  serveSchema,
+  employers,
+  Shift,
+  JOBS,
+  type Employer,
+  type MissionResult,
   propertyDealSchema,
   propertySchema,
   type Listings,
@@ -59,6 +66,7 @@ import {
   payFee,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
+import { applyJob, payMission, quitJob } from '../domain/jobs.js';
 import { acquireProperty, moveIn, openBusiness, openBusinesses, releaseProperty, takenSpots } from '../domain/realEstate.js';
 import {
   adoptPet,
@@ -89,6 +97,10 @@ interface Session extends Walker {
   /** Cases parcourues depuis la dernière sauvegarde (batterie, promenade). */
   rideTiles: number;
   petTiles: number;
+  /** Emploi et expérience (d'après le dernier CharacterSelf), service en cours. */
+  job: { employerId: string; jobType: 'courier' | 'counter' } | null;
+  jobXp: Partial<Record<'courier' | 'counter', number>>;
+  shift: Shift | null;
 }
 
 export class DistrictRoom extends Room<DistrictState> {
@@ -99,6 +111,7 @@ export class DistrictRoom extends Room<DistrictState> {
   /** Passants (bots) du quartier, simulés ici et vus par tous. */
   private readonly passersby: Passerby[] = [];
   private districtKey = '';
+  private employers: Employer[] = [];
   /** Une case = une personne (joueurs, et bientôt bots ; stands des marchands). */
   private readonly occupancy = new TileOccupancy();
   /** Sessions par sessionId Colyseus. */
@@ -109,6 +122,7 @@ export class DistrictRoom extends Room<DistrictState> {
     if (!map) throw new Error(`Quartier inconnu : ${options.districtId}`);
     this.grid = new MapGrid(map);
     this.districtKey = options.districtId;
+    this.employers = employers(map);
     void this.refreshBusinesses();
     this.food = foodPlaces(map);
     this.shops = shopPlaces(map);
@@ -131,6 +145,32 @@ export class DistrictRoom extends Room<DistrictState> {
     this.onMessage(ClientMessage.chargeScooter, (client) => this.handleChargeScooter(client));
     this.onMessage(ClientMessage.feedPet, (client) => this.handleFeedPet(client));
     this.onMessage(ClientMessage.listings, (client) => void this.handleListings(client));
+    this.onMessage(ClientMessage.applyJob, (client, raw) =>
+      this.act(client, 'applyJob', async (s) => {
+        const parsed = applyJobSchema.safeParse(raw);
+        if (!parsed.success) return;
+        this.endShift(s);
+        return applyJob(db, s.characterId, this.districtKey, parsed.data.employerId);
+      }),
+    );
+    this.onMessage(ClientMessage.quitJob, (client) =>
+      this.act(client, 'quitJob', async (s) => {
+        this.endShift(s);
+        return quitJob(db, s.characterId);
+      }),
+    );
+    this.onMessage(ClientMessage.startShift, (client) => this.handleStartShift(client));
+    this.onMessage(ClientMessage.stopShift, (client) => {
+      const s = this.sessions.get(client.sessionId);
+      if (s) this.endShift(s);
+    });
+    this.onMessage(ClientMessage.serve, (client, raw) => {
+      const s = this.sessions.get(client.sessionId);
+      const parsed = serveSchema.safeParse(raw);
+      if (!s?.shift || !parsed.success) return;
+      const result = s.shift.serve(parsed.data.items, { x: s.x, y: s.y }, Date.now());
+      if (result) this.missionDone(s, result);
+    });
     this.onMessage(ClientMessage.buyProperty, (client, raw) => this.handleDeal(client, raw, 'buy'));
     this.onMessage(ClientMessage.rentProperty, (client, raw) => this.handleDeal(client, raw, 'rent'));
     this.onMessage(ClientMessage.moveIn, (client, raw) =>
@@ -206,6 +246,9 @@ export class DistrictRoom extends Room<DistrictState> {
       hasPet: false,
       rideTiles: 0,
       petTiles: 0,
+      job: null,
+      jobXp: {},
+      shift: null,
     };
     this.sessions.set(client.sessionId, session);
 
@@ -232,6 +275,8 @@ export class DistrictRoom extends Room<DistrictState> {
     s.vehicle = self.activeVehicle;
     s.battery = self.vehicles.find((v) => v.kind === self.activeVehicle)?.battery ?? 100;
     s.hasPet = self.pet !== null;
+    s.job = self.job;
+    s.jobXp = self.jobXp;
     const p = this.state.players.get(s.id);
     if (p) {
       p.vehicle = self.activeVehicle;
@@ -355,6 +400,17 @@ export class DistrictRoom extends Room<DistrictState> {
       p.moving = s.path.length > 0 && s.blockedMs === 0;
     }
     const now = Date.now();
+    for (const s of this.sessions.values()) {
+      if (!s.shift) continue;
+      // Au comptoir, on reste à son poste.
+      if (s.shift.employer.jobType === 'counter' && Math.hypot(s.x - s.shift.employer.door.x, s.y - s.shift.employer.door.y) > JOBS.counter.leaveDistance) {
+        this.notify(s.client, 'error', 'Tu as quitté ton poste : service terminé.');
+        this.endShift(s);
+        continue;
+      }
+      const result = s.shift.tick({ x: s.x, y: s.y }, now);
+      if (result) this.missionDone(s, result);
+    }
     for (const b of this.passersby) {
       updatePasserby(this.grid, this.occupancy, b, dtMs, now);
       const p = this.state.players.get(b.id);
@@ -448,6 +504,42 @@ export class DistrictRoom extends Room<DistrictState> {
       const path = target ? pathAvoiding(this.grid, this.occupancy, s, target) : null;
       if (path) s.path = path;
     }, TRAVEL.busArriveMs + TRAVEL.busStopMs);
+  }
+
+  // ---------- Services (agence pour l'emploi) ----------
+
+  private handleStartShift(client: Client): void {
+    const s = this.sessions.get(client.sessionId);
+    if (!s) return;
+    if (s.shift) return this.notify(client, 'error', 'Tu es déjà en service.');
+    const employer = this.employers.find((e) => e.id === s.job?.employerId);
+    if (!employer) return this.notify(client, 'error', "Tu n'as pas d'emploi : passe à l'agence pour l'emploi.");
+    if (Math.hypot(s.x - employer.door.x, s.y - employer.door.y) > MOVEMENT.foodInteractionRange) {
+      return this.notify(client, 'error', `Va d'abord chez ton employeur : ${employer.name}.`);
+    }
+    s.shift = new Shift(`${s.characterId}:${Date.now()}`, employer, s.jobXp[employer.jobType] ?? 0, this.grid.map);
+    s.shift.next({ x: s.x, y: s.y }, Date.now());
+    client.send(ServerMessage.mission, s.shift.view(Date.now()));
+  }
+
+  /** Fin d'une mission : on paie (si réussie), on prévient, on passe à la suivante. */
+  private missionDone(s: Session, result: MissionResult): void {
+    const shift = s.shift!;
+    this.notify(s.client, result.payCents > 0 ? 'info' : 'error', result.payCents > 0 ? `${result.text} +${result.payCents / 100} €` : result.text);
+    if (result.payCents > 0) {
+      void payMission(db, s.characterId, shift.employer.jobType, result.payCents, result.key)
+        .then((self) => this.sessions.get(s.id) === s && this.sendSelf(s, self))
+        .catch((err) => console.error('payMission', err));
+    }
+    s.client.send(ServerMessage.mission, shift.view(Date.now()));
+    if (shift.done) s.shift = null;
+  }
+
+  private endShift(s: Session): void {
+    if (!s.shift) return;
+    const view = s.shift.view(Date.now());
+    s.shift = null;
+    s.client.send(ServerMessage.mission, view.kind === 'done' ? view : { kind: 'done', earnedCents: view.earnedCents, succeeded: 0, total: view.total });
   }
 
   /** L'agence est consultée de partout : on peut acheter/louer sans être devant (on visite ensuite). */

@@ -19,12 +19,14 @@ import {
   type VehicleKind,
   petHappinessBonus,
   homeHappiness,
+  employers,
+  type JobType,
   type BusinessType,
   type PropertySpot,
   type FoodPlaceKind,
 } from '@jeu-ville/shared';
 import type { Db, Tx } from '../db/client.js';
-import { characters, dwellings, pets, properties, vehicles } from '../db/schema.js';
+import { characters, dwellings, jobExperience, jobs, pets, properties, vehicles } from '../db/schema.js';
 import { STARTER_DWELLING_KIND } from '../db/seed.js';
 import { GameError } from './errors.js';
 import { recordLedgerEntry } from './ledger.js';
@@ -73,7 +75,13 @@ export function storedPet(row: PetRow | null): StoredPet | null {
 export function toCharacterSelf(
   row: CharacterRow,
   dwelling: DwellingRow | null,
-  owned: { vehicles: VehicleRow[]; pet: PetRow | null; properties: PropertyRow[] },
+  owned: {
+    vehicles: VehicleRow[];
+    pet: PetRow | null;
+    properties: PropertyRow[];
+    job?: { employerId: string; jobType: string } | null;
+    xp?: { jobType: string; xp: number }[];
+  },
   nowMs: number,
 ): CharacterSelf {
   const age = ageAt(row.createdAt.getTime(), nowMs);
@@ -106,19 +114,29 @@ export function toCharacterSelf(
       business: p.businessType ? { type: p.businessType as BusinessType, name: p.businessName ?? '' } : null,
     })),
     movedAt: row.movedAt?.getTime() ?? null,
+    job: owned.job
+      ? {
+          employerId: owned.job.employerId,
+          jobType: owned.job.jobType as JobType,
+          employerName: employers(getDistrictMap(row.districtId)!).find((e) => e.id === owned.job!.employerId)?.name ?? '',
+        }
+      : null,
+    jobXp: Object.fromEntries((owned.xp ?? []).map((x) => [x.jobType, x.xp])),
     computedAt: nowMs,
   };
 }
 
 /** Vue privée complète (logement, véhicules, animal) d'une ligne de personnage. */
 export async function selfOf(db: Db | Tx, row: CharacterRow, nowMs: number): Promise<CharacterSelf> {
-  const [dwelling, owned, [pet], held] = await Promise.all([
+  const [dwelling, owned, [pet], held, [job], xp] = await Promise.all([
     loadDwelling(db, row.dwellingId),
     db.select().from(vehicles).where(eq(vehicles.characterId, row.id)),
     db.select().from(pets).where(eq(pets.characterId, row.id)),
     db.select().from(properties).where(or(eq(properties.ownerCharacterId, row.id), eq(properties.tenantCharacterId, row.id))),
+    db.select().from(jobs).where(eq(jobs.characterId, row.id)),
+    db.select().from(jobExperience).where(eq(jobExperience.characterId, row.id)),
   ]);
-  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null, properties: held }, nowMs);
+  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null, properties: held, job: job ?? null, xp }, nowMs);
 }
 
 async function loadDwelling(db: Db | Tx, id: string | null): Promise<DwellingRow | null> {

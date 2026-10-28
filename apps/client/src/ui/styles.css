@@ -791,3 +791,109 @@ input.agency-input {
   border: 1px solid #d5dde0;
   font: inherit;
 }
+
+/* ---------- Agence pour l'emploi et missions ---------- */
+
+h3.jobs-type {
+  margin: 10px 0 0;
+  font-size: 16px;
+}
+
+.agency-card.mine {
+  outline: 2px solid var(--accent);
+}
+
+.hud-card.mission {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  width: min(520px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.mission-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mission-head strong {
+  flex: 1 1 auto;
+}
+
+.mission-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.mission-time.late {
+  color: #c8322b;
+}
+
+.mission-earned {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+button.mission-stop {
+  background: #eef2f3;
+  color: var(--text);
+}
+
+.mission-body,
+.mission-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.order-icons {
+  font-size: 26px;
+  letter-spacing: 4px;
+}
+
+.mission-items {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+button.counter-item {
+  font-size: 26px;
+  padding: 6px 0;
+  background: #f6f8f9;
+}
+
+.mission-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 36px;
+  align-items: center;
+  background: #eef2f3;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+button.tray-item {
+  font-size: 22px;
+  padding: 2px 6px;
+  background: #fff;
+}
+
+.mission-tag {
+  font: 700 14px system-ui, sans-serif;
+  background: #ffc94d;
+  color: #3b2a12;
+  padding: 4px 10px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}

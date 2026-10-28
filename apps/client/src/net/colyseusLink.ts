@@ -6,6 +6,9 @@ import {
   type BuyFoodMessage,
   type BuyItemMessage,
   type BusinessType,
+  type ApplyJobMessage,
+  type MissionView,
+  type ServeMessage,
   type Listings,
   type OpenBusinessMessage,
   type PropertyDealMessage,
@@ -96,6 +99,30 @@ export class ColyseusLink implements DistrictLink {
       $(b).onChange(() => h.opened(id, b));
     });
     $(state).businesses.onRemove((_b: BusinessView, id: string) => h.closed(id));
+  }
+
+  applyJob(employerId: string): void {
+    this.room.send(ClientMessage.applyJob, { employerId } satisfies ApplyJobMessage);
+  }
+
+  quitJob(): void {
+    this.room.send(ClientMessage.quitJob, {});
+  }
+
+  startShift(): void {
+    this.room.send(ClientMessage.startShift, {});
+  }
+
+  stopShift(): void {
+    this.room.send(ClientMessage.stopShift, {});
+  }
+
+  serve(items: string[]): void {
+    this.room.send(ClientMessage.serve, { items } satisfies ServeMessage);
+  }
+
+  onMission(cb: (mission: MissionView) => void): void {
+    this.room.onMessage(ServerMessage.mission, cb);
   }
 
   rideBus(to: TilePoint): void {

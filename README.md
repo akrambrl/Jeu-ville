@@ -45,6 +45,10 @@ Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
   local commercial (premier arrivé, transactions verrouillées), loyers prélevés chaque
   jour même hors ligne, déménagement toutes les 2 semaines au plus ; ouvrir un commerce
   (snack, coffee shop, barbier, laverie, boutique) qui rapporte grâce aux clients bots.
+- Agence pour l'emploi : offres des commerces bots (livreur·se dans les fast-foods,
+  vendeur·se au comptoir des boulangeries et supermarchés), services de missions vérifiées
+  par le serveur (livrer à temps, servir la bonne commande), salaire et pourboires au
+  journal, expérience et niveaux qui augmentent la paie ; tenue correcte exigée.
 - Magasin de cycles (vélo, trottinette électrique à recharger) et animalerie (chien, chat
   à nourrir et promener, sinon recueilli par un refuge). Bus à 2 € avec arrivée en bus.
 - Bouton « Aller à… » : chez moi et tous les lieux du quartier.

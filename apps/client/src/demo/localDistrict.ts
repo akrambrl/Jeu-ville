@@ -66,6 +66,14 @@ import {
   rentPeriodsDue,
   salePriceCents,
   type BusinessType,
+  JOBS,
+  Shift,
+  canBeHired,
+  decayGauges,
+  employers,
+  type JobType,
+  type MissionResult,
+  type MissionView,
   type PropertySpot,
 } from '@jeu-ville/shared';
 import type { BusinessHandlers, DistrictLink, PlayerHandlers, PlayerView } from '../net/link.js';
@@ -95,6 +103,9 @@ export interface DemoSave {
   holdings?: DemoHolding[];
   homeSpotId?: string | null;
   movedAt?: number | null;
+  /** Ajouts du lot « agence pour l'emploi ». */
+  job?: { employerId: string; jobType: JobType } | null;
+  jobXp?: Partial<Record<JobType, number>>;
 }
 
 /** Bien acheté ou loué dans la démo (comme une ligne `properties` du serveur). */
@@ -196,6 +207,8 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
       business: h.business ? { type: h.business.type, name: h.business.name } : null,
     })),
     movedAt: save.movedAt ?? null,
+    job: save.job ? { ...save.job, employerName: employers(map).find((e) => e.id === save.job!.employerId)?.name ?? '' } : null,
+    jobXp: save.jobXp ?? {},
     computedAt: nowMs,
   };
 }
@@ -218,6 +231,8 @@ export class LocalDistrict implements DistrictLink {
   private noticeCb: (n: Notice) => void = () => {};
   private arrivalCb: (a: Arrival) => void = () => {};
   private businessHandlers: BusinessHandlers | null = null;
+  private missionCb: (m: MissionView) => void = () => {};
+  private shift: Shift | null = null;
 
   constructor(
     private readonly map: DistrictMap,
@@ -499,6 +514,74 @@ export class LocalDistrict implements DistrictLink {
     if (changed) this.commit();
   }
 
+  // ---------- Agence pour l'emploi (mêmes règles que le serveur) ----------
+
+  applyJob(employerId: string): void {
+    const employer = employers(this.map).find((e) => e.id === employerId);
+    if (!employer) return this.notice('Cette offre n’existe plus.');
+    if (this.save.job) return this.notice('Tu as déjà un emploi : démissionne d’abord.');
+    const appearance = decayGauges(this.save.gauges, Date.now() - this.save.gaugesUpdatedAt).appearance;
+    if (!canBeHired(appearance)) {
+      return this.notice(`Refusé : présente-toi mieux (apparence ${JOBS.minAppearanceToHire} au moins). Change-toi chez toi !`);
+    }
+    this.endShift();
+    this.save.job = { employerId, jobType: employer.jobType };
+    this.commit();
+  }
+
+  quitJob(): void {
+    this.endShift();
+    this.save.job = null;
+    this.commit();
+  }
+
+  startShift(): void {
+    const me = this.walkers.get(SELF_ID)!;
+    if (this.shift) return this.notice('Tu es déjà en service.');
+    const employer = employers(this.map).find((e) => e.id === this.save.job?.employerId);
+    if (!employer) return this.notice("Tu n'as pas d'emploi : passe à l'agence pour l'emploi.");
+    if (Math.hypot(me.x - employer.door.x, me.y - employer.door.y) > MOVEMENT.foodInteractionRange) {
+      return this.notice(`Va d'abord chez ton employeur : ${employer.name}.`);
+    }
+    this.shift = new Shift(`demo:${Date.now()}`, employer, this.save.jobXp?.[employer.jobType] ?? 0, this.map);
+    this.shift.next({ x: me.x, y: me.y }, Date.now());
+    this.missionCb(this.shift.view(Date.now()));
+  }
+
+  stopShift(): void {
+    this.endShift();
+  }
+
+  serve(items: string[]): void {
+    const me = this.walkers.get(SELF_ID)!;
+    const result = this.shift?.serve(items, { x: me.x, y: me.y }, Date.now());
+    if (result) this.missionDone(result);
+  }
+
+  onMission(cb: (mission: MissionView) => void): void {
+    this.missionCb = cb;
+  }
+
+  private missionDone(result: MissionResult): void {
+    const shift = this.shift!;
+    this.notice(result.payCents > 0 ? `${result.text} +${result.payCents / 100} €` : result.text, result.payCents > 0 ? 'info' : 'error');
+    if (result.payCents > 0) {
+      const type = shift.employer.jobType;
+      this.save.moneyCents += result.payCents;
+      this.save.jobXp = { ...this.save.jobXp, [type]: (this.save.jobXp?.[type] ?? 0) + JOBS[type].xpPerMission };
+      this.commit();
+    }
+    this.missionCb(shift.view(Date.now()));
+    if (shift.done) this.shift = null;
+  }
+
+  private endShift(): void {
+    if (!this.shift) return;
+    const view = this.shift.view(Date.now());
+    this.shift = null;
+    this.missionCb(view.kind === 'done' ? view : { kind: 'done', earnedCents: view.earnedCents, succeeded: 0, total: view.total });
+  }
+
   rideBus(to: TilePoint): void {
     const me = this.walkers.get(SELF_ID)!;
     if (!isTravelDestination(this.map, to, this.self().home?.door ?? null)) {
@@ -602,6 +685,16 @@ export class LocalDistrict implements DistrictLink {
         }
       } else {
         updatePasserby(this.grid, this.occupancy, w, dtMs, now);
+      }
+      if (id === SELF_ID && this.shift) {
+        const employer = this.shift.employer;
+        if (employer.jobType === 'counter' && Math.hypot(w.x - employer.door.x, w.y - employer.door.y) > JOBS.counter.leaveDistance) {
+          this.notice('Tu as quitté ton poste : service terminé.');
+          this.endShift();
+        } else {
+          const result = this.shift.tick({ x: w.x, y: w.y }, now);
+          if (result) this.missionDone(result);
+        }
       }
       const moving = w.path.length > 0 && w.blockedMs === 0;
       if (moving || wasMoving) {

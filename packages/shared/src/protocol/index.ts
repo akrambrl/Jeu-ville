@@ -11,6 +11,7 @@ import type { StoredPet } from '../formulas/pets.js';
 import type { OwnedVehicle, VehicleKind } from '../formulas/vehicles.js';
 import { BUSINESS_TYPES, VEHICLES } from '../config/balance.js';
 import type { BusinessType } from '../formulas/realEstate.js';
+import type { JobType } from '../formulas/jobs.js';
 import type { TilePoint } from '../map/types.js';
 
 // Messages de validation en français.
@@ -81,6 +82,10 @@ export interface CharacterSelf {
   properties: OwnedProperty[];
   /** Dernier déménagement (ms), pour la règle « une fois toutes les deux semaines ». */
   movedAt: number | null;
+  /** Emploi actuel (agence pour l'emploi). */
+  job: { employerId: string; employerName: string; jobType: JobType } | null;
+  /** Expérience par métier. */
+  jobXp: Partial<Record<JobType, number>>;
   /** Instant serveur du calcul (ms epoch). */
   computedAt: number;
 }
@@ -129,7 +134,24 @@ export const ClientMessage = {
   /** Rendre un bien loué, ou revendre un bien acheté à l'agence. */
   releaseProperty: 'releaseProperty',
   openBusiness: 'openBusiness',
+  applyJob: 'applyJob',
+  quitJob: 'quitJob',
+  /** Commencer / arrêter un service (devant son employeur). */
+  startShift: 'startShift',
+  stopShift: 'stopShift',
+  /** Comptoir : servir ces articles au client actuel. */
+  serve: 'serve',
 } as const;
+
+export const applyJobSchema = z.object({
+  employerId: z.string().min(1).max(64),
+});
+export type ApplyJobMessage = z.infer<typeof applyJobSchema>;
+
+export const serveSchema = z.object({
+  items: z.array(z.string().min(1).max(16)).max(8),
+});
+export type ServeMessage = z.infer<typeof serveSchema>;
 
 /** Acheter ou louer un bien ; `requestId` rend le clic idempotent (double clic, réseau). */
 export const propertyDealSchema = z.object({
@@ -211,7 +233,15 @@ export const ServerMessage = {
   arrival: 'arrival',
   /** Biens déjà pris (Listings), en réponse à ClientMessage.listings. */
   listings: 'listings',
+  /** Mission en cours pendant un service (MissionView). */
+  mission: 'mission',
 } as const;
+
+/** Ce que le joueur voit de sa mission ; c'est le serveur qui vérifie et qui paie. */
+export type MissionView =
+  | { kind: 'courier'; index: number; total: number; target: TilePoint; address: string; remainingMs: number; earnedCents: number }
+  | { kind: 'counter'; index: number; total: number; order: string[]; remainingMs: number; earnedCents: number }
+  | { kind: 'done'; earnedCents: number; succeeded: number; total: number };
 
 export interface Listings {
   /** Biens achetés ou loués par des joueurs (PropertySpot.id). */

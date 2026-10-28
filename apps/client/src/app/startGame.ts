@@ -1,8 +1,9 @@
-import { MOVEMENT, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
+import { MOVEMENT, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
 import { AgencySheet } from '../ui/agency.js';
+import { JobCenterSheet, MissionPanel } from '../ui/jobs.js';
 import { Hud, type Destination } from '../ui/hud.js';
 import { showTutorialOnce } from '../ui/tutorial.js';
 
@@ -27,6 +28,11 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   const food = foodPlaces(map);
   const shops = shopPlaces(map);
   const agencyDoor = map.pois.find((p) => p.kind === 'realestate')?.entrance ?? null;
+  const jobCenterDoor = map.pois.find((p) => p.kind === 'jobcenter')?.entrance ?? null;
+  const allEmployers = employers(map);
+  let inShift = false;
+  const isNear = (p: { x: number; y: number } | null | undefined, x: number, y: number) =>
+    !!p && Math.hypot(x - p.x, y - p.y) <= MOVEMENT.foodInteractionRange;
   let position = { x: 0, y: 0 };
   let current = character;
   const container = document.getElementById('game')!;
@@ -41,7 +47,10 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       hud.setNearShop(shopInReach(shops, x, y));
       hud.setPosition(x, y);
       position = { x, y };
-      hud.setNearAgency(!!agencyDoor && Math.hypot(x - agencyDoor.x, y - agencyDoor.y) <= MOVEMENT.foodInteractionRange);
+      hud.setNearAgency(isNear(agencyDoor, x, y));
+      hud.setNearJobCenter(isNear(jobCenterDoor, x, y));
+      const work = allEmployers.find((e) => e.id === current.job?.employerId);
+      hud.setCanStartShift(!inShift && isNear(work?.door, x, y));
     },
   });
 
@@ -58,6 +67,8 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       onChargeScooter: () => link.chargeScooter(),
       onFeedPet: () => link.feedPet(),
       onOpenAgency: () => void agency.open(current, position),
+      onOpenJobCenter: () => jobCenter.open(current, position),
+      onStartShift: () => link.startShift(),
       onRecenter: () => view.recenter(),
     },
     destinationsOf(map),
@@ -74,10 +85,29 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
     visit: (point) => view.requestMove(point),
   });
   ui.append(agency.root);
+  const jobCenter = new JobCenterSheet(map, {
+    apply: (id) => link.applyJob(id),
+    quit: () => link.quitJob(),
+    goTo: (point) => view.requestMove(point),
+  });
+  ui.append(jobCenter.root);
+  const mission = new MissionPanel({
+    goTo: (point) => view.requestMove(point),
+    serve: (items) => link.serve(items),
+    stop: () => link.stopShift(),
+    showTarget: (point) => view.setMissionTarget(point),
+  });
+  ui.append(mission.root);
+  link.onMission((m) => {
+    inShift = m.kind !== 'done';
+    mission.show(m);
+    if (m.kind === 'done') hud.notify(`Service terminé : ${m.succeeded}/${m.total} missions réussies, +${m.earnedCents / 100} €.`);
+  });
 
   link.onSelf((self) => {
     current = self;
     agency.update(self);
+    jobCenter.update(self);
     homeDoor = self.home?.door ?? null;
     view.setHomeDoor(homeDoor);
     hud.setSelf(self);

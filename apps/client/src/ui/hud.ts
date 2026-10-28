@@ -63,6 +63,8 @@ export interface HudCallbacks {
   onChargeScooter: () => void;
   onFeedPet: () => void;
   onOpenAgency: () => void;
+  onOpenJobCenter: () => void;
+  onStartShift: () => void;
   onRecenter: () => void;
 }
 
@@ -83,6 +85,8 @@ export class Hud {
   private readonly chargeButton: HTMLButtonElement;
   private readonly petCard: HTMLElement;
   private readonly agencyButton: HTMLButtonElement;
+  private readonly jobCenterButton: HTMLButtonElement;
+  private readonly shiftButton: HTMLButtonElement;
   private position: TilePoint = { x: 0, y: 0 };
   private readonly busButtons: { button: HTMLButtonElement; point: () => TilePoint | null }[] = [];
   private readonly walkButtons: { button: HTMLButtonElement; point: () => TilePoint | null }[] = [];
@@ -136,6 +140,12 @@ export class Hud {
     this.agencyButton = el('button', { class: 'primary', text: '🔑 Voir les annonces' });
     this.agencyButton.hidden = true;
     this.agencyButton.addEventListener('click', () => callbacks.onOpenAgency());
+    this.jobCenterButton = el('button', { class: 'primary', text: '💼 Voir les offres' });
+    this.jobCenterButton.hidden = true;
+    this.jobCenterButton.addEventListener('click', () => callbacks.onOpenJobCenter());
+    this.shiftButton = el('button', { class: 'primary', text: '▶️ Commencer le service' });
+    this.shiftButton.hidden = true;
+    this.shiftButton.addEventListener('click', () => callbacks.onStartShift());
     this.petCard = el('div', { class: 'hud-card pet-card' });
     this.petCard.hidden = true;
 
@@ -145,7 +155,7 @@ export class Hud {
         gauges,
         this.petCard,
       ]),
-      el('div', { class: 'hud-bottom' }, [this.homePanel, this.foodPanel, this.agencyButton, this.vehicleButton, this.goToButton, recenter]),
+      el('div', { class: 'hud-bottom' }, [this.homePanel, this.foodPanel, this.agencyButton, this.jobCenterButton, this.shiftButton, this.vehicleButton, this.goToButton, recenter]),
       this.destinationsPanel,
       el('div', { class: 'attribution' }),
     ]);
@@ -255,6 +265,15 @@ export class Hud {
       bar('💛', g.happiness),
       feed,
     );
+  }
+
+  /** Devant l'agence pour l'emploi / chez son employeur (hors service). */
+  setNearJobCenter(near: boolean): void {
+    this.jobCenterButton.hidden = !near;
+  }
+
+  setCanStartShift(can: boolean): void {
+    this.shiftButton.hidden = !can;
   }
 
   /** Devant l'agence immobilière : bouton pour voir les annonces. */

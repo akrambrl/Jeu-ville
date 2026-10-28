@@ -227,6 +227,63 @@ export const BUSINESS_TYPES = {
 /** Versement des recettes d'un commerce (h réelles) : le chiffre tombe au fil de la journée. */
 export const BUSINESS_PAYOUT_HOURS = 1;
 
+/**
+ * Métiers salariés (agence pour l'emploi) : on travaille pour un commerce bot
+ * par « services » de mini-missions, payées selon la performance.
+ */
+export const JOBS = {
+  courier: {
+    label: 'Livreur·se',
+    icon: '🛵',
+    /** Employeurs : types de lieux (MapPoi.kind) qui recrutent pour ce métier. */
+    employers: ['fastfood'],
+    missionsPerShift: 3,
+    /** Paie par livraison réussie, + pourboire si l'on est en avance. */
+    payCents: 12 * CENTS_PER_EURO,
+    tipCents: 6 * CENTS_PER_EURO,
+    xpPerMission: 10,
+    /** Adresse de livraison entre ces distances (cases) du point de départ. */
+    distance: [20, 70],
+    /** Délai : temps de marche × marge + bonus fixe ; pourboire si livré avant la moitié. */
+    deadlineFactor: 1.6,
+    deadlineBonusMs: 20_000,
+    /** Distance (cases) à l'adresse pour que la livraison compte. */
+    reach: 1.6,
+  },
+  counter: {
+    label: 'Vendeur·se au comptoir',
+    icon: '🧾',
+    employers: ['bakery', 'supermarket'],
+    missionsPerShift: 5,
+    payCents: 8 * CENTS_PER_EURO,
+    tipCents: 4 * CENTS_PER_EURO,
+    xpPerMission: 6,
+    /** Articles par commande, temps max pour servir, et seuil du pourboire (ms). */
+    orderSize: [2, 4],
+    customerTimeoutMs: 20_000,
+    tipBeforeMs: 8_000,
+    /** Au-delà de cette distance (cases) de son comptoir, le service s'arrête. */
+    leaveDistance: 3,
+  },
+  /** Expérience nécessaire pour chaque niveau (index = niveau − 1). */
+  levelXp: [0, 60, 180, 400, 800],
+  levelTitles: ['débutant·e', 'confirmé·e', 'expérimenté·e', 'chef·fe', 'référence du quartier'],
+  /** Chaque niveau au-dessus du premier augmente la paie de ce pourcentage. */
+  payRaisePerLevel: 0.15,
+  /** Apparence minimale pour être embauché (sinon : « présente-toi mieux »). */
+  minAppearanceToHire: 40,
+} as const;
+
+/** Articles du comptoir (boulangerie, supermarché) : icônes du mini-jeu. */
+export const COUNTER_ITEMS = [
+  { id: 'baguette', icon: '🥖', label: 'Baguette' },
+  { id: 'croissant', icon: '🥐', label: 'Croissant' },
+  { id: 'cake', icon: '🍰', label: 'Gâteau' },
+  { id: 'coffee', icon: '☕', label: 'Café' },
+  { id: 'juice', icon: '🧃', label: 'Jus' },
+  { id: 'apple', icon: '🍎', label: 'Pomme' },
+] as const;
+
 export const MOVEMENT = {
   /** Vitesse de marche, en cases par seconde. */
   walkTilesPerSecond: 4,

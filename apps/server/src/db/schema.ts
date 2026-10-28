@@ -182,3 +182,27 @@ export const properties = pgTable(
     check('properties_owner_xor_tenant', sql`${t.ownerCharacterId} is null or ${t.tenantCharacterId} is null`),
   ],
 );
+
+/** Emploi actuel (un à la fois), chez un employeur bot de la carte. */
+export const jobs = pgTable('jobs', {
+  characterId: uuid('character_id')
+    .primaryKey()
+    .references(() => characters.id),
+  /** Employeur (Employer.id, ex. « fastfood-117-99 »). */
+  employerId: text('employer_id').notNull(),
+  jobType: text('job_type').notNull(),
+  hiredAt: timestamp('hired_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Expérience par métier (garde la progression même après une démission). */
+export const jobExperience = pgTable(
+  'job_xp',
+  {
+    characterId: uuid('character_id')
+      .notNull()
+      .references(() => characters.id),
+    jobType: text('job_type').notNull(),
+    xp: integer('xp').notNull().default(0),
+  },
+  (t) => [uniqueIndex('job_xp_character_type_idx').on(t.characterId, t.jobType)],
+);

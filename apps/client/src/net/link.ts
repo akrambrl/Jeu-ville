@@ -1,4 +1,4 @@
-import type { Arrival, BusinessType, CharacterSelf, HomeActionId, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
+import type { Arrival, BusinessType, CharacterSelf, HomeActionId, MissionView, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
 
 /** Ce que tous les joueurs voient d'un personnage (voir apps/server/src/rooms/state.ts). */
 export interface PlayerView {
@@ -66,6 +66,13 @@ export interface DistrictLink {
   openBusiness(spotId: string, type: BusinessType, name: string): void;
   /** Enseignes des commerces de joueurs (ajout, changement, fermeture). */
   subscribeBusinesses(handlers: BusinessHandlers): void;
+  /** Agence pour l'emploi et services. */
+  applyJob(employerId: string): void;
+  quitJob(): void;
+  startShift(): void;
+  stopShift(): void;
+  serve(items: string[]): void;
+  onMission(cb: (mission: MissionView) => void): void;
   /** Quelqu'un (soi compris) arrive en bus : jouer la cinématique. */
   onArrival(cb: (arrival: Arrival) => void): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */
