@@ -43,6 +43,13 @@
       "when": 1793194079602,
       "tag": "0005_errands",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793197107039,
+      "tag": "0006_friends",
+      "breakpoints": true
     }
   ]
 }

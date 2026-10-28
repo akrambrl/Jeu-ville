@@ -9,6 +9,7 @@ import { showTutorialOnce } from '../ui/tutorial.js';
 import { DialogueBox } from '../ui/dialogue.js';
 import { Conversations } from './conversations.js';
 import { ChatPanel } from '../ui/chat.js';
+import { FriendsSheet } from '../ui/friends.js';
 import { ErrandPanel, rewardText } from '../ui/errands.js';
 import type { ChatLink } from '../net/chat.js';
 
@@ -79,13 +80,29 @@ export function startGame(
   const dialogue = new DialogueBox();
   ui.append(dialogue.root);
   const chatLink = makeChat(view);
+  let friends: FriendsSheet | null = null;
   const chat = chatLink
     ? new ChatPanel(chatLink, {
         onLine: (line) => view.showBubbleFor(line.characterId, line.text),
         notify: (n) => hud.notify(n.text, n.level),
+        friendship: (id) => (friends?.isFriend(id) ? 'friend' : friends?.isPending(id) ? 'pending' : 'none'),
       })
     : null;
-  if (chat) ui.append(chat.root, chat.toggle);
+  if (chat && chatLink) {
+    friends = new FriendsSheet(chatLink, (name) => chat.mention(name));
+    ui.append(chat.root, chat.toggle, friends.toggle, friends.root);
+    chatLink.subscribeFriends({
+      friends: (v) => friends!.update(v),
+      event: (e) =>
+        hud.notify(
+          e.kind === 'online'
+            ? `🟢 Ton ami ${e.name} vient de se connecter !`
+            : e.kind === 'request'
+              ? `👋 ${e.name} veut être ton ami (👥 pour répondre).`
+              : `🤝 ${e.name} a accepté ta demande d’ami !`,
+        ),
+    });
+  }
   let errand: ErrandView | null = null;
   /** « ❗ » au-dessus de ceux qui ont encore besoin d'aide aujourd'hui. */
   const refreshMarks = () => {
@@ -115,7 +132,15 @@ export function startGame(
     link,
     view,
     dialogue,
-    (name) => (chat ? chat.mention(name) : dialogue.open(name, [`${name} est un vrai joueur, comme toi !`])),
+    (name, characterId) => {
+      if (!chat || !chatLink) return dialogue.open(name, [`${name} est un vrai joueur, comme toi !`]);
+      const isFriend = friends?.isFriend(characterId) ?? false;
+      const pending = friends?.isPending(characterId) ?? false;
+      dialogue.open(name, [isFriend ? `${name} est ton ami 🤝` : `${name} est un vrai joueur, comme toi !`], undefined, [
+        { label: '💬 Lui écrire', primary: true, act: () => chat.mention(name) },
+        ...(isFriend || pending ? [] : [{ label: '👋 Ajouter en ami', act: () => chatLink.requestFriend({ characterId }) }]),
+      ]);
+    },
     {
       offers: todaysOffers,
       active: () => errand,

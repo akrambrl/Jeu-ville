@@ -3,6 +3,7 @@ export * from './config/characters.js';
 export * from './config/moderation.js';
 export * from './config/dialogues.js';
 export * from './config/chat.js';
+export * from './config/friends.js';
 export * from './formulas/chat.js';
 export * from './config/errands.js';
 export * from './formulas/errands.js';

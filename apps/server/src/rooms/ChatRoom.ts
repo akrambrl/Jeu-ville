@@ -2,6 +2,8 @@
  * Chat général : une seule room pour tout le serveur. Le serveur nettoie le
  * texte, masque les insultes, limite le flood ; on peut signaler un message
  * (copie gardée pour la modération) et bloquer un joueur (persisté).
+ * Tous les joueurs connectés y sont : c'est aussi là que l'on suit qui est en
+ * ligne, pour les amis (liste, demandes, « un ami vient de se connecter »).
  */
 import { randomUUID } from 'node:crypto';
 import { Room, type Client } from '@colyseus/core';
@@ -15,6 +17,11 @@ import {
   chatReportSchema,
   chatSaySchema,
   cleanChatText,
+  friendRemoveSchema,
+  friendRequestSchema,
+  friendRespondSchema,
+  type FriendEvent,
+  type FriendsView,
   maskBannedWords,
   replyExcerpt,
   type ChatLine,
@@ -24,6 +31,7 @@ import { db } from '../db/client.js';
 import { playerFromToken } from '../domain/auth.js';
 import { getCharacterByPlayer } from '../domain/characters.js';
 import { listBlocked, reportLine, setBlocked } from '../domain/chat.js';
+import { findCharacterByName, friendIds, listFriendships, removeFriend, requestFriend, respondFriend } from '../domain/friends.js';
 import { GameError } from '../domain/errors.js';
 
 interface ChatAuth {
@@ -35,11 +43,16 @@ interface ChatAuth {
 export class ChatRoom extends Room {
   private readonly history: ChatLine[] = [];
   private readonly sentAt = new Map<string, number[]>();
+  /** Connexions par personnage (un joueur peut avoir plusieurs onglets). */
+  private readonly online = new Map<string, Set<Client>>();
 
   override onCreate(): void {
     this.onMessage(ChatClientMessage.say, (client, raw) => this.handleSay(client, raw));
     this.onMessage(ChatClientMessage.report, (client, raw) => void this.guard(client, () => this.handleReport(client, raw)));
     this.onMessage(ChatClientMessage.block, (client, raw) => void this.guard(client, () => this.handleBlock(client, raw)));
+    this.onMessage(ChatClientMessage.friendRequest, (client, raw) => void this.guard(client, () => this.handleFriendRequest(client, raw)));
+    this.onMessage(ChatClientMessage.friendRespond, (client, raw) => void this.guard(client, () => this.handleFriendRespond(client, raw)));
+    this.onMessage(ChatClientMessage.friendRemove, (client, raw) => void this.guard(client, () => this.handleFriendRemove(client, raw)));
   }
 
   override async onAuth(_client: Client, rawOptions: unknown): Promise<ChatAuth> {
@@ -54,6 +67,84 @@ export class ChatRoom extends Room {
   override async onJoin(client: Client, _options: unknown, auth: ChatAuth): Promise<void> {
     client.send(ChatServerMessage.history, this.history);
     client.send(ChatServerMessage.blocked, await listBlocked(db, auth.characterId));
+    const sessions = this.online.get(auth.characterId) ?? new Set<Client>();
+    sessions.add(client);
+    this.online.set(auth.characterId, sessions);
+    await this.sendFriends(auth.characterId);
+    // Première connexion : ses amis en ligne sont prévenus.
+    if (sessions.size === 1) {
+      for (const id of await friendIds(db, auth.characterId)) {
+        if (!this.online.has(id)) continue;
+        this.event(id, { kind: 'online', name: auth.name });
+        await this.sendFriends(id);
+      }
+    }
+  }
+
+  override async onLeave(client: Client): Promise<void> {
+    const me = this.auth(client);
+    const sessions = this.online.get(me.characterId);
+    sessions?.delete(client);
+    if (sessions && sessions.size > 0) return;
+    this.online.delete(me.characterId);
+    for (const id of await friendIds(db, me.characterId)) if (this.online.has(id)) await this.sendFriends(id);
+  }
+
+  /** Liste d'amis à jour, envoyée à toutes les connexions du joueur (s'il est en ligne). */
+  private async sendFriends(characterId: string): Promise<void> {
+    const clients = this.online.get(characterId);
+    if (!clients) return;
+    const rows = await listFriendships(db, characterId);
+    const view: FriendsView = {
+      friends: rows
+        .filter((r) => r.status === 'accepted')
+        .map((r) => ({ characterId: r.characterId, name: r.name, districtId: r.districtId, online: this.online.has(r.characterId) }))
+        .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, 'fr')),
+      incoming: rows.filter((r) => r.status === 'pending' && !r.mine).map(({ characterId: id, name }) => ({ characterId: id, name })),
+      outgoing: rows.filter((r) => r.status === 'pending' && r.mine).map(({ characterId: id, name }) => ({ characterId: id, name })),
+    };
+    for (const c of clients) c.send(ChatServerMessage.friends, view);
+  }
+
+  private event(characterId: string, e: FriendEvent): void {
+    for (const c of this.online.get(characterId) ?? []) c.send(ChatServerMessage.friendEvent, e);
+  }
+
+  private async handleFriendRequest(client: Client, raw: unknown): Promise<void> {
+    const parsed = friendRequestSchema.safeParse(raw);
+    if (!parsed.success) return this.notify(client, 'error', 'Indique le pseudo d’un joueur.');
+    const me = this.auth(client);
+    const target = parsed.data.characterId
+      ? { characterId: parsed.data.characterId, name: '' }
+      : await findCharacterByName(db, parsed.data.name ?? '');
+    if (!target) return this.notify(client, 'error', 'Aucun joueur ne porte ce pseudo.');
+    const result = await requestFriend(db, me.characterId, target.characterId);
+    const name = target.name || (await listFriendships(db, me.characterId)).find((f) => f.characterId === target.characterId)?.name || 'ce joueur';
+    if (result === 'accepted') {
+      this.notify(client, 'info', `🤝 Toi et ${name}, vous êtes maintenant amis !`);
+      this.event(target.characterId, { kind: 'accepted', name: me.name });
+    } else {
+      this.notify(client, 'info', `👋 Demande d’ami envoyée à ${name}.`);
+      this.event(target.characterId, { kind: 'request', name: me.name });
+    }
+    await Promise.all([this.sendFriends(me.characterId), this.sendFriends(target.characterId)]);
+  }
+
+  private async handleFriendRespond(client: Client, raw: unknown): Promise<void> {
+    const parsed = friendRespondSchema.safeParse(raw);
+    if (!parsed.success) return;
+    const me = this.auth(client);
+    await respondFriend(db, me.characterId, parsed.data.characterId, parsed.data.accept);
+    if (parsed.data.accept) this.event(parsed.data.characterId, { kind: 'accepted', name: me.name });
+    await Promise.all([this.sendFriends(me.characterId), this.sendFriends(parsed.data.characterId)]);
+  }
+
+  private async handleFriendRemove(client: Client, raw: unknown): Promise<void> {
+    const parsed = friendRemoveSchema.safeParse(raw);
+    if (!parsed.success) return;
+    const me = this.auth(client);
+    await removeFriend(db, me.characterId, parsed.data.characterId);
+    await Promise.all([this.sendFriends(me.characterId), this.sendFriends(parsed.data.characterId)]);
   }
 
   private auth(client: Client): ChatAuth {
@@ -99,8 +190,14 @@ export class ChatRoom extends Room {
   private async handleBlock(client: Client, raw: unknown): Promise<void> {
     const parsed = chatBlockSchema.safeParse(raw);
     if (!parsed.success) return;
-    const blocked = await setBlocked(db, this.auth(client).characterId, parsed.data.characterId, parsed.data.blocked);
+    const me = this.auth(client).characterId;
+    const blocked = await setBlocked(db, me, parsed.data.characterId, parsed.data.blocked);
     client.send(ChatServerMessage.blocked, blocked);
+    // Bloquer quelqu'un met fin à l'amitié (ou à la demande) avec lui.
+    if (parsed.data.blocked) {
+      await removeFriend(db, me, parsed.data.characterId);
+      await Promise.all([this.sendFriends(me), this.sendFriends(parsed.data.characterId)]);
+    }
   }
 
   private async guard(client: Client, action: () => Promise<void>): Promise<void> {

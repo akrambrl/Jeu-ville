@@ -44,8 +44,8 @@ export class Conversations {
     private readonly link: DistrictLink,
     private readonly view: CityView,
     private readonly dialogue: DialogueBox,
-    /** Vrai joueur touché : lui écrire dans le chat. */
-    private readonly mention: (name: string) => void,
+    /** Vrai joueur touché : lui écrire, l'ajouter en ami… */
+    private readonly onPlayer: (name: string, characterId: string) => void,
     private readonly errands: ErrandState,
   ) {
     this.busyTiles = new Set(map.busyStreets.flatMap((s) => s.sidewalks.map((t) => `${t.x},${t.y}`)));
@@ -54,7 +54,7 @@ export class Conversations {
   tap(person: PersonTap, me: TilePoint): void {
     if (this.dialogue.isOpen) return;
     if (person.kind === 'avatar' && person.view.name) {
-      this.mention(person.view.name);
+      this.onPlayer(person.view.name, person.view.id);
       return;
     }
     const at = this.where(person);

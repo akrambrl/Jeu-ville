@@ -122,6 +122,10 @@ export const ChatClientMessage = {
   say: 'say',
   report: 'report',
   block: 'block',
+  /** Amis : demander (par pseudo ou identifiant), répondre, retirer. */
+  friendRequest: 'friendRequest',
+  friendRespond: 'friendRespond',
+  friendRemove: 'friendRemove',
 } as const;
 
 export const ChatServerMessage = {
@@ -131,7 +135,42 @@ export const ChatServerMessage = {
   /** Joueurs que l'on bloque (identifiants de personnages). */
   blocked: 'blocked',
   notice: 'notice',
+  /** Liste d'amis à jour (FriendsView). */
+  friends: 'friends',
+  /** Événement à signaler au joueur (FriendEvent) : ami connecté, demande reçue… */
+  friendEvent: 'friendEvent',
 } as const;
+
+export const friendRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(40).optional(), characterId: z.string().uuid().optional() })
+  .refine((v) => !!v.name !== !!v.characterId, 'Indique un pseudo ou un joueur.');
+export type FriendRequestMessage = z.infer<typeof friendRequestSchema>;
+export const friendRespondSchema = z.object({ characterId: z.string().uuid(), accept: z.boolean() });
+export const friendRemoveSchema = z.object({ characterId: z.string().uuid() });
+
+export interface FriendRef {
+  characterId: string;
+  name: string;
+}
+
+export interface FriendView extends FriendRef {
+  online: boolean;
+  /** Quartier où il joue (`<ville>:<quartier>`). */
+  districtId: string;
+}
+
+export interface FriendsView {
+  friends: FriendView[];
+  /** Demandes reçues, à accepter ou refuser. */
+  incoming: FriendRef[];
+  /** Demandes envoyées, en attente. */
+  outgoing: FriendRef[];
+}
+
+export type FriendEvent =
+  | { kind: 'online'; name: string }
+  | { kind: 'request'; name: string }
+  | { kind: 'accepted'; name: string };
 
 export const chatSaySchema = z.object({
   text: z.string().min(1).max(1000),

@@ -15,6 +15,9 @@ import {
   replyExcerpt,
   type ChatLine,
   type ChatSayMessage,
+  type FriendEvent,
+  type FriendRequestMessage,
+  type FriendsView,
   type Notice,
 } from '@jeu-ville/shared';
 
@@ -23,6 +26,11 @@ export interface ChatHandlers {
   line: (line: ChatLine) => void;
   blocked: (characterIds: string[]) => void;
   notice: (notice: Notice) => void;
+}
+
+export interface FriendHandlers {
+  friends: (view: FriendsView) => void;
+  event: (event: FriendEvent) => void;
 }
 
 export interface ChatLink {
@@ -35,6 +43,11 @@ export interface ChatLink {
   say(text: string, replyToId?: string): void;
   report(messageId: string): void;
   block(characterId: string, blocked: boolean): void;
+  /** Amis (vrais joueurs) : demande par pseudo ou par joueur, réponse, retrait. */
+  subscribeFriends(handlers: FriendHandlers): void;
+  requestFriend(target: { name: string } | { characterId: string }): void;
+  respondFriend(characterId: string, accept: boolean): void;
+  removeFriend(characterId: string): void;
 }
 
 export class ColyseusChat implements ChatLink {
@@ -62,6 +75,23 @@ export class ColyseusChat implements ChatLink {
 
   block(characterId: string, blocked: boolean): void {
     this.room.send(ChatClientMessage.block, { characterId, blocked });
+  }
+
+  subscribeFriends(h: FriendHandlers): void {
+    this.room.onMessage(ChatServerMessage.friends, h.friends);
+    this.room.onMessage(ChatServerMessage.friendEvent, h.event);
+  }
+
+  requestFriend(target: { name: string } | { characterId: string }): void {
+    this.room.send(ChatClientMessage.friendRequest, target satisfies FriendRequestMessage);
+  }
+
+  respondFriend(characterId: string, accept: boolean): void {
+    this.room.send(ChatClientMessage.friendRespond, { characterId, accept });
+  }
+
+  removeFriend(characterId: string): void {
+    this.room.send(ChatClientMessage.friendRemove, { characterId });
   }
 }
 
@@ -111,6 +141,18 @@ export class DemoChat implements ChatLink {
   block(): void {
     this.handlers?.notice({ level: 'info', text: 'Dans la démo, il n’y a que des bots.' });
   }
+
+  subscribeFriends(h: FriendHandlers): void {
+    h.friends({ friends: [], incoming: [], outgoing: [] });
+  }
+
+  requestFriend(): void {
+    this.handlers?.notice({ level: 'info', text: 'Les amis, c’est avec de vrais joueurs : disponible dans le jeu en ligne.' });
+  }
+
+  respondFriend(): void {}
+
+  removeFriend(): void {}
 
   private scheduleBot(): void {
     const [min, max] = CHAT.demoBotEveryMs;

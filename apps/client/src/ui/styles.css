@@ -417,6 +417,8 @@ button.danger {
 .sheet-backdrop {
   position: absolute;
   inset: 0;
+  /* Au-dessus du HUD, quel que soit l'ordre d'ajout ; sous le chat. */
+  z-index: 25;
   background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: flex-end;
@@ -1279,4 +1281,32 @@ body.chat-docked .chat-toggle {
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
+}
+
+/* Amis */
+
+.friends-toggle {
+  position: absolute;
+  right: 12px;
+  top: calc(50% - 64px);
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+  font-size: 24px;
+  z-index: 6;
+}
+
+.friends-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.friends-add .agency-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
 }

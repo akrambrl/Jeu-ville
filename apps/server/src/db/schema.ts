@@ -267,3 +267,31 @@ export const errandsDone = pgTable(
     index('errands_done_day_idx').on(t.characterId, t.day),
   ],
 );
+
+/**
+ * Amitiés : une ligne par paire de joueurs (`lowId` < `highId`), en attente
+ * (demande de `requestedBy`) ou acceptée. L'index unique empêche les doublons.
+ */
+export const friendships = pgTable(
+  'friendships',
+  {
+    lowId: uuid('low_id')
+      .notNull()
+      .references(() => characters.id),
+    highId: uuid('high_id')
+      .notNull()
+      .references(() => characters.id),
+    requestedBy: uuid('requested_by')
+      .notNull()
+      .references(() => characters.id),
+    /** 'pending' ou 'accepted'. */
+    status: text('status').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('friendships_pair_idx').on(t.lowId, t.highId),
+    index('friendships_high_idx').on(t.highId),
+    check('friendships_ordered', sql`${t.lowId} < ${t.highId}`),
+  ],
+);

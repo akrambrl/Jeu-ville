@@ -15,6 +15,8 @@ export interface ChatPanelOptions {
   /** Un message arrive : bulle au-dessus de la tête de l'auteur s'il est dans le quartier. */
   onLine: (line: ChatLine) => void;
   notify: (notice: Notice) => void;
+  /** Ce joueur est-il déjà un ami (ou une demande en cours) ? Pour proposer « Ajouter en ami ». */
+  friendship: (characterId: string) => 'friend' | 'pending' | 'none';
 }
 
 export class ChatPanel {
@@ -169,7 +171,18 @@ export class ChatPanel {
     });
     const buttons: HTMLElement[] = [reply];
     // Signaler / bloquer : seulement les vrais joueurs, pas soi-même.
-    if (line.characterId !== this.link.selfId && !line.bot) buttons.push(this.reportButton(row, line), this.blockButton(line));
+    if (line.characterId !== this.link.selfId && !line.bot) {
+      if (this.opts.friendship(line.characterId) === 'none') {
+        const add = el('button', { class: 'small', text: '👋 Ajouter en ami' });
+        add.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.link.requestFriend({ characterId: line.characterId });
+          row.querySelector('.chat-actions')?.remove();
+        });
+        buttons.push(add);
+      }
+      buttons.push(this.reportButton(row, line), this.blockButton(line));
+    }
     row.append(el('div', { class: 'chat-actions' }, buttons));
   }
 
