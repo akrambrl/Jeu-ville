@@ -1,0 +1,28 @@
+# Déploiement en ligne sur Render (https://render.com) : « New » → « Blueprint »,
+# choisir ce dépôt. Un service web (jeu + serveur temps réel, une seule adresse)
+# et une base PostgreSQL, en Europe (Francfort).
+services:
+  - type: web
+    name: jeu-ville-93
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: claude/eloquent-euler-qhcmmi
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jeu-ville/client build
+    startCommand: pnpm --filter @jeu-ville/server start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: CLIENT_DIST
+        value: ../client/dist
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jeu-ville-db
+          property: connectionString
+
+databases:
+  - name: jeu-ville-db
+    plan: free
+    region: frankfurt
+    databaseName: jeuville

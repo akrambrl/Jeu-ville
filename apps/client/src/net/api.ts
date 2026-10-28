@@ -1,8 +1,11 @@
 import type { CharacterSelf, CreateCharacterRequest, MeResponse, SessionResponse } from '@jeu-ville/shared';
 
-/** URL du serveur de jeu. Par défaut : même hôte que la page, port 2567. */
+/**
+ * URL du serveur de jeu. En ligne, le serveur sert aussi le jeu : même adresse
+ * que la page. En développement : même hôte, port 2567.
+ */
 export const SERVER_URL: string =
-  import.meta.env.VITE_SERVER_URL ?? `${location.protocol}//${location.hostname}:2567`;
+  import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? location.origin : `${location.protocol}//${location.hostname}:2567`);
 
 const TOKEN_KEY = 'jeu-ville.token';
 

@@ -9,4 +9,6 @@ export const env = {
   databaseUrl: required('DATABASE_URL'),
   port: Number(process.env.PORT ?? 2567),
   clientOrigin: process.env.CLIENT_ORIGIN ?? 'http://localhost:5173',
+  /** Dossier du jeu compilé (apps/client/dist) à servir sur la même adresse, en ligne ; sinon rien. */
+  clientDist: process.env.CLIENT_DIST ?? null,
 };
