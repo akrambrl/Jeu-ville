@@ -17,6 +17,8 @@ const BIKE_SEAT = { y: 0.385 * BIKE_SCALE, z: -0.07 * BIKE_SCALE };
 const SCOOTER_DECK = 0.085;
 /** Durée d'affichage d'une bulle de parole (ms). */
 const BUBBLE_MS = 6000;
+/** Hauteur de la bulle au-dessus de la tête (cases), au-dessus du nom et des étiquettes. */
+const BUBBLE_LIFT = 0.9;
 
 /** Rotation d'un os autour de l'axe gauche-droite du corps (degrés, + = vers l'arrière). */
 type Pose = Record<string, number>;
@@ -117,7 +119,9 @@ export class Character3D {
     el.className = 'speech-bubble';
     el.textContent = text;
     this.bubble = new CSS2DObject(el);
-    this.bubble.position.set(0, this.height + 0.6, 0);
+    // Ancrée par le bas : la bulle grandit vers le haut, au-dessus du nom.
+    this.bubble.center.set(0.5, 1);
+    this.bubble.position.set(0, this.height + BUBBLE_LIFT, 0);
     this.root.add(this.bubble);
     this.bubbleTimer = window.setTimeout(() => {
       this.bubble?.element.remove();

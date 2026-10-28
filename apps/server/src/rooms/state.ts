@@ -2,6 +2,7 @@ import { MapSchema, Schema, type } from '@colyseus/schema';
 
 /** Ce que TOUS les joueurs du quartier voient d'un personnage. */
 export class PlayerState extends Schema {
+  /** Identifiant du personnage (vrais joueurs) ou du passant. */
   @type('string') id = '';
   @type('string') name = '';
   @type('float32') x = 0;

@@ -9,11 +9,14 @@ import { startGame } from '../app/startGame.js';
 import { showCreationScreen } from '../ui/creationScreen.js';
 import { el } from '../ui/dom.js';
 import { showLoginScreen } from '../ui/loginScreen.js';
-import { LocalDistrict, createDemoSave, demoSelf, demoStore, repairDemoSave, type DemoSave } from './localDistrict.js';
+import { DemoChat } from '../net/chat.js';
+import { LocalDistrict, SELF_PLAYER_ID, createDemoSave, demoSelf, demoStore, repairDemoSave, type DemoSave } from './localDistrict.js';
 import '../ui/styles.css';
 
 const ui = document.getElementById('ui')!;
 const map = getDistrictMap(DEFAULT_DISTRICT_KEY)!;
+/** Dans la démo, un passant à moins de tant de cases « écrit » dans le chat (bulle visible). */
+const DEMO_CHAT_SPEAKER_RANGE = 15;
 
 async function newGame(): Promise<DemoSave> {
   let pseudo = '';
@@ -58,7 +61,8 @@ async function start(): Promise<void> {
   const loaded = demoStore.load();
   const save = loaded ? repairDemoSave(map, loaded) : await newGame();
   const link = new LocalDistrict(map, DEFAULT_DISTRICT_KEY, save);
-  startGame(ui, link.self(), link);
+  const self = link.self();
+  startGame(ui, self, link, (view) => new DemoChat(SELF_PLAYER_ID, self.name, self.districtId, () => view.nearestBot(DEMO_CHAT_SPEAKER_RANGE)));
   showDemoBadge();
 }
 

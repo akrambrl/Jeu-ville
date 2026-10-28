@@ -206,3 +206,40 @@ export const jobExperience = pgTable(
   },
   (t) => [uniqueIndex('job_xp_character_type_idx').on(t.characterId, t.jobType)],
 );
+
+/** Chat : joueurs qu'un personnage ne veut plus lire. */
+export const chatBlocks = pgTable(
+  'chat_blocks',
+  {
+    blockerId: uuid('blocker_id')
+      .notNull()
+      .references(() => characters.id),
+    blockedId: uuid('blocked_id')
+      .notNull()
+      .references(() => characters.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('chat_blocks_pair_idx').on(t.blockerId, t.blockedId)],
+);
+
+/** Chat : signalements pour la modération (copie du message signalé). */
+export const chatReports = pgTable(
+  'chat_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reporterId: uuid('reporter_id')
+      .notNull()
+      .references(() => characters.id),
+    reportedId: uuid('reported_id')
+      .notNull()
+      .references(() => characters.id),
+    /** Identifiant du message dans le chat (un signalement par message et par joueur). */
+    messageId: text('message_id').notNull(),
+    messageText: text('message_text').notNull(),
+    messageAt: timestamp('message_at', { withTimezone: true }).notNull(),
+    /** « open » tant qu'un modérateur ne l'a pas traité. */
+    status: text('status').notNull().default('open'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('chat_reports_reporter_message_idx').on(t.reporterId, t.messageId), index('chat_reports_status_idx').on(t.status)],
+);

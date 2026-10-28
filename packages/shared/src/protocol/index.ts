@@ -110,6 +110,44 @@ export interface ApiError {
 // ---------- Temps réel (rooms Colyseus) ----------
 
 export const ROOM_DISTRICT = 'district';
+/** Chat général : une seule room pour tout le serveur. */
+export const ROOM_CHAT = 'chat';
+
+export const chatJoinSchema = z.object({ token: z.string().min(1) });
+export type ChatJoinOptions = z.infer<typeof chatJoinSchema>;
+
+export const ChatClientMessage = {
+  say: 'say',
+  report: 'report',
+  block: 'block',
+} as const;
+
+export const ChatServerMessage = {
+  /** Derniers messages (ChatLine[]), à l'arrivée. */
+  history: 'history',
+  line: 'line',
+  /** Joueurs que l'on bloque (identifiants de personnages). */
+  blocked: 'blocked',
+  notice: 'notice',
+} as const;
+
+export const chatSaySchema = z.object({ text: z.string().min(1).max(1000) });
+export const chatReportSchema = z.object({ messageId: z.string().min(1).max(64) });
+export const chatBlockSchema = z.object({ characterId: z.string().uuid(), blocked: z.boolean() });
+
+/** Un message du chat général. */
+export interface ChatLine {
+  id: string;
+  /** Personnage auteur (pour bloquer, et pour la bulle au-dessus de sa tête). */
+  characterId: string;
+  name: string;
+  /** Quartier de l'auteur (`<ville>:<quartier>`). */
+  districtId: string;
+  text: string;
+  at: number;
+  /** Bot de la démo solo (pas un vrai joueur). */
+  bot?: boolean;
+}
 
 export const districtJoinSchema = z.object({
   token: z.string().min(1),

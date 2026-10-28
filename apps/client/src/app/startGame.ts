@@ -8,6 +8,8 @@ import { Hud, type Destination } from '../ui/hud.js';
 import { showTutorialOnce } from '../ui/tutorial.js';
 import { DialogueBox } from '../ui/dialogue.js';
 import { Conversations } from './conversations.js';
+import { ChatPanel } from '../ui/chat.js';
+import type { ChatLink } from '../net/chat.js';
 
 export function showFatal(ui: HTMLElement, message: string, retry: () => void): void {
   const button = el('button', { class: 'primary', text: 'Réessayer' });
@@ -22,7 +24,13 @@ export function showFatal(ui: HTMLElement, message: string, retry: () => void): 
 }
 
 /** Lance la ville pour un personnage, quel que soit le lien (serveur ou démo locale). */
-export function startGame(ui: HTMLElement, character: CharacterSelf, link: DistrictLink): void {
+export function startGame(
+  ui: HTMLElement,
+  character: CharacterSelf,
+  link: DistrictLink,
+  /** Chat général (null : indisponible). Reçoit la vue, pour la démo qui fait parler les passants. */
+  makeChat: (view: CityView) => ChatLink | null,
+): void {
   const map = getDistrictMap(character.districtId);
   if (!map) return showFatal(ui, 'Quartier inconnu.', () => location.reload());
 
@@ -60,8 +68,16 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   });
   const dialogue = new DialogueBox();
   ui.append(dialogue.root);
+  const chatLink = makeChat(view);
+  const chat = chatLink
+    ? new ChatPanel(chatLink, {
+        onLine: (line) => view.showBubbleFor(line.characterId, line.text),
+        notify: (n) => hud.notify(n.text, n.level),
+      })
+    : null;
+  if (chat) ui.append(chat.root, chat.toggle);
   const conversations = new Conversations(map, link, view, dialogue, (name) =>
-    dialogue.open(name, [`${name} est un vrai joueur, comme toi !`, 'Dis-lui bonjour dans le chat.']),
+    chat ? chat.mention(name) : dialogue.open(name, [`${name} est un vrai joueur, comme toi !`]),
   );
 
   const hud = new Hud(

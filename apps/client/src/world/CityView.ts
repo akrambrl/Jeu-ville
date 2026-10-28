@@ -562,6 +562,26 @@ export class CityView {
     this.avatars.get(id)?.say(text);
   }
 
+  /** Bulle au-dessus du perso de ce personnage (ou passant), s'il est dans le quartier. */
+  showBubbleFor(characterId: string, text: string): void {
+    for (const [id, view] of this.views) if (view.id === characterId) this.showBubble(id, text);
+  }
+
+  /** Passant le plus proche du joueur (à moins de `maxTiles` cases), ou null. */
+  nearestBot(maxTiles: number): PlayerView | null {
+    const me = this.avatarTile(this.opts.link.sessionId);
+    if (!me) return null;
+    let best: PlayerView | null = null;
+    let bestD = maxTiles;
+    for (const [id, view] of this.views) {
+      const at = this.avatarTile(id);
+      if (view.name || !at) continue;
+      const d = Math.hypot(at.x - me.x, at.y - me.y);
+      if (d < bestD) [best, bestD] = [view, d];
+    }
+    return best;
+  }
+
   // ---------- Noms de rues (peints sur la chaussée) ----------
 
   private readonly streetNames: THREE.Mesh[] = [];

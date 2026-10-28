@@ -82,6 +82,8 @@ import type { BusinessHandlers, DistrictLink, PlayerHandlers, PlayerView } from 
 
 const SAVE_KEY = 'jeu-ville.demo.save';
 const SELF_ID = 'moi';
+/** Identifiant du joueur dans la démo (vue du quartier, auteur de ses messages de chat). */
+export const SELF_PLAYER_ID = SELF_ID;
 const SAVE_INTERVAL_MS = 5_000;
 /** Pas de simulation maximal (onglet en arrière-plan, gros ralentissement). */
 const MAX_TICK_MS = 1_000;
