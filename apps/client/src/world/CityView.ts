@@ -48,6 +48,8 @@ const BUSINESS_COLORS: Record<string, [string, string]> = {
   barber: ['#1d3557', '#ffffff'],
   laundry: ['#2a9d8f', '#ffffff'],
   clothes: ['#6d2e8c', '#fbe9ff'],
+  fastfood: ['#d62828', '#ffd23f'],
+  restaurant: ['#3d2b1f', '#f2d49b'],
 };
 /** Cinématique d'arrivée en bus (secondes) : approche, arrêt portes ouvertes, départ. */
 const BUS_ARRIVE_S = TRAVEL.busArriveMs / 1000;

@@ -226,6 +226,9 @@ export const BUSINESS_TYPES = {
   barber: { label: 'Barbier', sign: 'BARBIER', icon: '💈', setupCents: 5_000 * CENTS_PER_EURO, dailyRevenueCents: 900 * CENTS_PER_EURO, chargesShare: 0.3 },
   laundry: { label: 'Laverie', sign: 'LAVERIE', icon: '🧺', setupCents: 8_000 * CENTS_PER_EURO, dailyRevenueCents: 1_000 * CENTS_PER_EURO, chargesShare: 0.25 },
   clothes: { label: 'Boutique de vêtements', sign: 'MODE', icon: '👕', setupCents: 9_000 * CENTS_PER_EURO, dailyRevenueCents: 1_500 * CENTS_PER_EURO, chargesShare: 0.45 },
+  // Restauration : plus de travaux (cuisine, salle), plus de clients, plus de charges.
+  fastfood: { label: 'Fast-food', sign: 'FAST-FOOD', icon: '🍔', setupCents: 10_000 * CENTS_PER_EURO, dailyRevenueCents: 1_700 * CENTS_PER_EURO, chargesShare: 0.45 },
+  restaurant: { label: 'Restaurant', sign: 'RESTAURANT', icon: '🍽️', setupCents: 14_000 * CENTS_PER_EURO, dailyRevenueCents: 2_200 * CENTS_PER_EURO, chargesShare: 0.5 },
 } as const;
 
 /** Versement des recettes d'un commerce (h réelles) : le chiffre tombe au fil de la journée. */
