@@ -36,7 +36,7 @@ import { recordLedgerEntry } from './ledger.js';
 type CharacterRow = typeof characters.$inferSelect;
 type DwellingRow = typeof dwellings.$inferSelect;
 
-function storedGauges(row: CharacterRow): StoredGauges {
+export function storedGauges(row: CharacterRow): StoredGauges {
   return { hunger: row.hunger, hygiene: row.hygiene, appearance: row.appearance, health: row.health };
 }
 

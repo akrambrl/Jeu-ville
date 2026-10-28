@@ -44,6 +44,8 @@ export class Shift {
     private readonly xp: number,
     private readonly map: DistrictMap,
     private readonly rand: () => number = Math.random,
+    /** Gain d'une mission réussie (par défaut : le salaire du métier). */
+    private readonly payFor: (tip: boolean) => number = (tip) => missionPayCents(employer.jobType, xp, tip),
   ) {
     this.total = JOBS[employer.jobType].missionsPerShift;
   }
@@ -98,7 +100,7 @@ export class Shift {
   }
 
   private finish(ok: boolean, tip: boolean, pos: TilePoint, nowMs: number, text: string): MissionResult {
-    const pay = ok ? missionPayCents(this.employer.jobType, this.xp, tip) : 0;
+    const pay = ok ? this.payFor(tip) : 0;
     const key = `${this.id}:${this.index}`;
     this.index++;
     if (ok) {

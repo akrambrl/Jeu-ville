@@ -3,6 +3,7 @@ import {
   ClientMessage,
   ServerMessage,
   type Arrival,
+  type StartOwnShiftMessage,
   type AcceptErrandMessage,
   type ErrandView,
   type BuyFoodMessage,
@@ -69,6 +70,10 @@ export class ColyseusLink implements DistrictLink {
 
   onErrand(cb: (errand: ErrandView) => void): void {
     this.room.onMessage(ServerMessage.errand, cb);
+  }
+
+  startOwnShift(spotId: string): void {
+    this.room.send(ClientMessage.startOwnShift, { spotId } satisfies StartOwnShiftMessage);
   }
 
   talk(botId: string): void {

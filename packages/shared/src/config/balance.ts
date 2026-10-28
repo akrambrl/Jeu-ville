@@ -120,6 +120,19 @@ export const FOOD_MENUS = {
     { id: 'fruit', label: 'Fruits', icon: '🍎', costCents: 2 * CENTS_PER_EURO, effects: { hunger: 12, health: 2 } },
     { id: 'ready-meal', label: 'Plat à emporter', icon: '🥡', costCents: 6 * CENTS_PER_EURO, effects: { hunger: 45 } },
   ],
+  // Commerces ouverts par des joueurs (le prix va au joueur qui le tient).
+  snackBar: [
+    { id: 'wrap', label: 'Sandwich kebab', icon: '🥙', costCents: 6 * CENTS_PER_EURO, effects: { hunger: 40 } },
+    { id: 'plate', label: 'Assiette', icon: '🍛', costCents: 9 * CENTS_PER_EURO, effects: { hunger: 60 } },
+  ],
+  coffee: [
+    { id: 'coffee', label: 'Café', icon: '☕', costCents: 2 * CENTS_PER_EURO, effects: { hunger: 5 } },
+    { id: 'breakfast', label: 'Café + viennoiserie', icon: '🥐', costCents: 4.5 * CENTS_PER_EURO, effects: { hunger: 20 } },
+  ],
+  restaurant: [
+    { id: 'dish', label: 'Plat du jour', icon: '🍲', costCents: 12 * CENTS_PER_EURO, effects: { hunger: 70 } },
+    { id: 'full', label: 'Entrée, plat, dessert', icon: '🍽️', costCents: 18 * CENTS_PER_EURO, effects: { hunger: 90, health: 3 } },
+  ],
 } as const satisfies Record<string, readonly FoodItem[]>;
 
 /** Déplacements payants dans la ville (entre villes, la téléportation est gratuite). */
@@ -230,6 +243,17 @@ export const BUSINESS_TYPES = {
   fastfood: { label: 'Fast-food', sign: 'FAST-FOOD', icon: '🍔', setupCents: 10_000 * CENTS_PER_EURO, dailyRevenueCents: 1_700 * CENTS_PER_EURO, chargesShare: 0.45 },
   restaurant: { label: 'Restaurant', sign: 'RESTAURANT', icon: '🍽️', setupCents: 14_000 * CENTS_PER_EURO, dailyRevenueCents: 2_200 * CENTS_PER_EURO, chargesShare: 0.5 },
 } as const;
+
+/**
+ * Commerces de bouche des joueurs : ce qu'on y mange (FOOD_MENUS), et ce que
+ * rapporte chaque client servi quand le joueur tient lui-même son comptoir.
+ */
+export const BUSINESS_FOOD = {
+  snack: { menu: 'snackBar', servePayCents: 12 * CENTS_PER_EURO, tipCents: 4 * CENTS_PER_EURO },
+  coffee: { menu: 'coffee', servePayCents: 9 * CENTS_PER_EURO, tipCents: 3 * CENTS_PER_EURO },
+  fastfood: { menu: 'fastfood', servePayCents: 14 * CENTS_PER_EURO, tipCents: 5 * CENTS_PER_EURO },
+  restaurant: { menu: 'restaurant', servePayCents: 20 * CENTS_PER_EURO, tipCents: 8 * CENTS_PER_EURO },
+} as const satisfies Partial<Record<keyof typeof BUSINESS_TYPES, { menu: keyof typeof FOOD_MENUS; servePayCents: number; tipCents: number }>>;
 
 /** Versement des recettes d'un commerce (h réelles) : le chiffre tombe au fil de la journée. */
 export const BUSINESS_PAYOUT_HOURS = 1;

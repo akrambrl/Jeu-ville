@@ -1,4 +1,4 @@
-import { ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
+import { BUSINESS_FOOD, businessFoodPlaces, type FoodPlace, ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
@@ -46,6 +46,17 @@ export function startGame(
   const isNear = (p: { x: number; y: number } | null | undefined, x: number, y: number) =>
     !!p && Math.hypot(x - p.x, y - p.y) <= MOVEMENT.foodInteractionRange;
   let position = { x: 0, y: 0 };
+  /** Commerces de bouche tenus par des joueurs (on peut y manger). */
+  let playerFood: FoodPlace[] = [];
+  /** Local devant lequel on se tient, si c'est son propre commerce de bouche. */
+  let ownCounterSpot: string | null = null;
+  const myCounters = () =>
+    current.properties
+      .filter((p) => p.business && p.business.type in BUSINESS_FOOD)
+      .flatMap((p) => {
+        const spot = map.properties.find((s) => s.id === p.spotId);
+        return spot ? [{ spotId: p.spotId, door: spot.door }] : [];
+      });
   let current = character;
   // Missions du quotidien : les demandes du jour se calculent comme sur le serveur.
   const walkable = reachableTiles(new MapGrid(map), map.spawn);
@@ -64,17 +75,24 @@ export function startGame(
     onLocalPosition: (x, y) => {
       const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
       hud.setNearHome(near);
-      hud.setNearFood(foodPlaceInReach(food, x, y));
+      hud.setNearFood(foodPlaceInReach([...food, ...playerFood], x, y));
       hud.setNearShop(shopInReach(shops, x, y));
       hud.setPosition(x, y);
       position = { x, y };
       hud.setNearAgency(isNear(agencyDoor, x, y));
       hud.setNearJobCenter(isNear(jobCenterDoor, x, y));
       const work = allEmployers.find((e) => e.id === current.job?.employerId);
-      hud.setCanStartShift(!inShift && isNear(work?.door, x, y));
+      // Devant son propre commerce de bouche : on peut tenir le comptoir.
+      const counter = myCounters().find((c) => isNear(c.door, x, y));
+      ownCounterSpot = counter?.spotId ?? null;
+      if (counter) hud.setCanStartShift(!inShift, '🧾 Tenir mon comptoir');
+      else hud.setCanStartShift(!inShift && isNear(work?.door, x, y));
       conversations.update(position);
     },
     onPersonTap: (person) => conversations.tap(person, position),
+    onBusinesses: (open) => {
+      playerFood = businessFoodPlaces(map, open);
+    },
     onGroundTap: () => conversations.cancel(),
   });
   const dialogue = new DialogueBox();
@@ -164,7 +182,7 @@ export function startGame(
       onFeedPet: () => link.feedPet(),
       onOpenAgency: () => void agency.open(current, position),
       onOpenJobCenter: () => jobCenter.open(current, position),
-      onStartShift: () => link.startShift(),
+      onStartShift: () => (ownCounterSpot ? link.startOwnShift(ownCounterSpot) : link.startShift()),
       onRecenter: () => view.recenter(),
     },
     [...helpDestinations(todaysOffers()), ...destinationsOf(map)],

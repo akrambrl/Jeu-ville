@@ -4,6 +4,7 @@
  * intentions ; le serveur décide.
  */
 import {
+  BUSINESS_FOOD,
   BUSINESS_TYPES,
   MOVEMENT,
   REAL_ESTATE,
@@ -226,7 +227,9 @@ export class AgencySheet {
           p.business
             ? el('span', {
                 class: 'agency-price',
-                text: `${BUSINESS_TYPES[p.business.type].icon} ${p.business.name} · ≈ ${formatMoney(businessPayoutCents(p.business.type, spot) * 24)} / jour`,
+                text: `${BUSINESS_TYPES[p.business.type].icon} ${p.business.name} · ≈ ${formatMoney(businessPayoutCents(p.business.type, spot) * 24)} / jour${
+                  p.business.type in BUSINESS_FOOD ? ' · 🧾 sers toi-même au comptoir pour gagner plus' : ''
+                }`,
               })
             : el('span'),
         ]),

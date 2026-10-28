@@ -2,7 +2,7 @@
  * Manger dehors : chez un marchand ambulant ou dans un commerce (boulangerie,
  * fast-food, grande surface). Règles pures, appliquées par le serveur (et la démo solo).
  */
-import { FOOD_MENUS, MOVEMENT, type FoodItem } from '../config/balance.js';
+import { BUSINESS_FOOD, FOOD_MENUS, MOVEMENT, type FoodItem } from '../config/balance.js';
 import type { DistrictMap } from '../map/types.js';
 import { applyGaugeEffects, decayGauges, type StoredGauges } from './gauges.js';
 import type { HomeActionResult } from './homeActions.js';
@@ -16,6 +16,8 @@ export interface FoodPlace {
   name: string;
   x: number;
   y: number;
+  /** Commerce tenu par un joueur (PropertySpot.id du local) : le prix lui revient. */
+  spotId?: string;
 }
 
 const VENDOR_NAMES: Record<'corn' | 'chestnut', string> = { corn: 'Marchand de maïs', chestnut: 'Marchand de marrons' };
@@ -29,6 +31,18 @@ export function foodPlaces(map: DistrictMap): FoodPlace[] {
     places.push({ id: `${p.kind}-${p.entrance.x}-${p.entrance.y}`, kind: p.kind as FoodPlaceKind, name: p.name, x: p.entrance.x, y: p.entrance.y });
   }
   return places;
+}
+
+/** Commerces de bouche ouverts par des joueurs (snack, café, fast-food, restaurant). */
+export function businessFoodPlaces(map: DistrictMap, businesses: readonly { spotId: string; type: string; name: string }[]): FoodPlace[] {
+  const out: FoodPlace[] = [];
+  for (const b of businesses) {
+    const food = (BUSINESS_FOOD as Record<string, { menu: FoodPlaceKind } | undefined>)[b.type];
+    const spot = map.properties.find((p) => p.id === b.spotId);
+    if (!food || !spot) continue;
+    out.push({ id: `biz-${b.spotId}`, kind: food.menu, name: b.name, x: spot.door.x, y: spot.door.y, spotId: b.spotId });
+  }
+  return out;
 }
 
 /** Endroit où manger à portée de (x, y), le plus proche ; null s'il n'y en a pas. */

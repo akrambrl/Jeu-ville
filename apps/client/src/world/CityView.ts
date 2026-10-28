@@ -29,6 +29,8 @@ export interface CityViewOptions {
   onPersonTap?: (person: PersonTap) => void;
   /** On a touché le sol pour marcher. */
   onGroundTap?: () => void;
+  /** Les commerces de joueurs ont changé (ouverture, fermeture, nom). */
+  onBusinesses?: (open: { spotId: string; type: string; name: string }[]) => void;
 }
 
 export type PersonTap =
@@ -252,9 +254,19 @@ export class CityView {
     this.scene.add(this.homeTag);
     this.setHomeDoor(this.opts.homeDoor);
     this.bindPlayers();
+    const open = new Map<string, { spotId: string; type: string; name: string }>();
+    const changed = () => this.opts.onBusinesses?.([...open.values()]);
     this.opts.link.subscribeBusinesses({
-      opened: (spotId, b) => this.setBusinessSign(spotId, b.type, b.name),
-      closed: (spotId) => this.setBusinessSign(spotId, null, ''),
+      opened: (spotId, b) => {
+        this.setBusinessSign(spotId, b.type, b.name);
+        open.set(spotId, { spotId, type: b.type, name: b.name });
+        changed();
+      },
+      closed: (spotId) => {
+        this.setBusinessSign(spotId, null, '');
+        open.delete(spotId);
+        changed();
+      },
     });
     this.renderer.setAnimationLoop(() => this.frame());
   }

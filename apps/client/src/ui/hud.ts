@@ -274,7 +274,9 @@ export class Hud {
     this.jobCenterButton.hidden = !near;
   }
 
-  setCanStartShift(can: boolean): void {
+  /** Bouton de service : chez son employeur, ou à son propre comptoir (`label`). */
+  setCanStartShift(can: boolean, label = '▶️ Commencer le service'): void {
+    if (this.shiftButton.textContent !== label) this.shiftButton.textContent = label;
     this.shiftButton.hidden = !can;
   }
 

@@ -48,6 +48,8 @@ import {
   drainBattery,
   feedPet,
   holdForTalk,
+  businessFoodPlaces,
+  ownCounter,
   ERRANDS,
   Errand,
   addKindness,
@@ -289,6 +291,8 @@ export class LocalDistrict implements DistrictLink {
   private businessHandlers: BusinessHandlers | null = null;
   private missionCb: (m: MissionView) => void = () => {};
   private shift: Shift | null = null;
+  /** Service au comptoir de son propre commerce (local), sinon null. */
+  private ownSpot: string | null = null;
   /** Demandes d'aide du jour, mission du quotidien en cours. */
   private offers: ErrandOffer[] = [];
   private errandDay = '';
@@ -399,16 +403,18 @@ export class LocalDistrict implements DistrictLink {
 
   buyFood(placeId: string, itemId: string): void {
     const me = this.walkers.get(SELF_ID)!;
-    const place = this.food.find((p) => p.id === placeId);
+    const place = [...this.food, ...this.myFoodPlaces()].find((p) => p.id === placeId);
     if (!place || Math.hypot(me.x - place.x, me.y - place.y) > MOVEMENT.foodInteractionRange) {
       return this.noticeCb({ level: 'error', text: 'Approche-toi pour commander.' });
     }
     const now = Date.now();
-    const result = resolveFood(place.kind, itemId, this.save.gauges, this.save.gaugesUpdatedAt, this.save.moneyCents, now);
+    // Dans la démo, les seuls commerces de joueurs sont les siens : on y mange gratuitement.
+    const own = !!place.spotId;
+    const result = resolveFood(place.kind, itemId, this.save.gauges, this.save.gaugesUpdatedAt, own ? Number.MAX_SAFE_INTEGER : this.save.moneyCents, now);
     if (!result.ok) return this.noticeCb({ level: 'error', text: result.error });
     this.save.gauges = result.gauges;
     this.save.gaugesUpdatedAt = now;
-    this.save.moneyCents += result.moneyDeltaCents;
+    if (!own) this.save.moneyCents += result.moneyDeltaCents;
     this.persist();
     this.selfCb(this.self());
   }
@@ -626,7 +632,30 @@ export class LocalDistrict implements DistrictLink {
     if (Math.hypot(me.x - employer.door.x, me.y - employer.door.y) > MOVEMENT.foodInteractionRange) {
       return this.notice(`Va d'abord chez ton employeur : ${employer.name}.`);
     }
+    this.ownSpot = null;
     this.shift = new Shift(`demo:${Date.now()}`, employer, this.save.jobXp?.[employer.jobType] ?? 0, this.map);
+    this.shift.next({ x: me.x, y: me.y }, Date.now());
+    this.missionCb(this.shift.view(Date.now()));
+  }
+
+  /** Commerces de bouche que l'on tient (où l'on peut manger, et servir). */
+  private myFoodPlaces() {
+    const open = (this.save.holdings ?? []).filter((h) => h.business).map((h) => ({ spotId: h.spotId, type: h.business!.type, name: h.business!.name }));
+    return businessFoodPlaces(this.map, open);
+  }
+
+  startOwnShift(spotId: string): void {
+    const me = this.walkers.get(SELF_ID)!;
+    if (this.shift) return this.notice('Tu es déjà en service.');
+    const h = (this.save.holdings ?? []).find((x) => x.spotId === spotId && x.business);
+    if (!h) return this.notice('Ce n’est pas ton commerce.');
+    const counter = ownCounter(this.map, { spotId, type: h.business!.type, name: h.business!.name });
+    if (!counter) return this.notice('Ce commerce ne sert pas à manger.');
+    if (Math.hypot(me.x - counter.employer.door.x, me.y - counter.employer.door.y) > MOVEMENT.foodInteractionRange) {
+      return this.notice('Va d’abord devant ton commerce.');
+    }
+    this.ownSpot = spotId;
+    this.shift = new Shift(`demo:own:${Date.now()}`, counter.employer, 0, this.map, Math.random, counter.pay);
     this.shift.next({ x: me.x, y: me.y }, Date.now());
     this.missionCb(this.shift.view(Date.now()));
   }
@@ -651,7 +680,8 @@ export class LocalDistrict implements DistrictLink {
     if (result.payCents > 0) {
       const type = shift.employer.jobType;
       this.save.moneyCents += result.payCents;
-      this.save.jobXp = { ...this.save.jobXp, [type]: (this.save.jobXp?.[type] ?? 0) + JOBS[type].xpPerMission };
+      // Son propre comptoir : de l'argent, pas d'expérience de salarié.
+      if (!this.ownSpot) this.save.jobXp = { ...this.save.jobXp, [type]: (this.save.jobXp?.[type] ?? 0) + JOBS[type].xpPerMission };
       this.commit();
     }
     this.missionCb(shift.view(Date.now()));

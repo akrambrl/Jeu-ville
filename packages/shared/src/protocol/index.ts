@@ -234,12 +234,17 @@ export const ClientMessage = {
   stopShift: 'stopShift',
   /** Comptoir : servir ces articles au client actuel. */
   serve: 'serve',
+  /** Tenir soi-même le comptoir de son commerce de bouche (devant le local). */
+  startOwnShift: 'startOwnShift',
   /** Parler à un passant (bot) : il s'arrête et se tourne vers le joueur. */
   talk: 'talk',
   /** Missions du quotidien : accepter une demande d'aide, ou laisser tomber. */
   acceptErrand: 'acceptErrand',
   abandonErrand: 'abandonErrand',
 } as const;
+
+export const startOwnShiftSchema = z.object({ spotId: z.string().min(1).max(64) });
+export type StartOwnShiftMessage = z.infer<typeof startOwnShiftSchema>;
 
 export const acceptErrandSchema = z.object({ offerId: z.string().min(1).max(32) });
 export type AcceptErrandMessage = z.infer<typeof acceptErrandSchema>;

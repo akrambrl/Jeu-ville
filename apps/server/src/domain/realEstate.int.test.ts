@@ -107,6 +107,27 @@ describe.skipIf(!hasDb)('agence immobilière (base réelle)', () => {
     await expect(mod.openBusiness(mod.db, c.id, key, nextSpot('local').id, 'snack', 'Nique')).rejects.toThrow(/pas autorisé/);
   });
 
+  it('manger chez un joueur : le prix va au commerçant ; son comptoir lui rapporte une fois par client', async () => {
+    const [owner, client] = [await newCharacter(), await newCharacter()];
+    const spot = nextSpot('local', ECONOMY.startingMoneyCents);
+    await mod.acquireProperty(mod.db, owner.id, key, spot.id, 'rent', randomUUID());
+    await mod.openBusiness(mod.db, owner.id, key, spot.id, 'fastfood', 'Chez Test');
+    const sales = await import('./businessSales.js');
+    const ownerBefore = (await mod.getCharacterSelf(mod.db, owner.id))!.moneyCents;
+    const sale = await sales.buyFoodAtBusiness(mod.db, client.id, key, spot.id, 'fastfood', 'menu');
+    expect(sale).toMatchObject({ operatorId: owner.id, paidCents: 1000 });
+    const after = sale.self;
+    expect(after.moneyCents).toBe(client.moneyCents - 1000);
+    expect((await mod.getCharacterSelf(mod.db, owner.id))!.moneyCents).toBe(ownerBefore + 1000);
+    // Le commerçant mange gratuitement chez lui.
+    expect((await sales.buyFoodAtBusiness(mod.db, owner.id, key, spot.id, 'fastfood', 'menu')).self.moneyCents).toBe(ownerBefore + 1000);
+    const paid = await sales.payCounterSale(mod.db, owner.id, spot.id, 1400, 'shift-own:0');
+    expect(paid.moneyCents).toBe(ownerBefore + 2400);
+    await expect(sales.payCounterSale(mod.db, owner.id, spot.id, 1400, 'shift-own:0')).rejects.toThrow();
+    expect(await mod.ledgerBalance(mod.db, owner.id)).toBe(paid.moneyCents);
+    expect(await mod.ledgerBalance(mod.db, client.id)).toBe(after.moneyCents);
+  });
+
   it('carte régénérée : un bien acheté qui n’existe plus est remboursé une fois', async () => {
     const c = await newCharacter();
     const spot = nextSpot('local', ECONOMY.startingMoneyCents);

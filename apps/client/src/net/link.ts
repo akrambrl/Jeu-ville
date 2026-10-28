@@ -72,6 +72,8 @@ export interface DistrictLink {
   applyJob(employerId: string): void;
   quitJob(): void;
   startShift(): void;
+  /** Tenir soi-même le comptoir de son commerce de bouche (devant le local). */
+  startOwnShift(spotId: string): void;
   stopShift(): void;
   serve(items: string[]): void;
   onMission(cb: (mission: MissionView) => void): void;

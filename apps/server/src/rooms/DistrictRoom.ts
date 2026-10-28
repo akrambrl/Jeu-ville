@@ -39,6 +39,9 @@ import {
   spawnPasserby,
   updatePasserby,
   holdForTalk,
+  businessFoodPlaces,
+  ownCounter,
+  startOwnShiftSchema,
   Errand,
   acceptErrandSchema,
   dailyErrandOffers,
@@ -77,6 +80,7 @@ import {
   payFee,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
+import { businessOperator, buyFoodAtBusiness, payCounterSale } from '../domain/businessSales.js';
 import { checkErrandAllowed, completeErrand } from '../domain/errands.js';
 import { applyJob, payMission, quitJob } from '../domain/jobs.js';
 import { acquireProperty, moveIn, openBusiness, openBusinesses, releaseProperty, takenSpots } from '../domain/realEstate.js';
@@ -113,6 +117,8 @@ interface Session extends Walker {
   job: { employerId: string; jobType: 'courier' | 'counter' } | null;
   jobXp: Partial<Record<'courier' | 'counter', number>>;
   shift: Shift | null;
+  /** Service au comptoir de son propre commerce (local), sinon null : service pour un employeur. */
+  ownSpot: string | null;
   /** Mission du quotidien en cours, et son étape (pour renvoyer la vue quand elle change). */
   errand: Errand | null;
   errandStep: number;
@@ -125,6 +131,8 @@ export class DistrictRoom extends Room<DistrictState> {
   override state = new DistrictState();
   private grid!: MapGrid;
   private food: FoodPlace[] = [];
+  /** Lieux où manger de la carte (les commerces de joueurs s'y ajoutent). */
+  private mapFood: FoodPlace[] = [];
   private shops: ShopPlace[] = [];
   /** Passants (bots) du quartier, simulés ici et vus par tous. */
   private readonly passersby: Passerby[] = [];
@@ -147,7 +155,8 @@ export class DistrictRoom extends Room<DistrictState> {
     this.districtKey = options.districtId;
     this.employers = employers(map);
     void this.refreshBusinesses();
-    this.food = foodPlaces(map);
+    this.mapFood = foodPlaces(map);
+    this.food = this.mapFood;
     this.shops = shopPlaces(map);
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
     const tiles = reachableTiles(this.grid, map.spawn);
@@ -198,6 +207,7 @@ export class DistrictRoom extends Room<DistrictState> {
       }),
     );
     this.onMessage(ClientMessage.startShift, (client) => this.handleStartShift(client));
+    this.onMessage(ClientMessage.startOwnShift, (client, raw) => void this.handleStartOwnShift(client, raw));
     this.onMessage(ClientMessage.stopShift, (client) => {
       const s = this.sessions.get(client.sessionId);
       if (s) this.endShift(s);
@@ -287,6 +297,7 @@ export class DistrictRoom extends Room<DistrictState> {
       job: null,
       jobXp: {},
       shift: null,
+      ownSpot: null,
       errand: null,
       errandStep: 0,
     };
@@ -513,8 +524,19 @@ export class DistrictRoom extends Room<DistrictState> {
       return this.notify(client, 'error', 'Approche-toi pour commander.');
     }
     try {
-      const self = await buyFood(db, s.characterId, place.kind, parsed.data.itemId);
-      client.send(ServerMessage.self, self);
+      if (place.spotId) {
+        const sale = await buyFoodAtBusiness(db, s.characterId, this.districtKey, place.spotId, place.kind, parsed.data.itemId);
+        client.send(ServerMessage.self, sale.self);
+        // Le commerçant, s'il est dans le quartier, voit tout de suite la vente.
+        const operator = [...this.sessions.values()].find((o) => o.characterId === sale.operatorId);
+        if (operator && sale.paidCents > 0) {
+          const self = await getCharacterSelf(db, operator.characterId);
+          if (self) this.sendSelf(operator, self);
+          this.notify(operator.client, 'info', `🍽️ ${sale.self.name} a mangé chez toi : +${sale.paidCents / 100} €`);
+        }
+        return;
+      }
+      client.send(ServerMessage.self, await buyFood(db, s.characterId, place.kind, parsed.data.itemId));
     } catch (err) {
       if (err instanceof GameError) return this.notify(client, 'error', err.message);
       console.error('buyFood', err);
@@ -568,7 +590,28 @@ export class DistrictRoom extends Room<DistrictState> {
     if (Math.hypot(s.x - employer.door.x, s.y - employer.door.y) > MOVEMENT.foodInteractionRange) {
       return this.notify(client, 'error', `Va d'abord chez ton employeur : ${employer.name}.`);
     }
+    s.ownSpot = null;
     s.shift = new Shift(`${s.characterId}:${Date.now()}`, employer, s.jobXp[employer.jobType] ?? 0, this.grid.map);
+    s.shift.next({ x: s.x, y: s.y }, Date.now());
+    client.send(ServerMessage.mission, s.shift.view(Date.now()));
+  }
+
+  /** Tenir le comptoir de son propre commerce de bouche : chaque client servi rapporte. */
+  private async handleStartOwnShift(client: Client, raw: unknown): Promise<void> {
+    const s = this.sessions.get(client.sessionId);
+    const parsed = startOwnShiftSchema.safeParse(raw);
+    if (!s || !parsed.success) return;
+    if (s.shift) return this.notify(client, 'error', 'Tu es déjà en service.');
+    const op = await businessOperator(db, this.districtKey, parsed.data.spotId);
+    if (!op || op.characterId !== s.characterId) return this.notify(client, 'error', 'Ce n’est pas ton commerce.');
+    const counter = ownCounter(this.grid.map, { spotId: parsed.data.spotId, type: op.type, name: op.name });
+    if (!counter) return this.notify(client, 'error', 'Ce commerce ne sert pas à manger.');
+    if (Math.hypot(s.x - counter.employer.door.x, s.y - counter.employer.door.y) > MOVEMENT.foodInteractionRange) {
+      return this.notify(client, 'error', 'Va d’abord devant ton commerce.');
+    }
+    if (this.sessions.get(client.sessionId) !== s || s.shift) return;
+    s.ownSpot = parsed.data.spotId;
+    s.shift = new Shift(`${s.characterId}:own:${Date.now()}`, counter.employer, 0, this.grid.map, Math.random, counter.pay);
     s.shift.next({ x: s.x, y: s.y }, Date.now());
     client.send(ServerMessage.mission, s.shift.view(Date.now()));
   }
@@ -578,7 +621,10 @@ export class DistrictRoom extends Room<DistrictState> {
     const shift = s.shift!;
     this.notify(s.client, result.payCents > 0 ? 'info' : 'error', result.payCents > 0 ? `${result.text} +${result.payCents / 100} €` : result.text);
     if (result.payCents > 0) {
-      void payMission(db, s.characterId, shift.employer.jobType, result.payCents, result.key)
+      const ownSpot = s.ownSpot;
+      void (ownSpot
+        ? payCounterSale(db, s.characterId, ownSpot, result.payCents, result.key)
+        : payMission(db, s.characterId, shift.employer.jobType, result.payCents, result.key))
         .then((self) => this.sessions.get(s.id) === s && this.sendSelf(s, self))
         .catch((err) => console.error('payMission', err));
     }
@@ -611,6 +657,7 @@ export class DistrictRoom extends Room<DistrictState> {
   /** Enseignes des commerces de joueurs (visibles de tous). */
   private async refreshBusinesses(): Promise<void> {
     const open = await openBusinesses(db, this.districtKey);
+    this.food = [...this.mapFood, ...businessFoodPlaces(this.grid.map, open)];
     const ids = new Set(open.map((b) => b.spotId));
     for (const id of [...this.state.businesses.keys()]) if (!ids.has(id)) this.state.businesses.delete(id);
     for (const b of open) {

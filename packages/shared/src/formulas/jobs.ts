@@ -2,7 +2,7 @@
  * Métiers : offres d'emploi (employeurs bots de la carte), niveaux, paie des
  * missions, commandes du comptoir. Règles pures, appliquées par le serveur et la démo.
  */
-import { COUNTER_ITEMS, JOBS, MOVEMENT } from '../config/balance.js';
+import { BUSINESS_FOOD, COUNTER_ITEMS, JOBS, MOVEMENT } from '../config/balance.js';
 import type { DistrictMap, TilePoint } from '../map/types.js';
 
 export type JobType = 'courier' | 'counter';
@@ -70,4 +70,22 @@ export function sameOrder(asked: string[], served: string[]): boolean {
   const a = [...asked].sort();
   const b = [...served].sort();
   return a.every((x, k) => x === b[k]);
+}
+
+/**
+ * Son propre commerce de bouche : on peut tenir le comptoir soi-même (missions
+ * « comptoir »), chaque client servi rapporte selon BUSINESS_FOOD. null si ce
+ * commerce ne sert pas à manger.
+ */
+export function ownCounter(
+  map: DistrictMap,
+  business: { spotId: string; type: string; name: string },
+): { employer: Employer; pay: (tip: boolean) => number } | null {
+  const food = (BUSINESS_FOOD as Record<string, { servePayCents: number; tipCents: number } | undefined>)[business.type];
+  const spot = map.properties.find((p) => p.id === business.spotId);
+  if (!food || !spot) return null;
+  return {
+    employer: { id: `own-${business.spotId}`, name: business.name, jobType: 'counter', door: spot.door },
+    pay: (tip) => food.servePayCents + (tip ? food.tipCents : 0),
+  };
 }
