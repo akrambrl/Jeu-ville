@@ -1,4 +1,4 @@
-import type { Arrival, CharacterSelf, HomeActionId, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
+import type { Arrival, BusinessType, CharacterSelf, HomeActionId, Notice, TilePoint, VehicleKind } from '@jeu-ville/shared';
 
 /** Ce que tous les joueurs voient d'un personnage (voir apps/server/src/rooms/state.ts). */
 export interface PlayerView {
@@ -17,6 +17,16 @@ export interface PlayerView {
   pet: string;
   /** Véhicule utilisé (« bike », « scooter ») ou ''. */
   vehicle: string;
+}
+
+export interface BusinessView {
+  type: string;
+  name: string;
+}
+
+export interface BusinessHandlers {
+  opened: (spotId: string, b: BusinessView) => void;
+  closed: (spotId: string) => void;
 }
 
 export interface PlayerHandlers {
@@ -46,6 +56,16 @@ export interface DistrictLink {
   chargeScooter(): void;
   /** Donner des croquettes à son animal. */
   feedPet(): void;
+  /** Agence immobilière : biens déjà pris par des joueurs (PropertySpot.id). */
+  requestListings(): Promise<string[]>;
+  buyProperty(spotId: string): void;
+  rentProperty(spotId: string): void;
+  moveIn(spotId: string): void;
+  /** Rendre un bien loué, ou le revendre à l'agence. */
+  releaseProperty(spotId: string): void;
+  openBusiness(spotId: string, type: BusinessType, name: string): void;
+  /** Enseignes des commerces de joueurs (ajout, changement, fermeture). */
+  subscribeBusinesses(handlers: BusinessHandlers): void;
   /** Quelqu'un (soi compris) arrive en bus : jouer la cinématique. */
   onArrival(cb: (arrival: Arrival) => void): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */

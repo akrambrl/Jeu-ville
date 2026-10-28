@@ -16,7 +16,7 @@ import { Pet3D } from './pets.js';
 import { buildProps } from './props.js';
 import { clockFromUrl, daylightAt, type Daylight } from './daylight.js';
 import { applyNight } from './night.js';
-import { canvasTexture } from './textures.js';
+import { canvasTexture, signTexture } from './textures.js';
 
 export interface CityViewOptions {
   map: DistrictMap;
@@ -27,6 +27,14 @@ export interface CityViewOptions {
 }
 
 const TAP_MAX_MOVE_PX = 8;
+/** Couleurs d'enseigne (fond, texte) des commerces de joueurs. */
+const BUSINESS_COLORS: Record<string, [string, string]> = {
+  snack: ['#c8322b', '#ffe08a'],
+  coffee: ['#4b2e1e', '#f3e1c4'],
+  barber: ['#1d3557', '#ffffff'],
+  laundry: ['#2a9d8f', '#ffffff'],
+  clothes: ['#6d2e8c', '#fbe9ff'],
+};
 /** Cinématique d'arrivée en bus (secondes) : approche, arrêt portes ouvertes, départ. */
 const BUS_ARRIVE_S = TRAVEL.busArriveMs / 1000;
 const BUS_STOP_S = TRAVEL.busStopMs / 1000;
@@ -208,16 +216,44 @@ export class CityView {
     this.addStreetNames();
     // Les matériaux qui s'allument la nuit viennent d'être créés.
     this.applyDaylight();
-    if (this.opts.homeDoor) {
-      const el = document.createElement('div');
-      el.className = 'home-tag';
-      el.textContent = '🏠 Chez moi';
-      const obj = new CSS2DObject(el);
-      obj.position.set(this.opts.homeDoor.x, 1.6, this.opts.homeDoor.y);
-      this.scene.add(obj);
-    }
+    const homeEl = document.createElement('div');
+    homeEl.className = 'home-tag';
+    homeEl.textContent = '🏠 Chez moi';
+    this.homeTag = new CSS2DObject(homeEl);
+    this.scene.add(this.homeTag);
+    this.setHomeDoor(this.opts.homeDoor);
     this.bindPlayers();
+    this.opts.link.subscribeBusinesses({
+      opened: (spotId, b) => this.setBusinessSign(spotId, b.type, b.name),
+      closed: (spotId) => this.setBusinessSign(spotId, null, ''),
+    });
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  private homeTag: CSS2DObject | null = null;
+  private readonly businessSigns = new Map<string, THREE.Mesh>();
+
+  /** Étiquette « Chez moi » au-dessus de la porte (après un déménagement…). */
+  setHomeDoor(door: TilePoint | null): void {
+    if (!this.homeTag) return;
+    this.homeTag.visible = !!door;
+    if (door) this.homeTag.position.set(door.x, 1.6, door.y);
+  }
+
+  /** Enseigne d'un commerce de joueur sur la façade de son local (null : fermé). */
+  private setBusinessSign(spotId: string, type: string | null, name: string): void {
+    this.businessSigns.get(spotId)?.removeFromParent();
+    this.businessSigns.delete(spotId);
+    const spot = this.opts.map.properties.find((p) => p.id === spotId);
+    if (!spot || !type) return;
+    const colors = BUSINESS_COLORS[type] ?? BUSINESS_COLORS.snack!;
+    const tex = signTexture(name.toUpperCase(), colors[0], colors[1]);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.3), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
+    const south = spot.door.y > spot.facade.y;
+    sign.position.set(spot.facade.x + (south ? 0 : 0.515), groundTop(this.grid.tileAt(spot.facade.x, spot.facade.y)) + 0.45, spot.facade.y + (south ? 0.515 : 0));
+    if (!south) sign.rotation.y = Math.PI / 2;
+    this.scene.add(sign);
+    this.businessSigns.set(spotId, sign);
   }
 
   /** Recentre la caméra sur le joueur. */

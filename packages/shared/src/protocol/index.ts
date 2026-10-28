@@ -9,7 +9,8 @@ import type { GaugeSnapshot } from '../formulas/gauges.js';
 import type { HomeActionId } from '../formulas/homeActions.js';
 import type { StoredPet } from '../formulas/pets.js';
 import type { OwnedVehicle, VehicleKind } from '../formulas/vehicles.js';
-import { VEHICLES } from '../config/balance.js';
+import { BUSINESS_TYPES, VEHICLES } from '../config/balance.js';
+import type { BusinessType } from '../formulas/realEstate.js';
 import type { TilePoint } from '../map/types.js';
 
 // Messages de validation en français.
@@ -53,6 +54,7 @@ export interface CharacterLook {
 }
 
 export interface HomeInfo {
+  /** Appart de départ (`<quartier>:<bâtiment>:<n°>`) ou bien de l'agence (`<quartier>:<id du bien>`). */
   dwellingId: string;
   buildingName: string;
   door: TilePoint;
@@ -73,10 +75,21 @@ export interface CharacterSelf {
   /** Véhicule utilisé en ce moment ('' = à pied). */
   activeVehicle: VehicleKind | '';
   pet: StoredPet | null;
-  /** Bonus (ou malus) de bonheur hors jauges : animal, chagrin… */
+  /** Bonus (ou malus) de bonheur hors jauges : logement, animal, chagrin… */
   happinessBonus: number;
+  /** Biens achetés ou loués via l'agence immobilière. */
+  properties: OwnedProperty[];
+  /** Dernier déménagement (ms), pour la règle « une fois toutes les deux semaines ». */
+  movedAt: number | null;
   /** Instant serveur du calcul (ms epoch). */
   computedAt: number;
+}
+
+export interface OwnedProperty {
+  /** Identifiant du bien sur la carte (PropertySpot.id). */
+  spotId: string;
+  relation: 'owner' | 'tenant';
+  business: { type: BusinessType; name: string } | null;
 }
 
 export interface MeResponse {
@@ -108,7 +121,44 @@ export const ClientMessage = {
   setVehicle: 'setVehicle',
   chargeScooter: 'chargeScooter',
   feedPet: 'feedPet',
+  /** Demander à l'agence quels biens sont déjà pris (réponse : ServerMessage.listings). */
+  listings: 'listings',
+  buyProperty: 'buyProperty',
+  rentProperty: 'rentProperty',
+  moveIn: 'moveIn',
+  /** Rendre un bien loué, ou revendre un bien acheté à l'agence. */
+  releaseProperty: 'releaseProperty',
+  openBusiness: 'openBusiness',
 } as const;
+
+/** Acheter ou louer un bien ; `requestId` rend le clic idempotent (double clic, réseau). */
+export const propertyDealSchema = z.object({
+  spotId: z.string().min(1).max(64),
+  requestId: z.string().uuid(),
+});
+export type PropertyDealMessage = z.infer<typeof propertyDealSchema>;
+
+export const propertySchema = z.object({
+  spotId: z.string().min(1).max(64),
+});
+export type PropertyMessage = z.infer<typeof propertySchema>;
+
+const BUSINESS_TYPE_IDS = Object.keys(BUSINESS_TYPES) as BusinessType[];
+
+/** Nom de commerce affiché sur l'enseigne : visible de tous, donc très encadré. */
+export const BUSINESS_NAME_RULES = { minLength: 3, maxLength: 18, pattern: /^[\p{L}\p{N}' &-]+$/u } as const;
+
+export const openBusinessSchema = z.object({
+  spotId: z.string().min(1).max(64),
+  type: z.enum(BUSINESS_TYPE_IDS as [BusinessType, ...BusinessType[]]),
+  name: z
+    .string()
+    .trim()
+    .min(BUSINESS_NAME_RULES.minLength, `Le nom doit faire au moins ${BUSINESS_NAME_RULES.minLength} caractères.`)
+    .max(BUSINESS_NAME_RULES.maxLength, `Le nom doit faire au plus ${BUSINESS_NAME_RULES.maxLength} caractères.`)
+    .regex(BUSINESS_NAME_RULES.pattern, 'Lettres, chiffres, espaces, apostrophes, & et - uniquement'),
+});
+export type OpenBusinessMessage = z.infer<typeof openBusinessSchema>;
 
 export const moveSchema = z.object({
   x: z.number().int(),
@@ -159,7 +209,14 @@ export const ServerMessage = {
   notice: 'notice',
   /** Un joueur arrive quelque part en bus (Arrival), pour la cinématique. */
   arrival: 'arrival',
+  /** Biens déjà pris (Listings), en réponse à ClientMessage.listings. */
+  listings: 'listings',
 } as const;
+
+export interface Listings {
+  /** Biens achetés ou loués par des joueurs (PropertySpot.id). */
+  taken: string[];
+}
 
 export interface Arrival {
   /** Identifiant du joueur dans le quartier (sessionId). */

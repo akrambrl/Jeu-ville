@@ -19,7 +19,9 @@ import {
   type Cycleway,
   type DistrictMap,
   type FacadeSign,
+  WALKABLE_TILES,
   type MapPoi,
+  type PropertySpot,
   type StreetVendor,
   type StarterBuilding,
   type Storefront,
@@ -92,6 +94,9 @@ function fastFoodSign(p: RawPoi): string {
   if (/burger/.test(c)) return 'BURGER';
   return 'SNACK';
 }
+
+/** Façades où un hall d'immeuble peut donner sur la rue. */
+const BUILDING_CODES = new Set<string>([TILE.apartments, TILE.commercial]);
 
 const isCommissariat = (p: RawPoi) => p.kind === 'police' && !/municipale/i.test(p.name);
 
@@ -1232,6 +1237,98 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     }
   }
 
+  // ---------- 6b. Biens de l'agence immobilière : appartements, maisons, locaux vides ----------
+
+  const properties: PropertySpot[] = [];
+  {
+    const starterSet = new Set(starterBlocks.map((b) => `${b.i},${b.j}`));
+    const farthest = Math.hypot(width, height) / 2;
+    const centrality = (p: TilePoint) => Math.round(Math.max(0, 1 - Math.hypot(p.x - townhall.x, p.y - townhall.y) / farthest) * 100) / 100;
+    const walkable = (p: TilePoint) => WALKABLE_TILES.has(tileAt(p.x, p.y) ?? '');
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const kind = kinds[j]![i]!;
+        const ox = i * PITCH + 2;
+        const oy = j * PITCH + 2;
+        const any =
+          [hEdges[j + 1]?.[i], vEdges[i + 1]?.[j], hEdges[j]?.[i], vEdges[i]?.[j]].map(edgeName).find((n) => n) ?? d.districtName;
+        const south = edgeName(hEdges[j + 1]?.[i]) ?? any;
+        const east = edgeName(vEdges[i + 1]?.[j]) ?? any;
+        if ((kind === 'apartments' || kind === 'tower') && !starterSet.has(`${i},${j}`)) {
+          // Deux appartements (T2 et T4) par hall d'entrée, côté sud et côté est.
+          for (const side of [
+            { id: 's', facade: { x: ox + 2, y: oy + 6 }, door: { x: ox + 2, y: oy + BLOCK - 1 }, street: south },
+            { id: 'e', facade: { x: ox + 6, y: oy + 2 }, door: { x: ox + BLOCK - 1, y: oy + 2 }, street: east },
+          ]) {
+            if (!BUILDING_CODES.has(tileAt(side.facade.x, side.facade.y) ?? '') || !walkable(side.door)) continue;
+            for (const rooms of [2, 4]) {
+              properties.push({
+                id: `apt-${i}-${j}-${side.id}-${rooms}`,
+                kind: 'apartment',
+                name: `Appartement T${rooms}, ${side.street}`,
+                door: side.door,
+                facade: side.facade,
+                rooms,
+                centrality: centrality(side.door),
+              });
+            }
+          }
+          // Rez-de-chaussée commerçant le long des grands axes.
+          for (const [lx, ly, side, edge] of [[5, 6, 's', hEdges[j + 1]?.[i]], [6, 5, 'e', vEdges[i + 1]?.[j]]] as const) {
+            if (!edge?.street || edge.code !== TILE.majorRoad) continue;
+            const facade = { x: ox + lx, y: oy + ly };
+            if (!BUILDING_CODES.has(tileAt(facade.x, facade.y) ?? '') || shapes[facade.y * width + facade.x] !== SHAPE.plain) continue;
+            const door = side === 's' ? { x: facade.x, y: facade.y + 1 } : { x: facade.x + 1, y: facade.y };
+            if (!walkable(door)) continue;
+            properties.push({
+              id: `local-${facade.x}-${facade.y}`,
+              kind: 'local',
+              name: `Local commercial, ${side === 's' ? south : east}`,
+              door,
+              facade,
+              rooms: 1,
+              centrality: centrality(door),
+            });
+          }
+        } else if (kind === 'houses' || kind === 'gardens') {
+          for (let y = oy; y < oy + BLOCK; y++) {
+            for (let x = ox; x < ox + BLOCK; x++) {
+              if (shapes[y * width + x] !== SHAPE.roofSouthDoor) continue;
+              const door = { x, y: y + 1 };
+              if (!walkable(door)) continue;
+              properties.push({
+                id: `house-${x}-${y}`,
+                kind: 'house',
+                name: `Maison, ${south}`,
+                door,
+                facade: { x, y },
+                rooms: 3 + (levels[y * width + x] ?? 1),
+                centrality: centrality(door),
+              });
+            }
+          }
+        } else if (kind === 'shops') {
+          // Locaux vides : façades de boutique sans commerce (sud, puis est).
+          for (const [lx, ly, side] of [[2, 6, 's'], [5, 6, 's'], [6, 2, 'e']] as const) {
+            const facade = { x: ox + lx, y: oy + ly };
+            if (tileAt(facade.x, facade.y) !== TILE.commercial || shapes[facade.y * width + facade.x] !== SHAPE.plain) continue;
+            const door = side === 's' ? { x: facade.x, y: facade.y + 1 } : { x: facade.x + 1, y: facade.y };
+            if (!walkable(door)) continue;
+            properties.push({
+              id: `local-${facade.x}-${facade.y}`,
+              kind: 'local',
+              name: `Local commercial, ${side === 's' ? south : east}`,
+              door,
+              facade,
+              rooms: 1,
+              centrality: centrality(door),
+            });
+          }
+        }
+      }
+    }
+  }
+
   // ---------- 7. Noms de rues (réparties le long de chaque rue) ----------
 
   const byName = new Map<string, { x: number; y: number; axis: 'x' | 'y' }[]>();
@@ -1273,6 +1370,7 @@ export function schematize(d: DistrictSource, raw: RawRaster): DistrictMap {
     cycleways,
     vendors,
     signs,
+    properties,
     starterBuildings,
     pois,
     streets,

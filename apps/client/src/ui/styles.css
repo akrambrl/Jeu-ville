@@ -656,3 +656,138 @@ button.small {
   padding: 4px 10px;
   font-size: 13px;
 }
+
+/* ---------- Agence immobilière ---------- */
+
+.sheet.agency {
+  max-height: 88vh;
+}
+
+.agency-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 0 0 auto;
+}
+
+button.agency-tab {
+  flex: 1 0 auto;
+  background: #eef2f3;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+button.agency-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.agency-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  touch-action: pan-y;
+  padding-top: 6px;
+}
+
+.agency-hint,
+.agency-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.agency-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #f6f8f9;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.agency-card-icon {
+  font-size: 24px;
+}
+
+.agency-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.agency-card-text small {
+  color: var(--muted);
+}
+
+.agency-price {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.agency-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+button.agency-visit {
+  background: #eef2f3;
+  color: var(--text);
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+button.armed {
+  background: #e07a2f;
+}
+
+button.agency-more {
+  background: transparent;
+  color: var(--accent);
+}
+
+.agency-business {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 2px dashed #c9d3d6;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.agency-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+button.agency-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: #eef2f3;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+button.agency-type small {
+  color: var(--muted);
+}
+
+button.agency-type.active {
+  outline: 3px solid var(--accent);
+}
+
+input.agency-input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d5dde0;
+  font: inherit;
+}

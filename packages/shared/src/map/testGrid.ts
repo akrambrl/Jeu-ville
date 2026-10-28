@@ -20,6 +20,7 @@ export function makeGrid(rows: string[]): MapGrid {
     cycleways: [],
     vendors: [],
     signs: [],
+    properties: [],
     starterBuildings: [],
     pois: [],
     streets: [],

@@ -62,6 +62,7 @@ export interface HudCallbacks {
   onSetVehicle: (vehicle: VehicleKind | '') => void;
   onChargeScooter: () => void;
   onFeedPet: () => void;
+  onOpenAgency: () => void;
   onRecenter: () => void;
 }
 
@@ -81,6 +82,7 @@ export class Hud {
   private readonly vehicleButton: HTMLButtonElement;
   private readonly chargeButton: HTMLButtonElement;
   private readonly petCard: HTMLElement;
+  private readonly agencyButton: HTMLButtonElement;
   private position: TilePoint = { x: 0, y: 0 };
   private readonly busButtons: { button: HTMLButtonElement; point: () => TilePoint | null }[] = [];
   private readonly walkButtons: { button: HTMLButtonElement; point: () => TilePoint | null }[] = [];
@@ -131,6 +133,9 @@ export class Hud {
       const next = order[(order.indexOf(self.activeVehicle) + 1) % order.length]!;
       callbacks.onSetVehicle(next);
     });
+    this.agencyButton = el('button', { class: 'primary', text: '🔑 Voir les annonces' });
+    this.agencyButton.hidden = true;
+    this.agencyButton.addEventListener('click', () => callbacks.onOpenAgency());
     this.petCard = el('div', { class: 'hud-card pet-card' });
     this.petCard.hidden = true;
 
@@ -140,7 +145,7 @@ export class Hud {
         gauges,
         this.petCard,
       ]),
-      el('div', { class: 'hud-bottom' }, [this.homePanel, this.foodPanel, this.vehicleButton, this.goToButton, recenter]),
+      el('div', { class: 'hud-bottom' }, [this.homePanel, this.foodPanel, this.agencyButton, this.vehicleButton, this.goToButton, recenter]),
       this.destinationsPanel,
       el('div', { class: 'attribution' }),
     ]);
@@ -250,6 +255,11 @@ export class Hud {
       bar('💛', g.happiness),
       feed,
     );
+  }
+
+  /** Devant l'agence immobilière : bouton pour voir les annonces. */
+  setNearAgency(near: boolean): void {
+    this.agencyButton.hidden = !near;
   }
 
   /** Position du perso (pour griser le bus vers les lieux tout proches). */

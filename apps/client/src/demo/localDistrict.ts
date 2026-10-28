@@ -54,8 +54,21 @@ import {
   shopPlaces,
   speedFactor,
   walkPet,
+  BUSINESS_TYPES,
+  REAL_ESTATE,
+  businessPayoutCents,
+  canMove,
+  containsBannedWord,
+  homeHappiness,
+  openBusinessSchema,
+  payoutPeriodsDue,
+  rentPerPeriodCents,
+  rentPeriodsDue,
+  salePriceCents,
+  type BusinessType,
+  type PropertySpot,
 } from '@jeu-ville/shared';
-import type { DistrictLink, PlayerHandlers, PlayerView } from '../net/link.js';
+import type { BusinessHandlers, DistrictLink, PlayerHandlers, PlayerView } from '../net/link.js';
 
 const SAVE_KEY = 'jeu-ville.demo.save';
 const SELF_ID = 'moi';
@@ -78,7 +91,24 @@ export interface DemoSave {
   activeVehicle?: VehicleKind | '';
   pet?: StoredPet | null;
   petLostAt?: number | null;
+  /** Ajouts du lot « agence immobilière ». */
+  holdings?: DemoHolding[];
+  homeSpotId?: string | null;
+  movedAt?: number | null;
 }
+
+/** Bien acheté ou loué dans la démo (comme une ligne `properties` du serveur). */
+interface DemoHolding {
+  spotId: string;
+  relation: 'owner' | 'tenant';
+  leaseStart: number | null;
+  rentPaid: number;
+  business: { type: BusinessType; name: string; openedAt: number; paid: number } | null;
+}
+
+const HOME_KINDS = new Set(['apartment', 'house']);
+/** Fréquence du « tick d'économie » de la démo (loyers, recettes). */
+const DEMO_ECONOMY_MS = 10_000;
 
 export const demoStore = {
   load(): DemoSave | null {
@@ -138,7 +168,9 @@ export function repairDemoSave(map: DistrictMap, save: DemoSave): DemoSave {
 }
 
 export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, nowMs = Date.now()): CharacterSelf {
-  const building = map.starterBuildings.find((b) => b.id === save.buildingId);
+  const homeSpot = save.homeSpotId ? (map.properties.find((p) => p.id === save.homeSpotId) ?? null) : null;
+  const building = homeSpot ? null : map.starterBuildings.find((b) => b.id === save.buildingId);
+  const bonus = homeHappiness(homeSpot) + petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs);
   const age = ageAt(save.createdAt, nowMs);
   return {
     id: SELF_ID,
@@ -147,13 +179,23 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
     cityId: map.cityId,
     districtId: districtKey,
     moneyCents: save.moneyCents,
-    gauges: snapshotGauges(save.gauges, save.gaugesUpdatedAt, nowMs, petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs)),
+    gauges: snapshotGauges(save.gauges, save.gaugesUpdatedAt, nowMs, bonus),
     age: { years: Math.min(age.years, TIME.maxAge), dayOfYear: age.dayOfYear },
-    home: building ? { dwellingId: `${building.id}:1`, buildingName: building.name, door: building.door } : null,
+    home: homeSpot
+      ? { dwellingId: homeSpot.id, buildingName: homeSpot.name, door: homeSpot.door }
+      : building
+        ? { dwellingId: `${building.id}:1`, buildingName: building.name, door: building.door }
+        : null,
     vehicles: save.vehicles ?? [],
     activeVehicle: save.activeVehicle ?? '',
     pet: save.pet ?? null,
-    happinessBonus: petHappinessBonus(save.pet ?? null, save.petLostAt ?? null, nowMs),
+    happinessBonus: bonus,
+    properties: (save.holdings ?? []).map((h) => ({
+      spotId: h.spotId,
+      relation: h.relation,
+      business: h.business ? { type: h.business.type, name: h.business.name } : null,
+    })),
+    movedAt: save.movedAt ?? null,
     computedAt: nowMs,
   };
 }
@@ -175,6 +217,7 @@ export class LocalDistrict implements DistrictLink {
   private selfCb: (self: CharacterSelf) => void = () => {};
   private noticeCb: (n: Notice) => void = () => {};
   private arrivalCb: (a: Arrival) => void = () => {};
+  private businessHandlers: BusinessHandlers | null = null;
 
   constructor(
     private readonly map: DistrictMap,
@@ -232,6 +275,8 @@ export class LocalDistrict implements DistrictLink {
       this.selfCb(this.self());
     }, SERVER.selfSnapshotIntervalMs);
     window.setTimeout(() => this.checkPetCare(), 1000);
+    window.setTimeout(() => this.economyTick(), 1000);
+    window.setInterval(() => this.economyTick(), DEMO_ECONOMY_MS);
     window.setInterval(() => this.persist(), SAVE_INTERVAL_MS);
     window.addEventListener('pagehide', () => this.persist());
   }
@@ -333,6 +378,125 @@ export class LocalDistrict implements DistrictLink {
     this.save.moneyCents -= PETS.kibble.costCents;
     this.save.pet = feedPet(this.save.pet, Date.now());
     this.commit();
+  }
+
+  // ---------- Agence immobilière (mêmes règles que le serveur) ----------
+
+  requestListings(): Promise<string[]> {
+    // Seul joueur de la démo : tout ce qu'il ne détient pas est disponible.
+    return Promise.resolve([]);
+  }
+
+  buyProperty(spotId: string): void {
+    this.acquire(spotId, 'buy');
+  }
+
+  rentProperty(spotId: string): void {
+    this.acquire(spotId, 'rent');
+  }
+
+  private spot(spotId: string): PropertySpot | null {
+    return this.map.properties.find((p) => p.id === spotId) ?? null;
+  }
+
+  private acquire(spotId: string, mode: 'buy' | 'rent'): void {
+    const spot = this.spot(spotId);
+    if (!spot) return this.notice('Ce bien n’existe pas.');
+    const holdings = (this.save.holdings ??= []);
+    if (holdings.some((h) => h.spotId === spotId)) return this.notice('Ce bien est déjà à toi.');
+    const kindOf = (h: DemoHolding) => this.spot(h.spotId)?.kind;
+    if (HOME_KINDS.has(spot.kind) && holdings.filter((h) => HOME_KINDS.has(kindOf(h) ?? '')).length >= REAL_ESTATE.maxHomes) {
+      return this.notice('Tu as déjà un logement : rends-le ou revends-le d’abord.');
+    }
+    if (spot.kind === 'local' && holdings.filter((h) => kindOf(h) === 'local').length >= REAL_ESTATE.maxLocals) {
+      return this.notice(`${REAL_ESTATE.maxLocals} locaux au plus.`);
+    }
+    const cost = mode === 'buy' ? salePriceCents(spot) : rentPerPeriodCents(spot);
+    if (this.save.moneyCents < cost) return this.notice("Pas assez d'argent.");
+    this.save.moneyCents -= cost;
+    const now = Date.now();
+    holdings.push({ spotId, relation: mode === 'buy' ? 'owner' : 'tenant', leaseStart: mode === 'rent' ? now : null, rentPaid: mode === 'rent' ? 1 : 0, business: null });
+    if (HOME_KINDS.has(spot.kind) && canMove(this.save.movedAt ?? null, now)) {
+      this.save.homeSpotId = spotId;
+      this.save.movedAt = now;
+    }
+    this.commit();
+  }
+
+  moveIn(spotId: string): void {
+    const spot = this.spot(spotId);
+    if (!spot || !HOME_KINDS.has(spot.kind)) return this.notice('On ne peut pas habiter dans un local commercial.');
+    if (!(this.save.holdings ?? []).some((h) => h.spotId === spotId)) return this.notice('Ce logement n’est pas à toi.');
+    if (!canMove(this.save.movedAt ?? null, Date.now())) {
+      return this.notice(`Un déménagement toutes les ${REAL_ESTATE.moveCooldownDays / 7} semaines au plus.`);
+    }
+    this.save.homeSpotId = spotId;
+    this.save.movedAt = Date.now();
+    this.commit();
+  }
+
+  releaseProperty(spotId: string): void {
+    const holdings = this.save.holdings ?? [];
+    const h = holdings.find((x) => x.spotId === spotId);
+    const spot = this.spot(spotId);
+    if (!h || !spot) return this.notice('Ce bien n’est pas à toi.');
+    if (h.relation === 'owner') this.save.moneyCents += Math.round(salePriceCents(spot) * REAL_ESTATE.resaleShare);
+    this.save.holdings = holdings.filter((x) => x !== h);
+    if (this.save.homeSpotId === spotId) this.save.homeSpotId = null;
+    if (h.business) this.businessHandlers?.closed(spotId);
+    this.commit();
+  }
+
+  openBusiness(spotId: string, type: BusinessType, name: string): void {
+    const parsed = openBusinessSchema.safeParse({ spotId, type, name });
+    if (!parsed.success) return this.notice(parsed.error.issues[0]?.message ?? 'Nom invalide.');
+    if (containsBannedWord(parsed.data.name)) return this.notice('Ce nom n’est pas autorisé.');
+    const h = (this.save.holdings ?? []).find((x) => x.spotId === spotId);
+    if (!h || this.spot(spotId)?.kind !== 'local') return this.notice('Ce local n’est pas à toi.');
+    if (h.business) return this.notice('Un commerce est déjà ouvert ici.');
+    const setup = BUSINESS_TYPES[type].setupCents;
+    if (this.save.moneyCents < setup) return this.notice("Pas assez d'argent pour les travaux.");
+    this.save.moneyCents -= setup;
+    h.business = { type, name: parsed.data.name, openedAt: Date.now(), paid: 0 };
+    this.businessHandlers?.opened(spotId, { type, name: parsed.data.name });
+    this.commit();
+  }
+
+  subscribeBusinesses(handlers: BusinessHandlers): void {
+    this.businessHandlers = handlers;
+    for (const h of this.save.holdings ?? []) if (h.business) handlers.opened(h.spotId, { type: h.business.type, name: h.business.name });
+  }
+
+  /** Loyers échus et recettes des commerces (rattrapés après une absence). */
+  private economyTick(): void {
+    const now = Date.now();
+    let changed = false;
+    for (const h of [...(this.save.holdings ?? [])]) {
+      const spot = this.spot(h.spotId);
+      if (!spot) continue;
+      if (h.relation === 'tenant' && h.leaseStart !== null) {
+        const due = rentPeriodsDue(h.leaseStart, now);
+        const rent = rentPerPeriodCents(spot);
+        for (; h.rentPaid < due; h.rentPaid++) {
+          if (this.save.moneyCents < rent) {
+            this.notice(`Loyer impayé : tu perds ${spot.name}.`, 'info');
+            this.releaseProperty(h.spotId);
+            break;
+          }
+          this.save.moneyCents -= rent;
+          changed = true;
+        }
+      }
+      if (h.business && (this.save.holdings ?? []).includes(h)) {
+        const due = payoutPeriodsDue(h.business.openedAt, now);
+        if (due > h.business.paid) {
+          this.save.moneyCents += (due - h.business.paid) * businessPayoutCents(h.business.type, spot);
+          h.business.paid = due;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.commit();
   }
 
   rideBus(to: TilePoint): void {

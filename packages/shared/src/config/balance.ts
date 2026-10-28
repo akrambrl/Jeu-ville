@@ -188,6 +188,45 @@ export const PETS = {
   lossPenaltyHours: 72,
 } as const;
 
+/**
+ * Immobilier (agence, 1 par ville). Prix et loyers de base, modulés par la
+ * proximité du centre : × (centralityMin + centralitySpread × centralité).
+ */
+export const REAL_ESTATE = {
+  apartment: { salePerRoomCents: 30_000 * CENTS_PER_EURO, weeklyRentPerRoomCents: 60 * CENTS_PER_EURO, happinessPerRoom: 2 },
+  house: { salePerRoomCents: 45_000 * CENTS_PER_EURO, weeklyRentPerRoomCents: 80 * CENTS_PER_EURO, happinessPerRoom: 3 },
+  local: { salePerRoomCents: 18_000 * CENTS_PER_EURO, weeklyRentPerRoomCents: 150 * CENTS_PER_EURO, happinessPerRoom: 0 },
+  centralityMin: 0.7,
+  centralitySpread: 0.6,
+  /** Les prix sont arrondis à la centaine d'euros. */
+  roundingCents: 100 * CENTS_PER_EURO,
+  /** Le loyer est prélevé par tranches (h réelles) : 1/7 du loyer hebdomadaire par jour. */
+  rentPeriodHours: 24,
+  /** Déménagement : une fois toutes les deux semaines au plus. */
+  moveCooldownDays: 14,
+  /** Biens qu'un joueur peut détenir en même temps (achetés ou loués). */
+  maxHomes: 1,
+  maxLocals: 2,
+  /** L'agence rachète un bien à ce pourcentage de son prix. */
+  resaleShare: 0.8,
+} as const;
+
+/**
+ * Commerces de niveau 1 qu'un joueur peut ouvrir dans un local. Revenu brut par
+ * jour réel (clients bots), modulé comme les prix par la centralité ; une part
+ * part en charges (stock, personnel bot).
+ */
+export const BUSINESS_TYPES = {
+  snack: { label: 'Snack', sign: 'SNACK', icon: '🥙', setupCents: 6_000 * CENTS_PER_EURO, dailyRevenueCents: 1_200 * CENTS_PER_EURO, chargesShare: 0.35 },
+  coffee: { label: 'Coffee shop', sign: 'COFFEE', icon: '☕', setupCents: 7_000 * CENTS_PER_EURO, dailyRevenueCents: 1_300 * CENTS_PER_EURO, chargesShare: 0.4 },
+  barber: { label: 'Barbier', sign: 'BARBIER', icon: '💈', setupCents: 5_000 * CENTS_PER_EURO, dailyRevenueCents: 900 * CENTS_PER_EURO, chargesShare: 0.3 },
+  laundry: { label: 'Laverie', sign: 'LAVERIE', icon: '🧺', setupCents: 8_000 * CENTS_PER_EURO, dailyRevenueCents: 1_000 * CENTS_PER_EURO, chargesShare: 0.25 },
+  clothes: { label: 'Boutique de vêtements', sign: 'MODE', icon: '👕', setupCents: 9_000 * CENTS_PER_EURO, dailyRevenueCents: 1_500 * CENTS_PER_EURO, chargesShare: 0.45 },
+} as const;
+
+/** Versement des recettes d'un commerce (h réelles) : le chiffre tombe au fil de la journée. */
+export const BUSINESS_PAYOUT_HOURS = 1;
+
 export const MOVEMENT = {
   /** Vitesse de marche, en cases par seconde. */
   walkTilesPerSecond: 4,
@@ -210,6 +249,8 @@ export const SERVER = {
   roomTickMs: 100,
   /** Fréquence d'envoi des jauges au joueur connecté (ms). */
   selfSnapshotIntervalMs: 60_000,
+  /** Tick d'économie (loyers, recettes des commerces), rejouable et idempotent (ms). */
+  economyTickMs: 60_000,
 } as const;
 
 /**

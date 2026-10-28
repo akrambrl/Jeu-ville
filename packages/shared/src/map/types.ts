@@ -228,6 +228,25 @@ export interface StreetVendor {
   facing: TilePoint;
 }
 
+/**
+ * Bien proposé par l'agence immobilière : appartement, maison ou local commercial.
+ * Repéré par l'import de carte ; prix et loyers sont calculés par la config (formulas/realEstate).
+ */
+export interface PropertySpot {
+  /** Identifiant stable dans le quartier (« apt-12-8-s-2 », « house-34-51 », « local-80-66 »). */
+  id: string;
+  kind: 'apartment' | 'house' | 'local';
+  name: string;
+  /** Case marchable devant l'entrée (là où l'on rentre chez soi, ou où l'on ouvre boutique). */
+  door: TilePoint;
+  /** Case de façade (enseigne d'un commerce ouvert dans un local). */
+  facade: TilePoint;
+  /** Pièces (logements) ; 1 pour un local. */
+  rooms: number;
+  /** 1 = à côté de la mairie, 0 = au bout du quartier : fait varier les prix et la clientèle. */
+  centrality: number;
+}
+
 /** Texte d'enseigne de façade (SHAPE.schoolSign / facadeSign) quand il diffère du texte par défaut. */
 export interface FacadeSign {
   x: number;
@@ -275,6 +294,8 @@ export interface DistrictMap {
   cycleways: Cycleway[];
   vendors: StreetVendor[];
   signs: FacadeSign[];
+  /** Biens de l'agence immobilière. */
+  properties: PropertySpot[];
   starterBuildings: StarterBuilding[];
   pois: MapPoi[];
   streets: StreetLabel[];

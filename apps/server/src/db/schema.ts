@@ -3,6 +3,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  integer,
   check,
   index,
   pgTable,
@@ -92,6 +93,10 @@ export const characters = pgTable(
     activeVehicle: text('active_vehicle').notNull().default(''),
     /** Dernière fois qu'un refuge a recueilli son animal (chagrin temporaire). */
     petLostAt: timestamp('pet_lost_at', { withTimezone: true }),
+    /** Logement acheté ou loué via l'agence (sinon : appart de départ, `dwellingId`). */
+    homePropertyId: text('home_property_id'),
+    /** Dernier déménagement (une fois toutes les deux semaines au plus). */
+    movedAt: timestamp('moved_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('characters_money_non_negative', sql`${t.moneyCents} >= 0`)],
@@ -144,3 +149,36 @@ export const pets = pgTable('pets', {
   gaugesUpdatedAt: timestamp('gauges_updated_at', { withTimezone: true }).notNull(),
   adoptedAt: timestamp('adopted_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Biens de l'agence immobilière (repérés sur la carte). Propriétaire OU locataire
+ * joueur ; sinon le bien appartient à un bot et il est disponible.
+ */
+export const properties = pgTable(
+  'properties',
+  {
+    /** `<quartier>:<id du bien>` */
+    id: text('id').primaryKey(),
+    districtId: text('district_id')
+      .notNull()
+      .references(() => districts.id),
+    spotId: text('spot_id').notNull(),
+    kind: text('kind').notNull(),
+    ownerCharacterId: uuid('owner_character_id').references(() => characters.id),
+    tenantCharacterId: uuid('tenant_character_id').references(() => characters.id),
+    leaseStartedAt: timestamp('lease_started_at', { withTimezone: true }),
+    /** Périodes de loyer déjà payées (tick idempotent). */
+    rentPeriodsPaid: integer('rent_periods_paid').notNull().default(0),
+    businessType: text('business_type'),
+    businessName: text('business_name'),
+    businessOpenedAt: timestamp('business_opened_at', { withTimezone: true }),
+    /** Périodes de recettes déjà versées (tick idempotent). */
+    payoutPeriodsPaid: integer('payout_periods_paid').notNull().default(0),
+  },
+  (t) => [
+    index('properties_owner_idx').on(t.ownerCharacterId),
+    index('properties_tenant_idx').on(t.tenantCharacterId),
+    // Un bien n'a jamais à la fois un propriétaire joueur et un locataire joueur (pour l'instant).
+    check('properties_owner_xor_tenant', sql`${t.ownerCharacterId} is null or ${t.tenantCharacterId} is null`),
+  ],
+);

@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import {
   DEFAULT_DISTRICT_KEY,
   ECONOMY,
@@ -18,10 +18,13 @@ import {
   type PetSpecies,
   type VehicleKind,
   petHappinessBonus,
+  homeHappiness,
+  type BusinessType,
+  type PropertySpot,
   type FoodPlaceKind,
 } from '@jeu-ville/shared';
 import type { Db, Tx } from '../db/client.js';
-import { characters, dwellings, pets, vehicles } from '../db/schema.js';
+import { characters, dwellings, pets, properties, vehicles } from '../db/schema.js';
 import { STARTER_DWELLING_KIND } from '../db/seed.js';
 import { GameError } from './errors.js';
 import { recordLedgerEntry } from './ledger.js';
@@ -34,6 +37,10 @@ function storedGauges(row: CharacterRow): StoredGauges {
 }
 
 function homeInfo(row: CharacterRow, dwelling: DwellingRow | null): HomeInfo | null {
+  if (row.homePropertyId) {
+    const spot = homeSpot(row);
+    return spot ? { dwellingId: row.homePropertyId, buildingName: spot.name, door: spot.door } : null;
+  }
   if (!dwelling) return null;
   const building = getDistrictMap(dwelling.districtId)?.starterBuildings.find((b) => b.id === dwelling.buildingId);
   if (!building) return null;
@@ -41,6 +48,14 @@ function homeInfo(row: CharacterRow, dwelling: DwellingRow | null): HomeInfo | n
 }
 
 type VehicleRow = typeof vehicles.$inferSelect;
+type PropertyRow = typeof properties.$inferSelect;
+
+/** Logement de l'agence où habite le perso (null : appart de départ). */
+function homeSpot(row: CharacterRow): PropertySpot | null {
+  if (!row.homePropertyId) return null;
+  const spotId = row.homePropertyId.slice(row.districtId.length + 1);
+  return getDistrictMap(row.districtId)?.properties.find((p) => p.id === spotId) ?? null;
+}
 type PetRow = typeof pets.$inferSelect;
 
 export function storedPet(row: PetRow | null): StoredPet | null {
@@ -58,13 +73,13 @@ export function storedPet(row: PetRow | null): StoredPet | null {
 export function toCharacterSelf(
   row: CharacterRow,
   dwelling: DwellingRow | null,
-  owned: { vehicles: VehicleRow[]; pet: PetRow | null },
+  owned: { vehicles: VehicleRow[]; pet: PetRow | null; properties: PropertyRow[] },
   nowMs: number,
 ): CharacterSelf {
   const age = ageAt(row.createdAt.getTime(), nowMs);
   const pet = storedPet(owned.pet);
-  const happinessBonus =
-    (dwelling ? HOUSING.starterApartment.happinessBonus : 0) + petHappinessBonus(pet, row.petLostAt?.getTime() ?? null, nowMs);
+  const housing = row.homePropertyId ? homeHappiness(homeSpot(row)) : dwelling ? HOUSING.starterApartment.happinessBonus : 0;
+  const happinessBonus = housing + petHappinessBonus(pet, row.petLostAt?.getTime() ?? null, nowMs);
   return {
     id: row.id,
     name: row.name,
@@ -85,18 +100,25 @@ export function toCharacterSelf(
     activeVehicle: row.activeVehicle as VehicleKind | '',
     pet,
     happinessBonus,
+    properties: owned.properties.map((p) => ({
+      spotId: p.spotId,
+      relation: p.ownerCharacterId === row.id ? ('owner' as const) : ('tenant' as const),
+      business: p.businessType ? { type: p.businessType as BusinessType, name: p.businessName ?? '' } : null,
+    })),
+    movedAt: row.movedAt?.getTime() ?? null,
     computedAt: nowMs,
   };
 }
 
 /** Vue privée complète (logement, véhicules, animal) d'une ligne de personnage. */
 export async function selfOf(db: Db | Tx, row: CharacterRow, nowMs: number): Promise<CharacterSelf> {
-  const [dwelling, owned, [pet]] = await Promise.all([
+  const [dwelling, owned, [pet], held] = await Promise.all([
     loadDwelling(db, row.dwellingId),
     db.select().from(vehicles).where(eq(vehicles.characterId, row.id)),
     db.select().from(pets).where(eq(pets.characterId, row.id)),
+    db.select().from(properties).where(or(eq(properties.ownerCharacterId, row.id), eq(properties.tenantCharacterId, row.id))),
   ]);
-  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null }, nowMs);
+  return toCharacterSelf(row, dwelling, { vehicles: owned, pet: pet ?? null, properties: held }, nowMs);
 }
 
 async function loadDwelling(db: Db | Tx, id: string | null): Promise<DwellingRow | null> {
@@ -183,7 +205,7 @@ export async function createCharacter(
       idempotencyKey: `starting_capital:${row.id}`,
     });
 
-    return toCharacterSelf({ ...row, moneyCents: balance }, { ...dwelling, tenantCharacterId: row.id }, { vehicles: [], pet: null }, now.getTime());
+    return toCharacterSelf({ ...row, moneyCents: balance }, { ...dwelling, tenantCharacterId: row.id }, { vehicles: [], pet: null, properties: [] }, now.getTime());
   });
 }
 

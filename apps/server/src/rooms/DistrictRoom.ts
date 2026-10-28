@@ -11,6 +11,10 @@ import {
   TileOccupancy,
   buyFoodSchema,
   buyItemSchema,
+  openBusinessSchema,
+  propertyDealSchema,
+  propertySchema,
+  type Listings,
   setVehicleSchema,
   shopItems,
   shopPlaces,
@@ -55,6 +59,7 @@ import {
   payFee,
 } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
+import { acquireProperty, moveIn, openBusiness, openBusinesses, releaseProperty, takenSpots } from '../domain/realEstate.js';
 import {
   adoptPet,
   buyVehicle,
@@ -66,7 +71,7 @@ import {
   setActiveVehicle,
 } from '../domain/possessions.js';
 
-import { DistrictState, PlayerState } from './state.js';
+import { BusinessState, DistrictState, PlayerState } from './state.js';
 
 interface AuthData {
   characterId: string;
@@ -93,6 +98,7 @@ export class DistrictRoom extends Room<DistrictState> {
   private shops: ShopPlace[] = [];
   /** Passants (bots) du quartier, simulés ici et vus par tous. */
   private readonly passersby: Passerby[] = [];
+  private districtKey = '';
   /** Une case = une personne (joueurs, et bientôt bots ; stands des marchands). */
   private readonly occupancy = new TileOccupancy();
   /** Sessions par sessionId Colyseus. */
@@ -102,6 +108,8 @@ export class DistrictRoom extends Room<DistrictState> {
     const map = getDistrictMap(options.districtId);
     if (!map) throw new Error(`Quartier inconnu : ${options.districtId}`);
     this.grid = new MapGrid(map);
+    this.districtKey = options.districtId;
+    void this.refreshBusinesses();
     this.food = foodPlaces(map);
     this.shops = shopPlaces(map);
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
@@ -122,6 +130,33 @@ export class DistrictRoom extends Room<DistrictState> {
     this.onMessage(ClientMessage.setVehicle, (client, raw) => this.handleSetVehicle(client, raw));
     this.onMessage(ClientMessage.chargeScooter, (client) => this.handleChargeScooter(client));
     this.onMessage(ClientMessage.feedPet, (client) => this.handleFeedPet(client));
+    this.onMessage(ClientMessage.listings, (client) => void this.handleListings(client));
+    this.onMessage(ClientMessage.buyProperty, (client, raw) => this.handleDeal(client, raw, 'buy'));
+    this.onMessage(ClientMessage.rentProperty, (client, raw) => this.handleDeal(client, raw, 'rent'));
+    this.onMessage(ClientMessage.moveIn, (client, raw) =>
+      this.act(client, 'moveIn', async (s) => {
+        const parsed = propertySchema.safeParse(raw);
+        if (parsed.success) return moveIn(db, s.characterId, this.districtKey, parsed.data.spotId);
+      }),
+    );
+    this.onMessage(ClientMessage.releaseProperty, (client, raw) =>
+      this.act(client, 'releaseProperty', async (s) => {
+        const parsed = propertySchema.safeParse(raw);
+        if (!parsed.success) return;
+        const self = await releaseProperty(db, s.characterId, this.districtKey, parsed.data.spotId);
+        await this.refreshBusinesses();
+        return self;
+      }),
+    );
+    this.onMessage(ClientMessage.openBusiness, (client, raw) =>
+      this.act(client, 'openBusiness', async (s) => {
+        const parsed = openBusinessSchema.safeParse(raw);
+        if (!parsed.success) throw new GameError(parsed.error.issues[0]?.message ?? 'Nom invalide.');
+        const self = await openBusiness(db, s.characterId, this.districtKey, parsed.data.spotId, parsed.data.type, parsed.data.name);
+        await this.refreshBusinesses();
+        return self;
+      }),
+    );
 
     this.setSimulationInterval((dt) => this.tick(dt), SERVER.roomTickMs);
     this.clock.setInterval(() => void this.pushSelfToAll(), SERVER.selfSnapshotIntervalMs);
@@ -415,7 +450,38 @@ export class DistrictRoom extends Room<DistrictState> {
     }, TRAVEL.busArriveMs + TRAVEL.busStopMs);
   }
 
+  /** L'agence est consultée de partout : on peut acheter/louer sans être devant (on visite ensuite). */
+  private async handleListings(client: Client): Promise<void> {
+    client.send(ServerMessage.listings, { taken: await takenSpots(db, this.districtKey) } satisfies Listings);
+  }
+
+  private handleDeal(client: Client, raw: unknown, mode: 'buy' | 'rent'): Promise<void> {
+    return this.act(client, mode === 'buy' ? 'buyProperty' : 'rentProperty', async (s) => {
+      const parsed = propertyDealSchema.safeParse(raw);
+      if (!parsed.success) return;
+      const self = await acquireProperty(db, s.characterId, this.districtKey, parsed.data.spotId, mode, parsed.data.requestId);
+      await this.handleListings(client);
+      return self;
+    });
+  }
+
+  /** Enseignes des commerces de joueurs (visibles de tous). */
+  private async refreshBusinesses(): Promise<void> {
+    const open = await openBusinesses(db, this.districtKey);
+    const ids = new Set(open.map((b) => b.spotId));
+    for (const id of [...this.state.businesses.keys()]) if (!ids.has(id)) this.state.businesses.delete(id);
+    for (const b of open) {
+      const current = this.state.businesses.get(b.spotId);
+      if (current?.type === b.type && current.name === b.name) continue;
+      const state = new BusinessState();
+      state.type = b.type;
+      state.name = b.name;
+      this.state.businesses.set(b.spotId, state);
+    }
+  }
+
   private async pushSelfToAll(): Promise<void> {
+    await this.refreshBusinesses();
     for (const s of this.sessions.values()) {
       const petNotice = s.hasPet ? await enforcePetCare(db, s.characterId) : null;
       if (petNotice) this.notify(s.client, 'info', petNotice);

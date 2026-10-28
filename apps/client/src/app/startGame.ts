@@ -2,6 +2,7 @@ import { MOVEMENT, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, sh
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el } from '../ui/dom.js';
+import { AgencySheet } from '../ui/agency.js';
 import { Hud, type Destination } from '../ui/hud.js';
 import { showTutorialOnce } from '../ui/tutorial.js';
 
@@ -25,6 +26,9 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   let homeDoor = character.home?.door ?? null;
   const food = foodPlaces(map);
   const shops = shopPlaces(map);
+  const agencyDoor = map.pois.find((p) => p.kind === 'realestate')?.entrance ?? null;
+  let position = { x: 0, y: 0 };
+  let current = character;
   const container = document.getElementById('game')!;
   const view = new CityView(container, {
     map,
@@ -36,6 +40,8 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       hud.setNearFood(foodPlaceInReach(food, x, y));
       hud.setNearShop(shopInReach(shops, x, y));
       hud.setPosition(x, y);
+      position = { x, y };
+      hud.setNearAgency(!!agencyDoor && Math.hypot(x - agencyDoor.x, y - agencyDoor.y) <= MOVEMENT.foodInteractionRange);
     },
   });
 
@@ -51,14 +57,29 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       onSetVehicle: (vehicle) => link.setVehicle(vehicle),
       onChargeScooter: () => link.chargeScooter(),
       onFeedPet: () => link.feedPet(),
+      onOpenAgency: () => void agency.open(current, position),
       onRecenter: () => view.recenter(),
     },
     destinationsOf(map),
   );
   hud.setSelf(character);
 
+  const agency = new AgencySheet(map, {
+    listings: () => link.requestListings(),
+    buy: (id) => link.buyProperty(id),
+    rent: (id) => link.rentProperty(id),
+    moveIn: (id) => link.moveIn(id),
+    release: (id) => link.releaseProperty(id),
+    openBusiness: (id, type, name) => link.openBusiness(id, type, name),
+    visit: (point) => view.requestMove(point),
+  });
+  ui.append(agency.root);
+
   link.onSelf((self) => {
+    current = self;
+    agency.update(self);
     homeDoor = self.home?.door ?? null;
+    view.setHomeDoor(homeDoor);
     hud.setSelf(self);
   });
   link.onNotice((n) => hud.notify(n.text, n.level));

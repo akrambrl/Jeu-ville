@@ -6,9 +6,11 @@
 import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { DISTRICT_MAPS, HOUSING, districtKey, type DistrictMap } from '@jeu-ville/shared';
 import type { Db } from './client.js';
-import { characters, cities, districts, dwellings } from './schema.js';
+import { characters, cities, districts, dwellings, properties } from './schema.js';
 
 export const STARTER_DWELLING_KIND = 'starter_apartment';
+/** Lignes insérées par requête (limite de paramètres de Postgres). */
+const SEED_BATCH = 500;
 
 export async function seedReferenceData(db: Db): Promise<void> {
   for (const map of Object.values(DISTRICT_MAPS)) {
@@ -28,6 +30,11 @@ export async function seedReferenceData(db: Db): Promise<void> {
       }));
     });
     if (rows.length > 0) await db.insert(dwellings).values(rows).onConflictDoNothing();
+    // Biens de l'agence immobilière (appartenant aux bots tant qu'aucun joueur ne les prend).
+    const spots = map.properties.map((p) => ({ id: `${key}:${p.id}`, districtId: key, spotId: p.id, kind: p.kind }));
+    for (let k = 0; k < spots.length; k += SEED_BATCH) {
+      await db.insert(properties).values(spots.slice(k, k + SEED_BATCH)).onConflictDoNothing();
+    }
     await retireRemovedBuildings(db, key, map);
   }
 }

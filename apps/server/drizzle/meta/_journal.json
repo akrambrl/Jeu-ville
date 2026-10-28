@@ -15,6 +15,13 @@
       "when": 1793180747774,
       "tag": "0001_vehicles_pets",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793182214624,
+      "tag": "0002_real_estate",
+      "breakpoints": true
     }
   ]
 }

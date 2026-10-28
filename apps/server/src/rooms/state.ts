@@ -20,6 +20,14 @@ export class PlayerState extends Schema {
   @type('string') vehicle = '';
 }
 
+/** Commerce ouvert par un joueur dans un local : enseigne visible de tous. */
+export class BusinessState extends Schema {
+  @type('string') type = '';
+  @type('string') name = '';
+}
+
 export class DistrictState extends Schema {
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
+  /** Commerces de joueurs, par identifiant de local (PropertySpot.id). */
+  @type({ map: BusinessState }) businesses = new MapSchema<BusinessState>();
 }

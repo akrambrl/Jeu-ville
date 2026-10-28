@@ -5,6 +5,11 @@ import {
   type Arrival,
   type BuyFoodMessage,
   type BuyItemMessage,
+  type BusinessType,
+  type Listings,
+  type OpenBusinessMessage,
+  type PropertyDealMessage,
+  type PropertyMessage,
   type SetVehicleMessage,
   type VehicleKind,
   type RideBusMessage,
@@ -15,7 +20,7 @@ import {
   type Notice,
   type TilePoint,
 } from '@jeu-ville/shared';
-import type { DistrictLink, PlayerHandlers, PlayerView } from './link.js';
+import type { BusinessHandlers, BusinessView, DistrictLink, PlayerHandlers, PlayerView } from './link.js';
 
 /** Quartier synchronisé avec le serveur, qui fait autorité. */
 export class ColyseusLink implements DistrictLink {
@@ -51,6 +56,46 @@ export class ColyseusLink implements DistrictLink {
 
   feedPet(): void {
     this.room.send(ClientMessage.feedPet, {});
+  }
+
+  requestListings(): Promise<string[]> {
+    return new Promise((resolve) => {
+      const off = this.room.onMessage(ServerMessage.listings, (l: Listings) => {
+        off();
+        resolve(l.taken);
+      });
+      this.room.send(ClientMessage.listings, {});
+    });
+  }
+
+  buyProperty(spotId: string): void {
+    this.room.send(ClientMessage.buyProperty, { spotId, requestId: crypto.randomUUID() } satisfies PropertyDealMessage);
+  }
+
+  rentProperty(spotId: string): void {
+    this.room.send(ClientMessage.rentProperty, { spotId, requestId: crypto.randomUUID() } satisfies PropertyDealMessage);
+  }
+
+  moveIn(spotId: string): void {
+    this.room.send(ClientMessage.moveIn, { spotId } satisfies PropertyMessage);
+  }
+
+  releaseProperty(spotId: string): void {
+    this.room.send(ClientMessage.releaseProperty, { spotId } satisfies PropertyMessage);
+  }
+
+  openBusiness(spotId: string, type: BusinessType, name: string): void {
+    this.room.send(ClientMessage.openBusiness, { spotId, type, name } satisfies OpenBusinessMessage);
+  }
+
+  subscribeBusinesses(h: BusinessHandlers): void {
+    const $ = getStateCallbacks(this.room);
+    const state = this.room.state as { businesses: Map<string, BusinessView> };
+    $(state).businesses.onAdd((b: BusinessView, id: string) => {
+      h.opened(id, b);
+      $(b).onChange(() => h.opened(id, b));
+    });
+    $(state).businesses.onRemove((_b: BusinessView, id: string) => h.closed(id));
   }
 
   rideBus(to: TilePoint): void {
