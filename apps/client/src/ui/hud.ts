@@ -2,6 +2,7 @@ import {
   HOME_ACTIONS,
   foodMenu,
   HOME_ACTION_IDS,
+  TRAVEL,
   computeHappiness,
   decayGauges,
   isCritical,
@@ -28,12 +29,16 @@ export interface Destination {
   name: string;
   /** Type de lieu affiché sous le nom (« Mairie », « Square »…). */
   kind: string;
+  /** Catégorie (titre de section dans « Aller à… »). */
+  category: string;
   point: TilePoint;
 }
 
 export interface HudCallbacks {
   onGoHome: () => void;
   onGoTo: (point: TilePoint) => void;
+  /** Y aller en bus (payant), téléporté avec une arrivée en bus. */
+  onBusTo: (point: TilePoint) => void;
   onHomeAction: (action: HomeActionId) => void;
   onBuyFood: (placeId: string, itemId: string) => void;
   onRecenter: () => void;
@@ -51,6 +56,8 @@ export class Hud {
   private readonly homePanel: HTMLElement;
   private readonly foodPanel: HTMLElement;
   private foodPlaceId: string | null = null;
+  private position: TilePoint = { x: 0, y: 0 };
+  private readonly busButtons: { button: HTMLButtonElement; point: () => TilePoint | null }[] = [];
   private readonly goToButton: HTMLButtonElement;
   private readonly destinationsPanel: HTMLElement;
   private readonly timer: number;
@@ -136,25 +143,69 @@ export class Hud {
     }
   }
 
+  /** Position du perso (pour griser le bus vers les lieux tout proches). */
+  setPosition(x: number, y: number): void {
+    this.position = { x, y };
+  }
+
   private buildDestinations(): HTMLElement {
     const list = el('div', { class: 'destination-list' });
-    const item = (icon: string, name: string, kind: string, go: () => void) => {
-      const b = el('button', { class: 'destination' }, [
+    const search = el('input', { class: 'destination-search', type: 'search', placeholder: '🔎 Rechercher un lieu…', 'aria-label': 'Rechercher un lieu' });
+    const rows: { row: HTMLElement; text: string; section: HTMLDetailsElement | null }[] = [];
+
+    const row = (icon: string, name: string, kind: string, go: () => void, point: () => TilePoint | null, section: HTMLDetailsElement | null) => {
+      const walk = el('button', { class: 'destination', title: 'Y aller à pied (gratuit)' }, [
         el('span', { class: 'destination-icon', text: icon }),
-        el('span', { class: 'destination-text' }, [el('strong', { text: name }), el('small', { text: kind })]),
+        el('span', { class: 'destination-text' }, [el('strong', { text: name }), el('small', { text: `${kind} · 🚶 à pied` })]),
       ]);
-      b.addEventListener('click', () => {
+      walk.addEventListener('click', () => {
         go();
         this.toggleDestinations(false);
       });
-      list.append(b);
+      const bus = el('button', { class: 'destination-bus', title: `Y aller en bus (${formatMoney(TRAVEL.busFareCents)})`, text: `🚌 ${formatMoney(TRAVEL.busFareCents)}` });
+      bus.addEventListener('click', () => {
+        const p = point();
+        if (!p) return;
+        this.callbacks.onBusTo(p);
+        this.toggleDestinations(false);
+      });
+      this.busButtons.push({ button: bus, point });
+      const r = el('div', { class: 'destination-row' }, [walk, bus]);
+      rows.push({ row: r, text: `${name} ${kind}`.toLowerCase(), section });
+      return r;
     };
-    item('🏠', 'Chez moi', 'Mon appartement', this.callbacks.onGoHome);
-    for (const d of this.destinations) item(d.icon, d.name, d.kind, () => this.callbacks.onGoTo(d.point));
+
+    list.append(row('🏠', 'Chez moi', 'Mon logement', this.callbacks.onGoHome, () => this.self?.home?.door ?? null, null));
+    const sections = new Map<string, HTMLDetailsElement>();
+    for (const d of this.destinations) {
+      let section = sections.get(d.category);
+      if (!section) {
+        section = el('details', { class: 'destination-section' }) as HTMLDetailsElement;
+        section.append(el('summary', { text: d.category }));
+        sections.set(d.category, section);
+        list.append(section);
+      }
+      section.append(row(d.icon, d.name, d.kind, () => this.callbacks.onGoTo(d.point), () => d.point, section));
+    }
+    for (const [title, section] of sections) {
+      const count = section.querySelectorAll('.destination-row').length;
+      section.querySelector('summary')!.textContent = `${title} (${count})`;
+    }
+
+    // Recherche : on n'affiche que les lieux qui correspondent, sections ouvertes.
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      for (const r of rows) r.row.hidden = q !== '' && !r.text.includes(q);
+      for (const section of sections.values()) {
+        const visible = [...section.querySelectorAll<HTMLElement>('.destination-row')].some((r) => !r.hidden);
+        section.hidden = !visible;
+        section.open = q !== '' && visible;
+      }
+    });
 
     const close = el('button', { class: 'sheet-close', text: 'Fermer' });
     close.addEventListener('click', () => this.toggleDestinations(false));
-    const sheet = el('div', { class: 'sheet' }, [el('h2', { text: 'Aller à…' }), list, close]);
+    const sheet = el('div', { class: 'sheet' }, [el('h2', { text: 'Aller à…' }), search, list, close]);
     const backdrop = el('div', { class: 'sheet-backdrop' }, [sheet]);
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) this.toggleDestinations(false);
@@ -165,6 +216,12 @@ export class Hud {
 
   private toggleDestinations(open = this.destinationsPanel.hidden): void {
     this.destinationsPanel.hidden = !open;
+    if (!open) return;
+    // Bus inutile pour les lieux tout proches.
+    for (const b of this.busButtons) {
+      const p = b.point();
+      b.button.disabled = !p || Math.hypot(p.x - this.position.x, p.y - this.position.y) < TRAVEL.minBusDistance;
+    }
   }
 
   notify(text: string, level: 'info' | 'error' = 'info'): void {

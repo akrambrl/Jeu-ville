@@ -88,8 +88,8 @@ export async function buildProps(grid: MapGrid): Promise<THREE.Group> {
   group.add(instanced(pole, dark, lamps), instanced(cap, dark, lamps), instanced(bulb, light, lamps));
   // La nuit : flaque de lumière chaude au pied de chaque lampadaire.
   const halo = new THREE.MeshBasicMaterial({ map: haloTexture(), color: 0xffc56b, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  showAtNight(halo, 0.8);
-  const haloMesh = instanced(new THREE.PlaneGeometry(2.6, 2.6).rotateX(-Math.PI / 2).translate(0.15, 0.03, 0.15), halo, lamps);
+  showAtNight(halo, 1);
+  const haloMesh = instanced(new THREE.PlaneGeometry(4.2, 4.2).rotateX(-Math.PI / 2).translate(0.15, 0.03, 0.15), halo, lamps);
   haloMesh.castShadow = false;
   haloMesh.receiveShadow = false;
   haloMesh.renderOrder = 1;
@@ -268,8 +268,8 @@ function goal(x: number, y: number, top: number, side: 1 | -1): THREE.Group {
 function haloTexture(): THREE.CanvasTexture {
   return canvasTexture(64, 64, (c) => {
     const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, 'rgba(255,255,255,0.9)');
-    g.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(255,255,255,0.45)');
     g.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = g;
     c.fillRect(0, 0, 64, 64);

@@ -203,6 +203,17 @@ export async function buyFood(db: Db, characterId: string, kind: FoodPlaceKind, 
   });
 }
 
+/** Paiement simple (ticket de bus…) : verrouille le perso, vérifie le solde, trace dans le journal. */
+export async function payFee(db: Db, characterId: string, amountCents: number, reason: string): Promise<CharacterSelf> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(characters).where(eq(characters.id, characterId)).for('update');
+    if (!row) throw new GameError('Personnage introuvable.', 404);
+    if (row.moneyCents < amountCents) throw new GameError("Pas assez d'argent.");
+    await recordLedgerEntry(tx, { characterId, amountCents: -amountCents, reason });
+    return toCharacterSelf((await tx.select().from(characters).where(eq(characters.id, characterId)))[0]!, await loadDwelling(tx, row.dwellingId), Date.now());
+  });
+}
+
 export async function getCharacterPosition(db: Db, characterId: string): Promise<{ x: number; y: number } | null> {
   const [row] = await db
     .select({ x: characters.posX, y: characters.posY })

@@ -2,7 +2,9 @@ import { getStateCallbacks, type Room } from 'colyseus.js';
 import {
   ClientMessage,
   ServerMessage,
+  type Arrival,
   type BuyFoodMessage,
+  type RideBusMessage,
   type CharacterSelf,
   type HomeActionId,
   type HomeActionMessage,
@@ -30,6 +32,14 @@ export class ColyseusLink implements DistrictLink {
 
   buyFood(placeId: string, itemId: string): void {
     this.room.send(ClientMessage.buyFood, { placeId, itemId } satisfies BuyFoodMessage);
+  }
+
+  rideBus(to: TilePoint): void {
+    this.room.send(ClientMessage.rideBus, { x: to.x, y: to.y } satisfies RideBusMessage);
+  }
+
+  onArrival(cb: (arrival: Arrival) => void): void {
+    this.room.onMessage(ServerMessage.arrival, cb);
   }
 
   subscribePlayers(h: PlayerHandlers): void {

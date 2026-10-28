@@ -11,3 +11,5 @@ export * from './protocol/index.js';
 export * from './map/registry.js';
 export * from './map/movement.js';
 export * from './map/occupancy.js';
+export * from './map/travel.js';
+export * from './map/passersby.js';

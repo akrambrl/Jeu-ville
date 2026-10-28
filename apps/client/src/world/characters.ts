@@ -83,6 +83,14 @@ export class Character3D {
     }
   }
 
+  /** Pose le perso directement en (x, y), sans transition. */
+  teleport(x: number, y: number): void {
+    this.x = this.targetX = x;
+    this.y = this.targetY = y;
+    this.moving = false;
+    this.place();
+  }
+
   get isMoving(): boolean {
     return this.moving;
   }

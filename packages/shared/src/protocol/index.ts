@@ -94,6 +94,7 @@ export const ClientMessage = {
   move: 'move',
   homeAction: 'homeAction',
   buyFood: 'buyFood',
+  rideBus: 'rideBus',
 } as const;
 
 export const moveSchema = z.object({
@@ -116,12 +117,31 @@ export const buyFoodSchema = z.object({
 });
 export type BuyFoodMessage = z.infer<typeof buyFoodSchema>;
 
+/** Prendre le bus jusqu'à l'entrée d'un lieu du quartier (ou chez soi). */
+export const rideBusSchema = z.object({
+  x: z.number().int(),
+  y: z.number().int(),
+});
+export type RideBusMessage = z.infer<typeof rideBusSchema>;
+
 export const ServerMessage = {
   /** Vue privée du personnage (CharacterSelf). */
   self: 'self',
   /** Message d'information/erreur à afficher (Notice). */
   notice: 'notice',
+  /** Un joueur arrive quelque part en bus (Arrival), pour la cinématique. */
+  arrival: 'arrival',
 } as const;
+
+export interface Arrival {
+  /** Identifiant du joueur dans le quartier (sessionId). */
+  playerId: string;
+  via: 'bus';
+  /** Case où il se retrouve. */
+  at: TilePoint;
+  /** Chaussée où le bus s'arrête et d'où il descend. */
+  curb: TilePoint;
+}
 
 export interface Notice {
   level: 'info' | 'error';

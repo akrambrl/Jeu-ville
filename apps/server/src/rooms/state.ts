@@ -14,6 +14,8 @@ export class PlayerState extends Schema {
   @type('uint8') skinTone = 0;
   @type('uint8') hairColor = 0;
   @type('uint8') bodyType = 0;
+  /** Animal qui suit le perso (« dog:2 »), ou ''. */
+  @type('string') pet = '';
 }
 
 export class DistrictState extends Schema {

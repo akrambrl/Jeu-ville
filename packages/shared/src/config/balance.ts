@@ -122,6 +122,34 @@ export const FOOD_MENUS = {
   ],
 } as const satisfies Record<string, readonly FoodItem[]>;
 
+/** Déplacements payants dans la ville (entre villes, la téléportation est gratuite). */
+export const TRAVEL = {
+  /** Ticket de bus pour aller directement à un lieu du quartier. */
+  busFareCents: 2 * CENTS_PER_EURO,
+  /** En dessous de cette distance (cases), on y va à pied. */
+  minBusDistance: 15,
+  /** Rayon (cases) où chercher la chaussée où le bus dépose le joueur. */
+  curbSearchRadius: 14,
+  /** Cinématique : le bus arrive, s'arrête (on descend), puis repart (ms). */
+  busArriveMs: 2_400,
+  busStopMs: 1_400,
+  busLeaveMs: 2_000,
+} as const;
+
+/** Passants (bots) qui se promènent dans le quartier, serveur comme démo solo. */
+export const PASSERBY = {
+  countPerDistrict: 30,
+  /** Ils marchent un peu moins vite que les joueurs. */
+  speedFactor: 0.6,
+  maxPathLength: 80,
+  /** Rayon (cases) dans lequel un passant choisit sa prochaine destination. */
+  targetRadius: 25,
+  /** Part des passants qui promènent leur chien. */
+  dogShare: 0.3,
+  /** Pause (ms) avant de repartir, après être arrivé. */
+  restMs: [1_000, 6_000],
+} as const;
+
 export const MOVEMENT = {
   /** Vitesse de marche, en cases par seconde. */
   walkTilesPerSecond: 4,

@@ -33,6 +33,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       const near = !!homeDoor && Math.hypot(x - homeDoor.x, y - homeDoor.y) <= MOVEMENT.homeInteractionRange;
       hud.setNearHome(near);
       hud.setNearFood(foodPlaceInReach(food, x, y));
+      hud.setPosition(x, y);
     },
   });
 
@@ -41,6 +42,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
     {
       onGoHome: () => homeDoor && view.requestMove(homeDoor),
       onGoTo: (point) => view.requestMove(point),
+      onBusTo: (point) => link.rideBus(point),
       onHomeAction: (action) => link.homeAction(action),
       onBuyFood: (placeId, itemId) => link.buyFood(placeId, itemId),
       onRecenter: () => view.recenter(),
@@ -54,6 +56,7 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
     hud.setSelf(self);
   });
   link.onNotice((n) => hud.notify(n.text, n.level));
+  link.onArrival((a) => view.playArrival(a));
   link.onDisconnected(() => showFatal(ui, 'Déconnecté du serveur.', () => location.reload()));
 
   const loading = el('div', { class: 'loading', text: `Chargement de ${map.cityName}…` });
@@ -66,27 +69,45 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
   showTutorialOnce(ui, map.cityName);
 }
 
-const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; order: number }> = {
-  townhall: { icon: '🏛️', kind: 'Mairie', order: 0 },
-  station: { icon: '🚉', kind: 'Gare RER E', order: 1 },
-  tram: { icon: '🚋', kind: 'Arrêt de tram', order: 2 },
-  police: { icon: '👮', kind: 'Police', order: 3 },
-  pharmacy: { icon: '💊', kind: 'Pharmacie', order: 4 },
-  supermarket: { icon: '🛒', kind: 'Grande surface', order: 5 },
-  bakery: { icon: '🥖', kind: 'Boulangerie', order: 6 },
-  fastfood: { icon: '🍔', kind: 'Restauration rapide', order: 7 },
-  market: { icon: '🧺', kind: 'Marché', order: 8 },
-  park: { icon: '🌳', kind: 'Square', order: 9 },
-  worship: { icon: '⛪', kind: 'Lieu de culte', order: 10 },
-  school: { icon: '🏫', kind: 'École', order: 11 },
-  square: { icon: '⛲', kind: 'Place', order: 12 },
-  gym: { icon: '🏟️', kind: 'Sport', order: 13 },
-  quarter: { icon: '🏘️', kind: 'Quartier', order: 14 },
+/** Catégories de « Aller à… », dans l'ordre d'affichage. */
+const CATEGORIES = {
+  transport: '🚉 Transports',
+  food: '🍽️ Manger et courses',
+  services: '🏛️ Services publics et santé',
+  schools: '🏫 Écoles et sport',
+  outdoor: '🌳 Parcs et places',
+  worship: '⛪ Lieux de culte',
+  quarters: '🏘️ Quartiers',
+} as const;
+
+const POI_INFO: Record<MapPoi['kind'], { icon: string; kind: string; category: keyof typeof CATEGORIES }> = {
+  station: { icon: '🚉', kind: 'Gare RER E', category: 'transport' },
+  tram: { icon: '🚋', kind: 'Arrêt de tram', category: 'transport' },
+  bakery: { icon: '🥖', kind: 'Boulangerie', category: 'food' },
+  fastfood: { icon: '🍔', kind: 'Restauration rapide', category: 'food' },
+  supermarket: { icon: '🛒', kind: 'Grande surface', category: 'food' },
+  market: { icon: '🧺', kind: 'Marché', category: 'food' },
+  townhall: { icon: '🏛️', kind: 'Mairie', category: 'services' },
+  police: { icon: '👮', kind: 'Police', category: 'services' },
+  pharmacy: { icon: '💊', kind: 'Pharmacie', category: 'services' },
+  school: { icon: '🏫', kind: 'École', category: 'schools' },
+  gym: { icon: '🏟️', kind: 'Sport', category: 'schools' },
+  park: { icon: '🌳', kind: 'Square', category: 'outdoor' },
+  square: { icon: '⛲', kind: 'Place', category: 'outdoor' },
+  worship: { icon: '⛪', kind: 'Lieu de culte', category: 'worship' },
+  quarter: { icon: '🏘️', kind: 'Quartier', category: 'quarters' },
 };
 
 /** Lieux du quartier proposés dans « Aller à… ». */
 function destinationsOf(map: DistrictMap): Destination[] {
+  const order = Object.keys(CATEGORIES);
   return [...map.pois]
-    .sort((a, b) => POI_INFO[a.kind].order - POI_INFO[b.kind].order || a.name.localeCompare(b.name, 'fr'))
-    .map((p) => ({ icon: POI_INFO[p.kind].icon, name: p.name, kind: POI_INFO[p.kind].kind, point: p.entrance }));
+    .sort(
+      (a, b) =>
+        order.indexOf(POI_INFO[a.kind].category) - order.indexOf(POI_INFO[b.kind].category) || a.name.localeCompare(b.name, 'fr'),
+    )
+    .map((p) => {
+      const info = POI_INFO[p.kind];
+      return { icon: info.icon, name: p.name, kind: info.kind, category: CATEGORIES[info.category], point: p.entrance };
+    });
 }

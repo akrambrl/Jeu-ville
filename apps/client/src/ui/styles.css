@@ -450,6 +450,58 @@ button.danger {
   touch-action: pan-y;
 }
 
+input.destination-search {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d5dde0;
+  font: inherit;
+  margin-bottom: 8px;
+}
+
+details.destination-section {
+  background: #f6f8f9;
+  border-radius: 12px;
+  padding: 2px 6px;
+}
+
+details.destination-section > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 6px;
+  list-style-position: inside;
+}
+
+details.destination-section[open] > summary {
+  padding-bottom: 6px;
+}
+
+.destination-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin-bottom: 6px;
+}
+
+.destination-row > button.destination {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+button.destination-bus {
+  flex: 0 0 auto;
+  background: #2aa58a;
+  color: #fff;
+  padding: 6px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+button.destination-bus:disabled {
+  background: #c9d3d6;
+  color: #6c7a80;
+}
+
 button.destination {
   display: flex;
   align-items: center;

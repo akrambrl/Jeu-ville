@@ -16,7 +16,9 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 export function formatMoney(cents: number): string {
-  return `${(cents / 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €`;
+  // Les centimes ne s'affichent que s'il y en a (1,50 € mais 20 000 €).
+  const digits = cents % 100 === 0 ? 0 : 2;
+  return `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} €`;
 }
 
 let toastTimer: number | undefined;

@@ -98,7 +98,7 @@ function mat(key: string, make: () => THREE.Texture | THREE.Color, lit?: () => T
       if (lit) {
         std.emissive = new THREE.Color(0xffffff);
         std.emissiveMap = lit();
-        glowAtNight(std, 1.1);
+        glowAtNight(std, 1.4);
       }
       m = std;
       materials.set(key, m);

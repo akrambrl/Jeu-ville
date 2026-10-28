@@ -302,7 +302,7 @@ export class Ambient {
 }
 
 /** Bus articulé blanc à bandeau vert, numéro de ligne sur les flancs et à l'avant. */
-function busMesh(ref: string): THREE.Group {
+export function busMesh(ref: string): THREE.Group {
   const g = carMesh(BUS_LEN, 0.5, 0.55, 0xf2f4f3, 0x2aa58a, false);
   const tex = signTexture(ref, '#1d2a33', '#ffd84d');
   const plate = new THREE.MeshBasicMaterial({ map: tex });

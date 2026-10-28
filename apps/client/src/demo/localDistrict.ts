@@ -11,14 +11,23 @@ import {
   STARTING_GAUGES,
   TIME,
   ageAt,
+  PASSERBY,
   TileOccupancy,
+  TRAVEL,
+  busDropOff,
+  isTravelDestination,
   nearestFreeTile,
   pathAvoiding,
+  reachableTiles,
+  spawnPasserby,
   stepWalker,
+  updatePasserby,
+  type Passerby,
   resolveHomeAction,
   foodPlaces,
   resolveFood,
   snapshotGauges,
+  type Arrival,
   type CharacterLook,
   type CharacterSelf,
   type CreateCharacterRequest,
@@ -129,11 +138,8 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
   };
 }
 
-interface DemoWalker extends Walker {
+interface DemoWalker extends Passerby {
   view: PlayerView;
-  speed: number;
-  /** Instant (ms) où un passant à l'arrêt repart. */
-  restUntil: number;
 }
 
 export class LocalDistrict implements DistrictLink {
@@ -143,10 +149,11 @@ export class LocalDistrict implements DistrictLink {
   /** Une case = une personne, comme sur le serveur. */
   private readonly occupancy = new TileOccupancy();
   private readonly food: FoodPlace[];
-  private readonly walkable: TilePoint[] = [];
+  private readonly walkable: TilePoint[];
   private handlers: PlayerHandlers | null = null;
   private selfCb: (self: CharacterSelf) => void = () => {};
   private noticeCb: (n: Notice) => void = () => {};
+  private arrivalCb: (a: Arrival) => void = () => {};
 
   constructor(
     private readonly map: DistrictMap,
@@ -155,21 +162,8 @@ export class LocalDistrict implements DistrictLink {
   ) {
     this.grid = new MapGrid(map);
     this.food = foodPlaces(map);
-    // Destinations des passants : seulement les cases reliées aux rues (pas les cours fermées).
-    const seen = new Uint8Array(map.width * map.height);
-    const queue: TilePoint[] = [map.spawn];
-    seen[map.spawn.y * map.width + map.spawn.x] = 1;
-    while (queue.length > 0) {
-      const p = queue.pop()!;
-      this.walkable.push(p);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const n = { x: p.x + dx, y: p.y + dy };
-        if (this.grid.isWalkable(n.x, n.y) && !seen[n.y * map.width + n.x]) {
-          seen[n.y * map.width + n.x] = 1;
-          queue.push(n);
-        }
-      }
-    }
+    // Où apparaissent les passants : cases reliées aux rues (pas les cours fermées).
+    this.walkable = reachableTiles(this.grid, map.spawn);
 
     for (const v of map.vendors) this.occupancy.block(v.x, v.y);
     const wanted = this.grid.nearestWalkable(save.pos) ?? map.spawn;
@@ -185,9 +179,14 @@ export class LocalDistrict implements DistrictLink {
       blockedMs: 0,
       speed: MOVEMENT.walkTilesPerSecond,
       restUntil: 0,
-      view: { id: SELF_ID, name: save.name, x: start.x, y: start.y, dir: 2, moving: false, ...save.look },
+      look: save.look,
+      pet: '',
+      view: { id: SELF_ID, name: save.name, x: start.x, y: start.y, dir: 2, moving: false, pet: '', ...save.look },
     });
-    for (let i = 0; i < PASSERBY_COUNT; i++) this.addPasserby(i);
+    for (let i = 0; i < PASSERBY.countPerDistrict; i++) {
+      const b = spawnPasserby(`passant-${i}`, this.occupancy, this.walkable, Date.now());
+      this.walkers.set(b.id, { ...b, view: { id: b.id, name: '', x: b.x, y: b.y, dir: 2, moving: false, pet: b.pet, ...b.look } });
+    }
 
     // Temps réellement écoulé : si la page rame (téléphone modeste), on ne marche pas au ralenti.
     let last = performance.now();
@@ -249,6 +248,37 @@ export class LocalDistrict implements DistrictLink {
     this.selfCb(this.self());
   }
 
+  rideBus(to: TilePoint): void {
+    const me = this.walkers.get(SELF_ID)!;
+    if (!isTravelDestination(this.map, to, this.self().home?.door ?? null)) {
+      return this.noticeCb({ level: 'error', text: 'Le bus ne va pas là.' });
+    }
+    if (Math.hypot(to.x - me.x, to.y - me.y) < TRAVEL.minBusDistance) {
+      return this.noticeCb({ level: 'error', text: 'C’est tout près, vas-y à pied.' });
+    }
+    if (this.save.moneyCents < TRAVEL.busFareCents) return this.noticeCb({ level: 'error', text: "Pas assez d'argent." });
+    const drop = busDropOff(this.grid, to);
+    const at = nearestFreeTile(this.grid, this.occupancy, drop.door, SELF_ID);
+    if (!at) return this.noticeCb({ level: 'error', text: 'Trop de monde là-bas, réessaie.' });
+    this.save.moneyCents -= TRAVEL.busFareCents;
+    this.occupancy.releaseAll(SELF_ID);
+    this.occupancy.tryHold(SELF_ID, at.x, at.y);
+    Object.assign(me, { x: at.x, y: at.y, tile: { ...at }, path: [], blockedMs: 0 });
+    Object.assign(me.view, { x: at.x, y: at.y, moving: false });
+    this.handlers?.changed(SELF_ID, me.view);
+    this.persist();
+    this.selfCb(this.self());
+    this.arrivalCb({ playerId: SELF_ID, via: 'bus', at, curb: drop.curb });
+    // Une fois descendu du bus, on marche jusqu'à la destination.
+    window.setTimeout(() => {
+      if (me.path.length === 0) this.move(to);
+    }, TRAVEL.busArriveMs + TRAVEL.busStopMs);
+  }
+
+  onArrival(cb: (arrival: Arrival) => void): void {
+    this.arrivalCb = cb;
+  }
+
   subscribePlayers(handlers: PlayerHandlers): void {
     this.handlers = handlers;
     for (const [id, w] of this.walkers) handlers.added(id, w.view);
@@ -268,58 +298,20 @@ export class LocalDistrict implements DistrictLink {
 
   // ---------- Simulation ----------
 
-  private randomWalkable(): TilePoint {
-    return this.walkable[Math.floor(Math.random() * this.walkable.length)]!;
-  }
-
-  private addPasserby(i: number): void {
-    const id = `passant-${i}`;
-    let p = this.randomWalkable();
-    while (!this.occupancy.tryHold(id, p.x, p.y)) p = this.randomWalkable();
-    this.walkers.set(id, {
-      id,
-      x: p.x,
-      y: p.y,
-      dir: 2,
-      path: [],
-      tile: { ...p },
-      blockedMs: 0,
-      speed: MOVEMENT.walkTilesPerSecond * PASSERBY_SPEED_FACTOR,
-      restUntil: Date.now() + Math.random() * 4000,
-      view: {
-        id,
-        name: '',
-        x: p.x,
-        y: p.y,
-        dir: 2,
-        moving: false,
-        sex: Math.random() < 0.5 ? 'male' : 'female',
-        baseLook: Math.floor(Math.random() * 6),
-        skinTone: Math.floor(Math.random() * 6),
-        hairColor: Math.floor(Math.random() * 6),
-        bodyType: Math.floor(Math.random() * 3),
-      },
-    });
-  }
-
   private tick(dtMs: number): void {
     const now = Date.now();
     for (const [id, w] of this.walkers) {
-      if (id !== SELF_ID && w.path.length === 0 && now >= w.restUntil) {
-        // Un passant choisit une destination pas trop loin.
-        const target = this.randomWalkable();
-        const path = this.occupancy.isFree(target.x, target.y, id) ? pathAvoiding(this.grid, this.occupancy, w, target, PASSERBY_MAX_PATH) : null;
-        if (path) w.path = path;
-        w.restUntil = now + 2000 + Math.random() * 6000;
-      }
       const wasMoving = w.view.moving;
-      if (w.path.length > 0) stepWalker(this.grid, this.occupancy, w, (w.speed * dtMs) / 1000, dtMs);
+      if (id === SELF_ID) {
+        if (w.path.length > 0) stepWalker(this.grid, this.occupancy, w, (w.speed * dtMs) / 1000, dtMs);
+      } else {
+        updatePasserby(this.grid, this.occupancy, w, dtMs, now);
+      }
       const moving = w.path.length > 0 && w.blockedMs === 0;
       if (moving || wasMoving) {
         Object.assign(w.view, { x: w.x, y: w.y, dir: w.dir, moving });
         this.handlers?.changed(id, w.view);
       }
-      if (id !== SELF_ID && wasMoving && !moving) w.restUntil = now + 1000 + Math.random() * 5000;
     }
   }
 

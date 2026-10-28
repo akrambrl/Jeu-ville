@@ -1,4 +1,4 @@
-import type { CharacterSelf, HomeActionId, Notice, TilePoint } from '@jeu-ville/shared';
+import type { Arrival, CharacterSelf, HomeActionId, Notice, TilePoint } from '@jeu-ville/shared';
 
 /** Ce que tous les joueurs voient d'un personnage (voir apps/server/src/rooms/state.ts). */
 export interface PlayerView {
@@ -13,6 +13,8 @@ export interface PlayerView {
   skinTone: number;
   hairColor: number;
   bodyType: number;
+  /** Animal qui suit le perso (« dog:2 »), ou '' (voir Passerby.pet). */
+  pet: string;
 }
 
 export interface PlayerHandlers {
@@ -32,6 +34,10 @@ export interface DistrictLink {
   homeAction(action: HomeActionId): void;
   /** Acheter `itemId` à l'endroit `placeId` (marchand, commerce) : il faut y être. */
   buyFood(placeId: string, itemId: string): void;
+  /** Prendre le bus (payant) jusqu'à l'entrée d'un lieu, ou chez soi. */
+  rideBus(to: TilePoint): void;
+  /** Quelqu'un (soi compris) arrive en bus : jouer la cinématique. */
+  onArrival(cb: (arrival: Arrival) => void): void;
   /** Les joueurs déjà présents sont annoncés immédiatement via `added`. */
   subscribePlayers(handlers: PlayerHandlers): void;
   onSelf(cb: (self: CharacterSelf) => void): void;

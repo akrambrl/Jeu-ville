@@ -6,12 +6,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { BODY_TYPES, MapGrid, type CharacterLook, type DistrictMap, type MapPoi, type TilePoint } from '@jeu-ville/shared';
+import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type TilePoint } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerView } from '../net/link.js';
-import { Ambient } from './ambient.js';
+import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
 import { Character3D, modelForLook } from './characters.js';
 import { buildGround, groundTop } from './ground.js';
+import { Pet3D } from './pets.js';
 import { buildProps } from './props.js';
 import { clockFromUrl, daylightAt, type Daylight } from './daylight.js';
 import { applyNight } from './night.js';
@@ -26,6 +27,12 @@ export interface CityViewOptions {
 }
 
 const TAP_MAX_MOVE_PX = 8;
+/** Cinématique d'arrivée en bus (secondes) : approche, arrêt portes ouvertes, départ. */
+const BUS_ARRIVE_S = TRAVEL.busArriveMs / 1000;
+const BUS_STOP_S = TRAVEL.busStopMs / 1000;
+const BUS_LEAVE_S = TRAVEL.busLeaveMs / 1000;
+/** Distance (cases) d'où le bus arrive et où il repart. */
+const BUS_RUN_TILES = 12;
 /** Recalcul de la lumière du jour (ms). */
 const DAYLIGHT_REFRESH_MS = 30_000;
 /** Le repère de destination disparaît quand le joueur est à moins de cette distance (cases). */
@@ -68,6 +75,7 @@ export class CityView {
   private readonly grid: MapGrid;
   private readonly clock = new THREE.Clock();
   private readonly avatars = new Map<string, Character3D>();
+  private readonly pets = new Map<string, Pet3D>();
   private readonly marker = new THREE.Group();
   private readonly markerRing: THREE.Mesh;
   private readonly markerArrow: THREE.Mesh;
@@ -76,6 +84,7 @@ export class CityView {
   private markerAge = 0;
   private markerOpacity = 0;
   private ambient: Ambient | null = null;
+  private readonly arrivals: { bus: THREE.Group; who: string; from: THREE.Vector3; to: THREE.Vector3; leave: THREE.Vector3; t: number; landed: boolean }[] = [];
   private following = true;
   private pointerDown: { x: number; y: number; t: number } | null = null;
   private readonly poiLabels: { obj: CSS2DObject; major: boolean }[] = [];
@@ -226,9 +235,17 @@ export class CityView {
   private frame(): void {
     const dt = Math.min(0.1, this.clock.getDelta());
     for (const a of this.avatars.values()) a.update(dt);
+    for (const [id, pet] of this.pets) {
+      const owner = this.avatars.get(id);
+      if (owner) {
+        pet.root.visible = owner.root.visible;
+        pet.follow(owner.root, owner.isMoving, dt);
+      }
+    }
     this.ambient?.update(dt, { x: this.controls.target.x, y: this.controls.target.z });
     const self = this.avatars.get(this.opts.link.sessionId);
     this.updateMarker(dt, self);
+    this.updateArrivals(dt);
     if (self) {
       this.opts.onLocalPosition(self.tileX, self.tileY);
       if (this.following) {
@@ -252,6 +269,66 @@ export class CityView {
 
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
+  }
+
+  /** Arrivée en bus : un bus vient se garer, le perso en descend et marche jusqu'à sa destination. */
+  playArrival(a: Arrival): void {
+    const along = (dx: number, dy: number) => {
+      const t = this.grid.tileAt(a.curb.x + dx, a.curb.y + dy);
+      return t === 'R' || t === 'M';
+    };
+    const axisX = along(1, 0) || along(-1, 0);
+    // Le bus arrive par le côté où la chaussée continue.
+    const sign = axisX ? (along(-1, 0) ? -1 : 1) : along(0, -1) ? -1 : 1;
+    const to = new THREE.Vector3(a.curb.x, 0, a.curb.y);
+    const from = to.clone().add(new THREE.Vector3(axisX ? sign * BUS_RUN_TILES : 0, 0, axisX ? 0 : sign * BUS_RUN_TILES));
+    const bus = busMesh('BUS');
+    bus.position.copy(from);
+    bus.rotation.y = axisX ? (sign > 0 ? Math.PI : 0) : sign > 0 ? Math.PI / 2 : -Math.PI / 2;
+    this.scene.add(bus);
+    // Il descend sur le trottoir (sa position donnée par le serveur), caché le temps que le bus arrive.
+    const avatar = this.avatars.get(a.playerId);
+    if (avatar) {
+      avatar.teleport(a.at.x, a.at.y);
+      avatar.root.visible = false;
+    }
+    // Il repart tout droit si la rue continue, sinon il fait demi-tour.
+    const ahead = to.clone().sub(from).normalize();
+    const continues = along(Math.round(ahead.x), Math.round(ahead.z)) && along(Math.round(ahead.x * 2), Math.round(ahead.z * 2));
+    const leave = continues ? to.clone().add(ahead.multiplyScalar(BUS_RUN_TILES)) : from.clone();
+    if (a.playerId === this.opts.link.sessionId) {
+      // La caméra saute à l'arrêt.
+      const delta = new THREE.Vector3(a.at.x, 0, a.at.y).sub(this.controls.target);
+      this.controls.target.add(delta);
+      this.camera.position.add(delta);
+      this.following = true;
+      this.marker.visible = false;
+    }
+    this.arrivals.push({ bus, who: a.playerId, from, to, leave, t: 0, landed: false });
+  }
+
+  private updateArrivals(dt: number): void {
+    for (const a of this.arrivals) {
+      a.t += dt;
+      const ease = (u: number) => 1 - (1 - u) ** 3;
+      if (a.t < BUS_ARRIVE_S) {
+        a.bus.position.lerpVectors(a.from, a.to, ease(a.t / BUS_ARRIVE_S));
+      } else if (a.t < BUS_ARRIVE_S + BUS_STOP_S) {
+        a.bus.position.copy(a.to);
+        if (!a.landed) {
+          a.landed = true;
+          const avatar = this.avatars.get(a.who);
+          if (avatar) avatar.root.visible = true;
+        }
+      } else {
+        const u = (a.t - BUS_ARRIVE_S - BUS_STOP_S) / BUS_LEAVE_S;
+        const dir = a.leave.clone().sub(a.to);
+        a.bus.position.copy(a.to).addScaledVector(dir, u * u);
+        a.bus.rotation.y = -Math.atan2(dir.z, dir.x);
+      }
+    }
+    for (const a of this.arrivals.filter((x) => x.t >= BUS_ARRIVE_S + BUS_STOP_S + BUS_LEAVE_S)) a.bus.removeFromParent();
+    for (let k = this.arrivals.length - 1; k >= 0; k--) if (this.arrivals[k]!.t >= BUS_ARRIVE_S + BUS_STOP_S + BUS_LEAVE_S) this.arrivals.splice(k, 1);
   }
 
   /** Le repère reste affiché tant que le joueur n'est pas arrivé, puis s'efface. */
@@ -380,6 +457,18 @@ export class CityView {
 
   // ---------- Joueurs ----------
 
+  /** Crée, remplace ou retire l'animal qui suit le perso `id`. */
+  private syncPet(id: string, look: string | undefined): void {
+    const current = this.pets.get(id);
+    if ((current?.look ?? '') === (look ?? '')) return;
+    current?.dispose();
+    this.pets.delete(id);
+    if (!look) return;
+    const pet = new Pet3D(look);
+    this.pets.set(id, pet);
+    this.scene.add(pet.root);
+  }
+
   private bindPlayers(): void {
     const link = this.opts.link;
     link.subscribePlayers({
@@ -390,11 +479,18 @@ export class CityView {
         this.avatars.set(id, c);
         this.scene.add(c.root);
         void c.load(modelForLook(lookOf(p)), (BODY_TYPES[p.bodyType] ?? BODY_TYPES[1]).width);
+        this.syncPet(id, p.pet);
       },
-      changed: (id, p) => this.avatars.get(id)?.setTarget(p.x, p.y, p.moving, p.dir),
+      changed: (id, p) => {
+        // Pendant l'arrivée en bus, le perso attend dans le bus.
+        if (this.arrivals.some((a) => a.who === id && !a.landed)) return;
+        this.avatars.get(id)?.setTarget(p.x, p.y, p.moving, p.dir);
+        this.syncPet(id, p.pet);
+      },
       removed: (id) => {
         this.avatars.get(id)?.dispose();
         this.avatars.delete(id);
+        this.syncPet(id, '');
       },
     });
   }

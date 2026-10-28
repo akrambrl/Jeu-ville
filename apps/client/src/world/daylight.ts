@@ -49,7 +49,8 @@ const c = (hex: number) => new THREE.Color(hex);
 
 const DAY = { top: c(0x8ec9ef), bottom: c(0xe6f3fb), fog: c(0xdcecf5), sky: c(0xfdf6e3), ground: c(0x6b8f5a), sun: c(0xfff0d4) };
 const DUSK = { top: c(0x3d4f8f), bottom: c(0xf0a36c), fog: c(0xc49a8a), sky: c(0xf2c39b), ground: c(0x4f5a52), sun: c(0xffa25c) };
-const NIGHT = { top: c(0x070d22), bottom: c(0x1a2546), fog: c(0x121a30), sky: c(0x5d6f9e), ground: c(0x1b2128), sun: c(0x9fb4ff) };
+// Nuit de ville : ciel orangé en bas (éclairage public), ambiance bleutée mais lisible.
+const NIGHT = { top: c(0x0d1630), bottom: c(0x3a3550), fog: c(0x2a2d45), sky: c(0x8a9cd0), ground: c(0x3a3a48), sun: c(0xb4c6ff) };
 
 /** Mélange jour / crépuscule / nuit selon la hauteur du soleil. */
 function blend(key: keyof typeof DAY, dusk: number, night: number): THREE.Color {
@@ -73,14 +74,14 @@ export function daylightAt(date: Date): Daylight {
     night,
     lightDir,
     lightColor: day ? DAY.sun.clone().lerp(DUSK.sun, dusk) : NIGHT.sun.clone(),
-    lightIntensity: day ? 0.6 + 1.7 * smooth(0, 20, elevation) : 0.45 * night + 0.2,
+    lightIntensity: day ? 0.6 + 1.7 * smooth(0, 20, elevation) : 0.7 * night + 0.3,
     hemiSky: blend('sky', dusk, night),
     hemiGround: blend('ground', dusk, night),
-    hemiIntensity: THREE.MathUtils.lerp(1.15, 0.55, night),
+    hemiIntensity: THREE.MathUtils.lerp(1.15, 0.95, night),
     skyTop: blend('top', dusk, night),
     skyBottom: blend('bottom', dusk, night),
     fog: blend('fog', dusk, night),
-    exposure: THREE.MathUtils.lerp(1.05, 1.15, night),
+    exposure: THREE.MathUtils.lerp(1.05, 1.35, night),
   };
 }
 
