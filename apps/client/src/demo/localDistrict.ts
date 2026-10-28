@@ -47,6 +47,8 @@ import {
   adoptPet,
   drainBattery,
   feedPet,
+  holdForTalk,
+  DIALOGUE,
   isPetNeglected,
   petHappinessBonus,
   petLook,
@@ -392,6 +394,13 @@ export class LocalDistrict implements DistrictLink {
     this.commit();
   }
 
+  talk(botId: string): void {
+    const b = this.walkers.get(botId);
+    const me = this.walkers.get(SELF_ID)!;
+    if (!b || botId === SELF_ID || Math.hypot(b.x - me.x, b.y - me.y) > DIALOGUE.talkRange + 1) return;
+    holdForTalk(b, me.tile, Date.now());
+  }
+
   feedPet(): void {
     if (!this.save.pet) return this.notice("Tu n'as pas d'animal.");
     if (this.save.moneyCents < PETS.kibble.costCents) return this.notice("Pas assez d'argent.");
@@ -702,7 +711,7 @@ export class LocalDistrict implements DistrictLink {
         }
       }
       const moving = w.path.length > 0 && w.blockedMs === 0;
-      if (moving || wasMoving) {
+      if (moving || wasMoving || w.view.dir !== w.dir) {
         Object.assign(w.view, { x: w.x, y: w.y, dir: w.dir, moving });
         this.handlers?.changed(id, w.view);
       }

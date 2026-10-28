@@ -6,6 +6,8 @@ import { AgencySheet } from '../ui/agency.js';
 import { JobCenterSheet, MissionPanel } from '../ui/jobs.js';
 import { Hud, type Destination } from '../ui/hud.js';
 import { showTutorialOnce } from '../ui/tutorial.js';
+import { DialogueBox } from '../ui/dialogue.js';
+import { Conversations } from './conversations.js';
 
 export function showFatal(ui: HTMLElement, message: string, retry: () => void): void {
   const button = el('button', { class: 'primary', text: 'Réessayer' });
@@ -51,8 +53,16 @@ export function startGame(ui: HTMLElement, character: CharacterSelf, link: Distr
       hud.setNearJobCenter(isNear(jobCenterDoor, x, y));
       const work = allEmployers.find((e) => e.id === current.job?.employerId);
       hud.setCanStartShift(!inShift && isNear(work?.door, x, y));
+      conversations.update(position);
     },
+    onPersonTap: (person) => conversations.tap(person, position),
+    onGroundTap: () => conversations.cancel(),
   });
+  const dialogue = new DialogueBox();
+  ui.append(dialogue.root);
+  const conversations = new Conversations(map, link, view, dialogue, (name) =>
+    dialogue.open(name, [`${name} est un vrai joueur, comme toi !`, 'Dis-lui bonjour dans le chat.']),
+  );
 
   const hud = new Hud(
     ui,

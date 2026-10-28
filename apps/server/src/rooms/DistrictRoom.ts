@@ -38,6 +38,9 @@ import {
   reachableTiles,
   spawnPasserby,
   updatePasserby,
+  holdForTalk,
+  talkSchema,
+  DIALOGUE,
   type Passerby,
   type Arrival,
   foodPlaces,
@@ -142,6 +145,7 @@ export class DistrictRoom extends Room<DistrictState> {
     }
 
     this.onMessage(ClientMessage.move, (client, raw) => this.handleMove(client, raw));
+    this.onMessage(ClientMessage.talk, (client, raw) => this.handleTalk(client, raw));
     this.onMessage(ClientMessage.homeAction, (client, raw) => this.handleHomeAction(client, raw));
     this.onMessage(ClientMessage.buyFood, (client, raw) => this.handleBuyFood(client, raw));
     this.onMessage(ClientMessage.rideBus, (client, raw) => this.handleRideBus(client, raw));
@@ -421,8 +425,18 @@ export class DistrictRoom extends Room<DistrictState> {
       const p = this.state.players.get(b.id);
       if (!p) continue;
       const moving = b.path.length > 0 && b.blockedMs === 0;
-      if (p.x !== b.x || p.y !== b.y || p.moving !== moving) Object.assign(p, { x: b.x, y: b.y, dir: b.dir, moving });
+      if (p.x !== b.x || p.y !== b.y || p.moving !== moving || p.dir !== b.dir) Object.assign(p, { x: b.x, y: b.y, dir: b.dir, moving });
     }
+  }
+
+  /** Parler à un passant : il s'arrête et se tourne vers le joueur (le texte est affiché par le client). */
+  private handleTalk(client: Client, raw: unknown): void {
+    const s = this.sessions.get(client.sessionId);
+    const parsed = talkSchema.safeParse(raw);
+    if (!s || !parsed.success) return;
+    const b = this.passersby.find((p) => p.id === parsed.data.botId);
+    if (!b || Math.hypot(b.x - s.x, b.y - s.y) > DIALOGUE.talkRange + 1) return;
+    holdForTalk(b, s.tile, Date.now());
   }
 
   private handleMove(client: Client, raw: unknown): void {

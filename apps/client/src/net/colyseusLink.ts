@@ -57,6 +57,10 @@ export class ColyseusLink implements DistrictLink {
     this.room.send(ClientMessage.chargeScooter, {});
   }
 
+  talk(botId: string): void {
+    this.room.send(ClientMessage.talk, { botId });
+  }
+
   feedPet(): void {
     this.room.send(ClientMessage.feedPet, {});
   }

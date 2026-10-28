@@ -141,7 +141,14 @@ export const ClientMessage = {
   stopShift: 'stopShift',
   /** Comptoir : servir ces articles au client actuel. */
   serve: 'serve',
+  /** Parler à un passant (bot) : il s'arrête et se tourne vers le joueur. */
+  talk: 'talk',
 } as const;
+
+export const talkSchema = z.object({
+  botId: z.string().min(1).max(32),
+});
+export type TalkMessage = z.infer<typeof talkSchema>;
 
 export const applyJobSchema = z.object({
   employerId: z.string().min(1).max(64),

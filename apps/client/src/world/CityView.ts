@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type TilePoint } from '@jeu-ville/shared';
+import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type StreetVendor, type TilePoint } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerView } from '../net/link.js';
 import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
@@ -24,7 +24,20 @@ export interface CityViewOptions {
   homeDoor: TilePoint | null;
   /** Appelé à chaque image avec la position affichée du joueur local. */
   onLocalPosition: (x: number, y: number) => void;
+  /** On a touché quelqu'un (joueur, passant, marchand) : parler plutôt que marcher. */
+  onPersonTap?: (person: PersonTap) => void;
+  /** On a touché le sol pour marcher. */
+  onGroundTap?: () => void;
 }
+
+export type PersonTap =
+  | { kind: 'avatar'; id: string; view: PlayerView }
+  | { kind: 'vendor'; vendor: StreetVendor };
+
+/** Rayon (pixels écran) autour d'un perso dans lequel un appui le désigne. */
+const PERSON_PICK_PX = 34;
+/** Hauteur visée (cases) pour repérer un perso à l'écran : à mi-corps. */
+const PERSON_PICK_HEIGHT = 0.45;
 
 const TAP_MAX_MOVE_PX = 8;
 /** Couleurs d'enseigne (fond, texte) des commerces de joueurs. */
@@ -87,6 +100,8 @@ export class CityView {
   private readonly grid: MapGrid;
   private readonly clock = new THREE.Clock();
   private readonly avatars = new Map<string, Character3D>();
+  /** Dernière vue de chaque perso (pour savoir à qui on parle). */
+  private readonly views = new Map<string, PlayerView>();
   private readonly pets = new Map<string, Pet3D>();
   private readonly marker = new THREE.Group();
   private readonly markerRing: THREE.Mesh;
@@ -108,6 +123,7 @@ export class CityView {
     private readonly opts: CityViewOptions,
   ) {
     this.grid = new MapGrid(opts.map);
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as { cityView: CityView }).cityView = this;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
@@ -483,6 +499,11 @@ export class CityView {
   }
 
   private tap(clientX: number, clientY: number): void {
+    const person = this.opts.onPersonTap ? this.pickPerson(clientX, clientY) : null;
+    if (person) {
+      this.opts.onPersonTap!(person);
+      return;
+    }
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
@@ -491,7 +512,54 @@ export class CityView {
     let tile = { x: Math.round(hit.x), y: Math.round(hit.z) };
     // Toucher un bâtiment : on va à la case praticable la plus proche.
     if (!this.grid.isWalkable(tile.x, tile.y)) tile = this.grid.nearestWalkable(tile, 3) ?? tile;
-    if (this.grid.isWalkable(tile.x, tile.y)) this.requestMove(tile);
+    if (!this.grid.isWalkable(tile.x, tile.y)) return;
+    this.opts.onGroundTap?.();
+    this.requestMove(tile);
+  }
+
+  /** Perso (autre que soi) ou marchand le plus proche de l'appui, à l'écran. */
+  private pickPerson(clientX: number, clientY: number): PersonTap | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const screen = (p: THREE.Vector3) => {
+      const v = p.clone().project(this.camera);
+      if (v.z > 1) return Infinity;
+      const sx = rect.left + ((v.x + 1) / 2) * rect.width;
+      const sy = rect.top + ((1 - v.y) / 2) * rect.height;
+      return Math.hypot(sx - clientX, sy - clientY);
+    };
+    let best: PersonTap | null = null;
+    let bestD = PERSON_PICK_PX;
+    for (const [id, c] of this.avatars) {
+      const view = this.views.get(id);
+      if (id === this.opts.link.sessionId || !view) continue;
+      const d = screen(c.root.position.clone().add(new THREE.Vector3(0, PERSON_PICK_HEIGHT, 0)));
+      if (d < bestD) [best, bestD] = [{ kind: 'avatar', id, view }, d];
+    }
+    for (const vendor of this.opts.map.vendors) {
+      const d = screen(new THREE.Vector3(vendor.x, PERSON_PICK_HEIGHT, vendor.y));
+      if (d < bestD) [best, bestD] = [{ kind: 'vendor', vendor }, d];
+    }
+    return best;
+  }
+
+  /** Tests de bout en bout (URL avec ?debug) : où sont les persos à l'écran. */
+  debugScreenPositions(): { id: string; x: number; y: number; name: string }[] {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return [...this.avatars].map(([id, c]) => {
+      const v = c.root.position.clone().add(new THREE.Vector3(0, PERSON_PICK_HEIGHT, 0)).project(this.camera);
+      return { id, x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height, name: this.views.get(id)?.name ?? '' };
+    });
+  }
+
+  /** Position affichée d'un perso (cases), ou null. */
+  avatarTile(id: string): TilePoint | null {
+    const c = this.avatars.get(id);
+    return c ? { x: c.tileX, y: c.tileY } : null;
+  }
+
+  /** Bulle de texte au-dessus d'un perso (chat, dialogue). */
+  showBubble(id: string, text: string): void {
+    this.avatars.get(id)?.say(text);
   }
 
   // ---------- Noms de rues (peints sur la chaussée) ----------
@@ -537,6 +605,7 @@ export class CityView {
     const link = this.opts.link;
     link.subscribePlayers({
       added: (id, p) => {
+        this.views.set(id, { ...p });
         const c = new Character3D((x, y) => this.grid.tileAt(x, y), p.x, p.y);
         c.setTarget(p.x, p.y, p.moving, p.dir);
         c.setLabel(p.name, id === link.sessionId);
@@ -548,12 +617,14 @@ export class CityView {
       },
       changed: (id, p) => {
         // Pendant l'arrivée en bus, le perso attend dans le bus.
+        this.views.set(id, { ...p });
         if (this.arrivals.some((a) => a.who === id && !a.landed)) return;
         this.avatars.get(id)?.setTarget(p.x, p.y, p.moving, p.dir);
         this.avatars.get(id)?.setVehicle(p.vehicle ?? '');
         this.syncPet(id, p.pet);
       },
       removed: (id) => {
+        this.views.delete(id);
         this.avatars.get(id)?.dispose();
         this.avatars.delete(id);
         this.syncPet(id, '');

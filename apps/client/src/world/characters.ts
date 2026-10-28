@@ -15,6 +15,8 @@ const CHILD_HEAD_SCALE = 1.35;
 const BIKE_SCALE = 1.3;
 const BIKE_SEAT = { y: 0.385 * BIKE_SCALE, z: -0.07 * BIKE_SCALE };
 const SCOOTER_DECK = 0.085;
+/** Durée d'affichage d'une bulle de parole (ms). */
+const BUBBLE_MS = 6000;
 
 /** Rotation d'un os autour de l'axe gauche-droite du corps (degrés, + = vers l'arrière). */
 type Pose = Record<string, number>;
@@ -101,6 +103,27 @@ export class Character3D {
     this.mixer = new THREE.AnimationMixer(body);
     for (const clip of clips) this.actions.set(clip.name, this.mixer.clipAction(clip));
     this.play(this.moving ? 'walk' : 'idle');
+  }
+
+  private bubble: CSS2DObject | null = null;
+  private bubbleTimer = 0;
+
+  /** Bulle de parole au-dessus de la tête, quelques secondes. */
+  say(text: string, ms = BUBBLE_MS): void {
+    this.bubble?.element.remove();
+    this.bubble?.removeFromParent();
+    window.clearTimeout(this.bubbleTimer);
+    const el = document.createElement('div');
+    el.className = 'speech-bubble';
+    el.textContent = text;
+    this.bubble = new CSS2DObject(el);
+    this.bubble.position.set(0, this.height + 0.6, 0);
+    this.root.add(this.bubble);
+    this.bubbleTimer = window.setTimeout(() => {
+      this.bubble?.element.remove();
+      this.bubble?.removeFromParent();
+      this.bubble = null;
+    }, ms);
   }
 
   setLabel(text: string, self: boolean): void {
@@ -236,6 +259,8 @@ export class Character3D {
   }
 
   dispose(): void {
+    window.clearTimeout(this.bubbleTimer);
+    this.bubble?.element.remove();
     this.label?.element.remove();
     this.root.removeFromParent();
   }

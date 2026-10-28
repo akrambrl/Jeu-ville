@@ -56,6 +56,8 @@ export interface DistrictLink {
   chargeScooter(): void;
   /** Donner des croquettes à son animal. */
   feedPet(): void;
+  /** On parle à un passant : il s'arrête et se tourne vers nous. */
+  talk(botId: string): void;
   /** Agence immobilière : biens déjà pris par des joueurs (PropertySpot.id). */
   requestListings(): Promise<string[]>;
   buyProperty(spotId: string): void;

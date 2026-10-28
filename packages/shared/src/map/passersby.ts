@@ -3,6 +3,8 @@
  * « une personne par case ». Même logique sur le serveur et dans la démo solo.
  */
 import { MOVEMENT, PASSERBY } from '../config/balance.js';
+import { DIALOGUE } from '../config/dialogues.js';
+import { directionOf } from './movement.js';
 import type { MapGrid } from './grid.js';
 import { pathAvoiding, stepWalker, type TileOccupancy, type Walker } from './occupancy.js';
 import type { TilePoint } from './types.js';
@@ -24,6 +26,14 @@ export interface Passerby extends Walker {
   pet: string;
   /** Flâneur d'une rue commerçante (index dans `busyStreets`) : il y reste. */
   zone?: number;
+  /** Quelqu'un lui parle : il reste là, tourné vers lui, jusqu'à cet instant (ms). */
+  talk?: { until: number; dir: number };
+}
+
+/** On parle à ce passant : il finit son pas, s'arrête et se tourne vers `towards`. */
+export function holdForTalk(b: Passerby, towards: TilePoint, nowMs: number): void {
+  b.path = b.path.slice(0, 1);
+  b.talk = { until: nowMs + DIALOGUE.pauseMs, dir: directionOf(towards.x - b.tile.x, towards.y - b.tile.y, b.dir) };
 }
 
 /** Robes de chien disponibles (voir le rendu côté client). */
@@ -96,6 +106,12 @@ export function updatePasserby(
   nowMs: number,
   rand: () => number = Math.random,
 ): void {
+  if (b.talk && nowMs < b.talk.until) {
+    if (b.path.length > 0) stepWalker(grid, occ, b, (b.speed * dtMs) / 1000, dtMs);
+    else b.dir = b.talk.dir;
+    return;
+  }
+  delete b.talk;
   if (b.path.length === 0 && nowMs >= b.restUntil) {
     const zone = b.zone !== undefined ? grid.map.busyStreets[b.zone]?.sidewalks : undefined;
     const target = zone ? pickInZone(zone, b.tile, rand) : pickNear(grid, b.tile, rand);
