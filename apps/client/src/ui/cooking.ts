@@ -14,11 +14,23 @@ import {
   type CookStep,
   type Recipe,
 } from '@jeu-ville/shared';
+import { Chef } from './chef.js';
 import { el } from './dom.js';
 
-/** Temps pendant lequel on montre la note d'une étape, puis celle du plat (ms). */
-const STEP_FEEDBACK_MS = 800;
-const DISH_FEEDBACK_MS = 1400;
+/** Annonce de l'étape, note d'une étape, puis révélation du plat (ms). */
+const STEP_INTRO_MS = 1100;
+const STEP_FEEDBACK_MS = 900;
+const DISH_FEEDBACK_MS = 2600;
+
+/** Ce que dit Tata Nadia (choisi au hasard). */
+const CHEF_LINES = {
+  start: ['On s’y met ? Je te regarde !', 'Allez, on cuisine ensemble !', 'Un client a faim, au travail !'],
+  during: ['Tu peux le faire !', 'Concentre-toi…', 'Doucement mais sûrement !'],
+  perfect: ['Génial ! Tu es un·e chef !', 'Parfait, j’adore !', 'Wouah, quel talent !'],
+  good: ['Bien joué !', 'Pas mal du tout !', 'C’est bien, continue !'],
+  bad: ['Pas grave, on continue !', 'Oups… la prochaine sera mieux !', 'Courage, ça arrive à tout le monde !'],
+} as const;
+const pick = (lines: readonly string[]) => lines[Math.floor(Math.random() * lines.length)]!;
 
 /** Une étape en cours : renvoie de quoi l'arrêter et lire sa note actuelle. */
 interface StepRun {
@@ -34,23 +46,28 @@ export class KitchenGame {
   private readonly hint = el('div', { class: 'kitchen-hint' });
   private readonly bar = el('div', { class: 'kitchen-bar-fill' });
   private readonly stage = el('div', { class: 'kitchen-stage' });
+  private readonly splash = el('div', { class: 'kitchen-splash' });
   private readonly feedback = el('div', { class: 'kitchen-feedback' });
+  private readonly chef = new Chef();
   private run: StepRun | null = null;
   private frame = 0;
-  private timer = 0;
+  private readonly timers = new Set<number>();
   /** Change à chaque partie : une partie abandonnée ne termine pas la suivante. */
   private game = 0;
 
   constructor() {
-    const quit = el('button', { class: 'small', text: 'Abandonner' });
+    const quit = el('button', { class: 'kitchen-quit', text: '✕', 'aria-label': 'Abandonner' });
     quit.addEventListener('click', () => this.close());
+    this.splash.hidden = true;
     this.root = el('div', { class: 'kitchen' }, [
       el('div', { class: 'kitchen-card' }, [
-        el('div', { class: 'kitchen-head' }, [this.title, quit]),
+        el('div', { class: 'kitchen-head' }, [el('div', { class: 'kitchen-ribbon' }, [this.title]), quit]),
         this.dots,
         this.hint,
         el('div', { class: 'kitchen-bar' }, [this.bar]),
         this.stage,
+        this.chef.root,
+        this.splash,
         this.feedback,
       ]),
     ]);
@@ -67,17 +84,31 @@ export class KitchenGame {
     const game = ++this.game;
     this.root.hidden = false;
     this.title.textContent = `${recipe.icon} ${recipe.label}`;
+    this.chef.say(pick(CHEF_LINES.start), 'happy');
     const scores: number[] = [];
     const next = () => {
       if (game !== this.game) return;
       const step = recipe.steps[scores.length];
       if (!step) return this.finish(recipe, scores, game, done);
       this.renderDots(recipe, scores.length);
-      this.startStep(step, (score) => {
+      this.intro(scores.length + 1, step, () => {
         if (game !== this.game) return;
-        scores.push(score);
-        this.showFeedback(score >= 0.85 ? '✨ Parfait !' : score >= 0.55 ? '👍 Bien !' : '😬 Bof…', score >= 0.55);
-        window.setTimeout(next, STEP_FEEDBACK_MS);
+        this.chef.say(pick(CHEF_LINES.during), 'idle');
+        this.startStep(step, (score) => {
+          if (game !== this.game) return;
+          scores.push(score);
+          if (score >= 0.85) {
+            this.showFeedback('Génial !', 'perfect');
+            this.chef.say(pick(CHEF_LINES.perfect), 'happy');
+          } else if (score >= 0.55) {
+            this.showFeedback('Bien !', 'good');
+            this.chef.say(pick(CHEF_LINES.good), 'happy');
+          } else {
+            this.showFeedback('Oups…', 'bad');
+            this.chef.say(pick(CHEF_LINES.bad), 'worried');
+          }
+          this.later(next, STEP_FEEDBACK_MS);
+        });
       });
     };
     next();
@@ -86,16 +117,48 @@ export class KitchenGame {
   close(): void {
     this.game++;
     this.stopStep();
+    for (const t of this.timers) window.clearTimeout(t);
+    this.timers.clear();
+    this.splash.hidden = true;
     this.root.hidden = true;
+  }
+
+  private later(fn: () => void, ms: number): void {
+    const t = window.setTimeout(() => {
+      this.timers.delete(t);
+      fn();
+    }, ms);
+    this.timers.add(t);
+  }
+
+  /** « Étape 2 ! » en grand, avec la consigne, avant de lancer le chrono. */
+  private intro(n: number, step: CookStep, then: () => void): void {
+    this.stopStep();
+    this.hint.textContent = step.label;
+    this.bar.style.width = '100%';
+    this.bar.classList.remove('late');
+    this.stage.append(el('div', { class: 'kitchen-food ghost', text: step.icon }));
+    this.splash.replaceChildren(el('div', { class: 'kitchen-splash-step', text: `Étape ${n}` }), el('div', { class: 'kitchen-splash-label', text: step.label }));
+    this.splash.hidden = false;
+    bump(this.splash, 'show');
+    this.later(() => {
+      this.splash.hidden = true;
+      then();
+    }, STEP_INTRO_MS);
   }
 
   private finish(recipe: Recipe, scores: number[], game: number, done: (scores: number[]) => void): void {
     this.renderDots(recipe, scores.length);
     const stars = cookStars(scores);
     this.hint.textContent = 'Le plat est prêt !';
-    this.stage.replaceChildren(el('div', { class: 'kitchen-dish', text: recipe.icon }));
-    this.showFeedback('⭐'.repeat(stars) + '☆'.repeat(3 - stars), stars >= 2);
-    window.setTimeout(() => {
+    const starRow = el(
+      'div',
+      { class: 'kitchen-stars' },
+      [1, 2, 3].map((k) => el('span', { class: `kitchen-star${k <= stars ? ' on' : ''}`, text: '★' })),
+    );
+    this.stage.replaceChildren(el('div', { class: 'kitchen-rays' }), el('div', { class: 'kitchen-dish', text: recipe.icon }), starRow);
+    this.chef.say(stars === 3 ? 'Incroyable ! Encore mieux que moi !' : stars === 2 ? 'Très bon plat, le client va adorer !' : 'Il est servi… on fera mieux la prochaine fois !', stars >= 2 ? 'happy' : 'worried');
+    this.later(() => {
       if (game !== this.game) return;
       this.close();
       done(scores);
@@ -108,24 +171,22 @@ export class KitchenGame {
     );
   }
 
-  private showFeedback(text: string, good: boolean): void {
+  private showFeedback(text: string, kind: 'perfect' | 'good' | 'bad'): void {
     this.feedback.textContent = text;
-    this.feedback.className = `kitchen-feedback show ${good ? 'good' : 'bad'}`;
-    window.setTimeout(() => (this.feedback.className = 'kitchen-feedback'), STEP_FEEDBACK_MS);
+    this.feedback.className = `kitchen-feedback ${kind}`;
+    bump(this.feedback, 'show');
   }
 
   private stopStep(): void {
     this.run?.stop();
     this.run = null;
     cancelAnimationFrame(this.frame);
-    window.clearTimeout(this.timer);
     this.stage.replaceChildren();
   }
 
   /** Démarre une étape ; `end` est appelé une seule fois avec sa note. */
   private startStep(step: CookStep, end: (score: number) => void): void {
     this.stopStep();
-    this.hint.textContent = step.label;
     const limit = COOKING.stepTimeMs[step.gesture];
     const started = performance.now();
     let ended = false;
@@ -194,7 +255,7 @@ const GESTURES: Record<CookStep['gesture'], Gesture> = {
     let start: { x: number; y: number } | null = null;
     const food = el('div', { class: 'kitchen-food', text: step.icon });
     const info = el('div', { class: 'kitchen-count', text: counter(0, needed, 'coupes') });
-    stage.append(food, info, el('div', { class: 'kitchen-tip', text: '👆 Glisse le doigt à travers' }));
+    stage.append(el('div', { class: 'kitchen-board' }, [food]), info, el('div', { class: 'kitchen-tip', text: '👆 Glisse le doigt à travers' }));
     const off = pointer(stage, {
       down: (e) => (start = { x: e.clientX, y: e.clientY }),
       move: (e) => {
@@ -254,7 +315,7 @@ const GESTURES: Record<CookStep['gesture'], Gesture> = {
     let taps = 0;
     const food = el('div', { class: 'kitchen-food', text: step.icon });
     const info = el('div', { class: 'kitchen-count', text: counter(0, needed, '') });
-    stage.append(food, info, el('div', { class: 'kitchen-tip', text: '👆 Tapote vite !' }));
+    stage.append(el('div', { class: 'kitchen-bowl' }, [food]), info, el('div', { class: 'kitchen-tip', text: '👆 Tapote vite !' }));
     const off = pointer(stage, {
       down: () => {
         taps++;
@@ -274,7 +335,7 @@ const GESTURES: Record<CookStep['gesture'], Gesture> = {
     zone.style.width = `${COOKING.timingZone * 200}%`;
     const cursor = el('div', { class: 'kitchen-cursor' });
     const gauge = el('div', { class: 'kitchen-gauge' }, [zone, cursor]);
-    stage.append(el('div', { class: 'kitchen-food sizzle', text: step.icon }), gauge, el('div', { class: 'kitchen-tip', text: '👆 Touche quand le curseur est dans le vert' }));
+    stage.append(el('div', { class: 'kitchen-pan' }, [el('div', { class: 'kitchen-food sizzle', text: step.icon })]), gauge, el('div', { class: 'kitchen-tip', text: '👆 Touche quand le curseur est dans le vert' }));
     const t0 = performance.now();
     let pos = 0;
     let frame = 0;
