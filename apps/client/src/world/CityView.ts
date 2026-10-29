@@ -18,6 +18,7 @@ import { buildProps } from './props.js';
 import { clockFromUrl, daylightAt, type Daylight } from './daylight.js';
 import { applyNight } from './night.js';
 import { canvasTexture, signTexture } from './textures.js';
+import { toonify } from './kawaii.js';
 
 export interface CityViewOptions {
   map: DistrictMap;
@@ -89,6 +90,8 @@ const LABEL_KINDS = new Set<MapPoi['kind']>([
 ]);
 /** Au-delà de cette distance caméra, les étiquettes secondaires sont masquées. */
 const LABEL_DISTANCE = 26;
+/** Les véhicules ajoutés en cours de route passent en style toon à ce rythme (ms). */
+const TOONIFY_AMBIENT_MS = 3000;
 /** Les « ❗ » (habitants qui demandent de l'aide) ne s'affichent qu'à moins de tant de cases du joueur. */
 const MARK_RADIUS = 9;
 /** L'étiquette « À louer » (avec le loyer) d'un local libre s'affiche à moins de tant de cases. */
@@ -227,13 +230,19 @@ export class CityView {
   /** Construit la ville (asynchrone : chargement des modèles). */
   async build(): Promise<void> {
     const { map } = this.opts;
-    this.scene.add(buildGround(this.grid));
+    const ground = buildGround(this.grid);
+    this.scene.add(ground);
     const buildings = await buildBuildings(this.grid, map.storefronts);
     this.scene.add(buildings.group);
-    this.scene.add(await buildProps(this.grid));
+    const props = await buildProps(this.grid);
+    this.scene.add(props);
     this.ambient = new Ambient(this.grid, map);
     this.scene.add(this.ambient.group);
-    void this.ambient.spawnVendors(map.vendors);
+    // Style kawaii : rendu en aplats ; les véhicules et marchands arrivent au fil du temps.
+    for (const part of [ground, buildings.group, props, this.ambient.group]) toonify(part);
+    const ambient = this.ambient;
+    void ambient.spawnVendors(map.vendors).then(() => toonify(ambient.group));
+    window.setInterval(() => toonify(ambient.group), TOONIFY_AMBIENT_MS);
 
     // Étiquettes des lieux, au-dessus des toits.
     for (const poi of map.pois) {

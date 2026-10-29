@@ -21,27 +21,29 @@ import {
 /** Hauteur d'un étage (1 case = 1 unité). */
 export const LEVEL_H = 0.42;
 
-const APARTMENT_WALLS = ['#e9e1d3', '#f0d9c4', '#dfe6dc', '#e9d6d2', '#d9dde6'];
+// Style kawaii : façades pastel (rose, vanille, menthe, ciel, lilas).
+const APARTMENT_WALLS = ['#ffbfd0', '#ffe08f', '#ade8b8', '#b5d4ff', '#d8c2ff'];
 
 const FACADES: Record<string, FacadeStyle> = {
-  [TILE.starter]: { wall: '#9fd8cb', balcony: true },
-  [TILE.commercial]: { wall: '#f2dcc0', shutters: '#5b7f9e' },
-  [TILE.civic]: { wall: '#f4dfa6', wide: true, band: '#f2a33a' },
-  [TILE.townhall]: { wall: '#f1e7d2', arched: true, band: '#fbf6ea' },
-  [TILE.worship]: { wall: '#d9cdb4', arched: true, window: '#5a7bd0', frame: '#bfb197' },
-  [TILE.station]: { wall: '#e7d8bf', arched: true, band: '#cdbb98' },
-  [TILE.police]: { wall: '#eef1f5', band: '#1f3f8c' },
-  [TILE.supermarket]: { wall: '#f1efe8', wide: true, window: '#cfd6dc', band: '#2f8f5b' },
-  [TILE.building]: { wall: '#e8d3b0' },
-  [TILE.industrial]: { wall: '#b7aea3' },
+  [TILE.starter]: { wall: '#9fe3c8', balcony: true },
+  [TILE.commercial]: { wall: '#ffd2a8', shutters: '#7fb8ff' },
+  [TILE.civic]: { wall: '#fff0b8', wide: true, band: '#ffb26b' },
+  [TILE.townhall]: { wall: '#fff6e6', arched: true, band: '#ffd1dc' },
+  [TILE.worship]: { wall: '#f3e6cf', arched: true, window: '#a9c0ff', frame: '#ffffff' },
+  [TILE.station]: { wall: '#ffe9d0', arched: true, band: '#ffc7a8' },
+  [TILE.police]: { wall: '#eef4ff', band: '#6f8fe0' },
+  [TILE.supermarket]: { wall: '#f6fff4', wide: true, window: '#c9ecf7', band: '#7fd19b' },
+  [TILE.building]: { wall: '#ffcf9a' },
+  [TILE.industrial]: { wall: '#cfc4ea' },
 };
 
 const ROOFS: Record<string, [string, string?]> = {
-  default: ['#9aa0a8'],
-  [TILE.townhall]: ['#4a6a8c', 'rgba(255,255,255,0.12)'],
-  [TILE.worship]: ['#5b6470', 'rgba(255,255,255,0.1)'],
-  [TILE.station]: ['#7d8794', 'rgba(255,255,255,0.12)'],
-  [TILE.supermarket]: ['#c9ced3'],
+  default: ['#f59fb5', 'rgba(255,255,255,0.25)'],
+  [TILE.apartments]: ['#b9a7e8', 'rgba(255,255,255,0.2)'],
+  [TILE.townhall]: ['#7fa6f0', 'rgba(255,255,255,0.3)'],
+  [TILE.worship]: ['#9fa8e0', 'rgba(255,255,255,0.25)'],
+  [TILE.station]: ['#9cc6e8', 'rgba(255,255,255,0.3)'],
+  [TILE.supermarket]: ['#a8e0bf'],
 };
 
 const FRONTS: Record<Storefront['kind'], Omit<FrontStyle, 'sign'>> = {

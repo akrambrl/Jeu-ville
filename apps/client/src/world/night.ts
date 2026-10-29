@@ -4,13 +4,19 @@
  */
 import * as THREE from 'three';
 
-const glowing: { m: THREE.MeshStandardMaterial; day: number; night: number }[] = [];
+type Glowing = THREE.Material & { emissiveIntensity: number };
+const glowing: { m: Glowing; day: number; night: number }[] = [];
 const fading: { m: THREE.Material & { opacity: number }; max: number }[] = [];
 
 /** Matériau dont l'émission passe de `day` à `night` à la tombée de la nuit. */
 export function glowAtNight(m: THREE.MeshStandardMaterial, night: number, day = 0): void {
   glowing.push({ m, day, night });
   m.emissiveIntensity = day;
+}
+
+/** Le matériau `from` a été remplacé par `to` (style toon) : il s'allume à sa place. */
+export function retargetGlow(from: THREE.Material, to: Glowing): void {
+  for (const g of glowing) if (g.m === from) g.m = to;
 }
 
 /** Matériau transparent qui n'apparaît que la nuit (halos), jusqu'à l'opacité `max`. */
@@ -41,7 +47,7 @@ export function litWindowsTexture(wide: boolean, seed: number): THREE.CanvasText
     s = (s * 16807) % 2147483647;
     return s / 2147483647;
   };
-  const spots: [number, number][] = wide ? [[6, 52]] : [[8, 20], [36, 20]];
+  const spots: [number, number][] = wide ? [[6, 52]] : [[10, 16], [38, 16]];
   for (let cy = 0; cy < 4; cy++) {
     for (let cx = 0; cx < 4; cx++) {
       for (const [x, w] of spots) {
