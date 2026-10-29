@@ -1,7 +1,7 @@
-import { BUSINESS_FOOD, businessFoodPlaces, type FoodPlace, ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion } from '@jeu-ville/shared';
+import { BUSINESS_FOOD, businessFoodPlaces, type FoodPlace, ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion, weeklyRentCents } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
-import { el } from '../ui/dom.js';
+import { el, formatMoney } from '../ui/dom.js';
 import { AgencySheet } from '../ui/agency.js';
 import { JobCenterSheet, MissionPanel } from '../ui/jobs.js';
 import { Hud, type Destination } from '../ui/hud.js';
@@ -227,7 +227,32 @@ export function startGame(
     view.setHomeDoor(homeDoor);
     hud.setSelf(self);
     refreshMarks();
+    // On vient de louer, d'acheter ou de rendre un local : les panneaux changent.
+    const mine = self.properties.map((p) => p.spotId).join();
+    if (mine !== myProperties) {
+      myProperties = mine;
+      void refreshForRent();
+    }
   });
+
+  // Locaux libres visibles dans la ville (panneaux « À LOUER »), rafraîchis régulièrement.
+  let myProperties = (character.properties ?? []).map((p) => p.spotId).join();
+  let freeLocals = '';
+  let viewReady = false;
+  const refreshForRent = async () => {
+    if (!viewReady) return;
+    const taken = new Set(await link.requestListings());
+    for (const p of current?.properties ?? []) taken.add(p.spotId);
+    const free = map.properties.filter((p) => p.kind === 'local' && !taken.has(p.id));
+    const key = free.map((p) => p.id).join();
+    if (key === freeLocals) return;
+    freeLocals = key;
+    view.setForRent(
+      free.map((spot) => ({ spot, label: `🏪 À louer · ${formatMoney(weeklyRentCents(spot))} / sem.` })),
+      () => void agency.open(current, position, 'local'),
+    );
+  };
+  window.setInterval(() => void refreshForRent(), FOR_RENT_REFRESH_MS);
   link.onNotice((n) => hud.notify(n.text, n.level));
   link.onArrival((a) => view.playArrival(a));
   link.onDisconnected(() => showFatal(ui, 'Déconnecté du serveur.', () => location.reload()));
@@ -236,11 +261,18 @@ export function startGame(
   ui.append(loading);
   view
     .build()
+    .then(() => {
+      viewReady = true;
+      void refreshForRent();
+    })
     .catch((err) => showFatal(ui, `Impossible d'afficher la ville : ${(err as Error).message}`, () => location.reload()))
     .finally(() => loading.remove());
 
   showTutorialOnce(ui, map.cityName);
 }
+
+/** Fréquence de mise à jour des panneaux « À LOUER » (les autres joueurs louent aussi), ms. */
+const FOR_RENT_REFRESH_MS = 60_000;
 
 /** Catégories de « Aller à… », dans l'ordre d'affichage. */
 const CATEGORIES = {

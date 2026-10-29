@@ -75,7 +75,9 @@ export class AgencySheet {
     this.root.hidden = true;
   }
 
-  async open(self: CharacterSelf | null, position: TilePoint): Promise<void> {
+  /** Ouvre l'agence (sur l'onglet `tab`, sinon le dernier consulté). */
+  async open(self: CharacterSelf | null, position: TilePoint, tab?: Tab): Promise<void> {
+    if (tab) this.tab = tab;
     this.self = self;
     this.position = position;
     this.root.hidden = false;

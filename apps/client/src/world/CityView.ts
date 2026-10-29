@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type StreetVendor, type TilePoint, ERRAND_TYPES, type ErrandOffer, type ErrandView } from '@jeu-ville/shared';
+import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type PropertySpot, type StreetVendor, type TilePoint, ERRAND_TYPES, type ErrandOffer, type ErrandView } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerView } from '../net/link.js';
 import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
@@ -91,6 +91,8 @@ const LABEL_KINDS = new Set<MapPoi['kind']>([
 const LABEL_DISTANCE = 26;
 /** Les « ❗ » (habitants qui demandent de l'aide) ne s'affichent qu'à moins de tant de cases du joueur. */
 const MARK_RADIUS = 9;
+/** L'étiquette « À louer » (avec le loyer) d'un local libre s'affiche à moins de tant de cases. */
+const FOR_RENT_RADIUS = 12;
 
 export class CityView {
   private readonly renderer: THREE.WebGLRenderer;
@@ -313,6 +315,47 @@ export class CityView {
 
   private marks = new Map<string, string | null>();
   private readonly businessSigns = new Map<string, THREE.Mesh>();
+  private readonly forRent = new Map<string, { sign: THREE.Mesh; tag: CSS2DObject; door: TilePoint }>();
+  private rentTexture: THREE.Texture | null = null;
+
+  /**
+   * Locaux libres : panneau « À LOUER » sur la vitrine (visible de loin) et,
+   * tout près, une étiquette avec le loyer ; la toucher ouvre l'agence.
+   */
+  setForRent(offers: { spot: PropertySpot; label: string }[], onTap: (spot: PropertySpot) => void): void {
+    for (const f of this.forRent.values()) {
+      f.sign.removeFromParent();
+      f.tag.removeFromParent();
+    }
+    this.forRent.clear();
+    this.rentTexture ??= signTexture('À LOUER', '#d62828', '#ffffff');
+    for (const { spot, label } of offers) {
+      if (this.businessSigns.has(spot.id)) continue;
+      const sign = this.facadeSign(spot, this.rentTexture, 0.8);
+      const el = document.createElement('button');
+      el.className = 'rent-tag';
+      el.textContent = label;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onTap(spot);
+      });
+      const tag = new CSS2DObject(el);
+      tag.position.set(spot.door.x, groundTop(this.grid.tileAt(spot.door.x, spot.door.y)) + 1.3, spot.door.y);
+      tag.visible = false;
+      this.scene.add(tag);
+      this.forRent.set(spot.id, { sign, tag, door: spot.door });
+    }
+  }
+
+  /** Panneau plat sur la façade d'un local (côté rue). */
+  private facadeSign(spot: PropertySpot, tex: THREE.Texture, width: number): THREE.Mesh {
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(width, 0.3), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
+    const south = spot.door.y > spot.facade.y;
+    sign.position.set(spot.facade.x + (south ? 0 : 0.515), groundTop(this.grid.tileAt(spot.facade.x, spot.facade.y)) + 0.45, spot.facade.y + (south ? 0.515 : 0));
+    if (!south) sign.rotation.y = Math.PI / 2;
+    this.scene.add(sign);
+    return sign;
+  }
 
   /** Étiquette « Chez moi » au-dessus de la porte (après un déménagement…). */
   setHomeDoor(door: TilePoint | null): void {
@@ -328,13 +371,12 @@ export class CityView {
     const spot = this.opts.map.properties.find((p) => p.id === spotId);
     if (!spot || !type) return;
     const colors = BUSINESS_COLORS[type] ?? BUSINESS_COLORS.snack!;
-    const tex = signTexture(name.toUpperCase(), colors[0], colors[1]);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.3), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25 }));
-    const south = spot.door.y > spot.facade.y;
-    sign.position.set(spot.facade.x + (south ? 0 : 0.515), groundTop(this.grid.tileAt(spot.facade.x, spot.facade.y)) + 0.45, spot.facade.y + (south ? 0.515 : 0));
-    if (!south) sign.rotation.y = Math.PI / 2;
-    this.scene.add(sign);
-    this.businessSigns.set(spotId, sign);
+    this.businessSigns.set(spotId, this.facadeSign(spot, signTexture(name.toUpperCase(), colors[0], colors[1]), 1));
+    // Un commerce vient d'ouvrir ici : plus de panneau « À LOUER ».
+    const rent = this.forRent.get(spotId);
+    rent?.sign.removeFromParent();
+    rent?.tag.removeFromParent();
+    this.forRent.delete(spotId);
   }
 
   /** Recentre la caméra sur le joueur. */
@@ -394,6 +436,7 @@ export class CityView {
         const c = mark ? this.avatars.get(id) : undefined;
         c?.showMark(Math.hypot(c.tileX - self.tileX, c.tileY - self.tileY) <= MARK_RADIUS);
       }
+      for (const f of this.forRent.values()) f.tag.visible = Math.hypot(f.door.x - self.tileX, f.door.y - self.tileY) <= FOR_RENT_RADIUS;
     }
 
     this.renderer.render(this.scene, this.camera);
