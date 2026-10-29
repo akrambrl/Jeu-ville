@@ -151,6 +151,11 @@ export class Character3D {
     this.root.add(this.mark);
   }
 
+  /** Affiche ou cache le signe (sans le perdre) : seuls les gens proches en montrent un. */
+  showMark(visible: boolean): void {
+    if (this.mark) this.mark.visible = visible;
+  }
+
   setLabel(text: string, self: boolean): void {
     if (!text) return;
     const el = document.createElement('div');

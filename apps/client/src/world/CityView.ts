@@ -89,6 +89,8 @@ const LABEL_KINDS = new Set<MapPoi['kind']>([
 ]);
 /** Au-delà de cette distance caméra, les étiquettes secondaires sont masquées. */
 const LABEL_DISTANCE = 26;
+/** Les « ❗ » (habitants qui demandent de l'aide) ne s'affichent qu'à moins de tant de cases du joueur. */
+const MARK_RADIUS = 9;
 
 export class CityView {
   private readonly renderer: THREE.WebGLRenderer;
@@ -386,6 +388,13 @@ export class CityView {
     const dist = this.camera.position.distanceTo(t);
     for (const l of this.poiLabels) l.obj.visible = l.major || dist < LABEL_DISTANCE;
     for (const s of this.streetNames) s.visible = dist < LABEL_DISTANCE;
+    // « ❗ » seulement pour les habitants tout proches, sinon l'écran en est couvert.
+    if (self) {
+      for (const [id, mark] of this.marks) {
+        const c = mark ? this.avatars.get(id) : undefined;
+        c?.showMark(Math.hypot(c.tileX - self.tileX, c.tileY - self.tileY) <= MARK_RADIUS);
+      }
+    }
 
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
