@@ -21,29 +21,29 @@ import {
 /** Hauteur d'un étage (1 case = 1 unité). */
 export const LEVEL_H = 0.42;
 
-// Style kawaii : façades pastel (rose, vanille, menthe, ciel, lilas).
-const APARTMENT_WALLS = ['#ffbfd0', '#ffe08f', '#ade8b8', '#b5d4ff', '#d8c2ff'];
+// Monde « jouet » : façades aux couleurs vives (rouge, jaune, bleu, vert, orange, rose).
+const APARTMENT_WALLS = ['#ff7a7a', '#ffd23f', '#5ab8ff', '#6ee08a', '#ffa64d', '#ff8fc8'];
 
 const FACADES: Record<string, FacadeStyle> = {
-  [TILE.starter]: { wall: '#9fe3c8', balcony: true },
-  [TILE.commercial]: { wall: '#ffd2a8', shutters: '#7fb8ff' },
-  [TILE.civic]: { wall: '#fff0b8', wide: true, band: '#ffb26b' },
-  [TILE.townhall]: { wall: '#fff6e6', arched: true, band: '#ffd1dc' },
-  [TILE.worship]: { wall: '#f3e6cf', arched: true, window: '#a9c0ff', frame: '#ffffff' },
-  [TILE.station]: { wall: '#ffe9d0', arched: true, band: '#ffc7a8' },
-  [TILE.police]: { wall: '#eef4ff', band: '#6f8fe0' },
-  [TILE.supermarket]: { wall: '#f6fff4', wide: true, window: '#c9ecf7', band: '#7fd19b' },
-  [TILE.building]: { wall: '#ffcf9a' },
-  [TILE.industrial]: { wall: '#cfc4ea' },
+  [TILE.starter]: { wall: '#4fd8b0', balcony: true },
+  [TILE.commercial]: { wall: '#ffb347', shutters: '#3d8bff' },
+  [TILE.civic]: { wall: '#ffd23f', wide: true, band: '#ff7a3d' },
+  [TILE.townhall]: { wall: '#fff4dc', arched: true, band: '#ff5c7a' },
+  [TILE.worship]: { wall: '#ffe7b0', arched: true, window: '#7a8cff', frame: '#ffffff' },
+  [TILE.station]: { wall: '#ff9b73', arched: true, band: '#ffd23f' },
+  [TILE.police]: { wall: '#7fb2ff', band: '#2952d9' },
+  [TILE.supermarket]: { wall: '#8ef0a8', wide: true, window: '#b9f0ff', band: '#1fae5b' },
+  [TILE.building]: { wall: '#ffc35c' },
+  [TILE.industrial]: { wall: '#b49cff' },
 };
 
 const ROOFS: Record<string, [string, string?]> = {
-  default: ['#f59fb5', 'rgba(255,255,255,0.25)'],
-  [TILE.apartments]: ['#b9a7e8', 'rgba(255,255,255,0.2)'],
-  [TILE.townhall]: ['#7fa6f0', 'rgba(255,255,255,0.3)'],
-  [TILE.worship]: ['#9fa8e0', 'rgba(255,255,255,0.25)'],
-  [TILE.station]: ['#9cc6e8', 'rgba(255,255,255,0.3)'],
-  [TILE.supermarket]: ['#a8e0bf'],
+  default: ['#ff4f4f', 'rgba(255,255,255,0.3)'],
+  [TILE.apartments]: ['#4f6dff', 'rgba(255,255,255,0.3)'],
+  [TILE.townhall]: ['#2f80ff', 'rgba(255,255,255,0.35)'],
+  [TILE.worship]: ['#8a5cff', 'rgba(255,255,255,0.3)'],
+  [TILE.station]: ['#ff4f4f', 'rgba(255,255,255,0.35)'],
+  [TILE.supermarket]: ['#22c55e', 'rgba(255,255,255,0.3)'],
 };
 
 const FRONTS: Record<Storefront['kind'], Omit<FrontStyle, 'sign'>> = {

@@ -1,6 +1,6 @@
 /** Textures dessinées en code (sols, façades, enseignes). */
 import * as THREE from 'three';
-import { pastel } from './kawaii.js';
+import { vivid } from './kawaii.js';
 
 export function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -23,61 +23,72 @@ export function seeded(seed: number): () => number {
   };
 }
 
-function speckle(ctx: CanvasRenderingContext2D, size: number, base: string, amount: number, count: number, seed: number): void {
-  const r = seeded(seed);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < count; i++) {
-    const light = r() < 0.5;
-    ctx.fillStyle = light ? `rgba(255,255,255,${r() * amount})` : `rgba(0,0,0,${r() * amount})`;
-    ctx.fillRect(r() * size, r() * size, 2, 2);
-  }
-}
-
 // ---------- Sols ----------
+
+/** Aplat de couleur (monde « jouet » : pas de grain réaliste). */
+function flat(c: CanvasRenderingContext2D, color: string): void {
+  c.fillStyle = color;
+  c.fillRect(0, 0, 64, 64);
+}
 
 export const GROUND_TEXTURES = {
   grass: () =>
     canvasTexture(64, 64, (c) => {
-      speckle(c, 64, '#74d17a', 0.08, 500, 1);
-      // Petites fleurs semées dans l'herbe.
+      flat(c, '#4cd964');
+      // Touffes d'herbe et petites fleurs, dessinées comme dans un jeu.
       const r = seeded(2);
-      for (let i = 0; i < 6; i++) {
-        c.fillStyle = ['#ffffff', '#ffb3c7', '#fff1a8'][i % 3]!;
-        c.fillRect(Math.floor(r() * 62), Math.floor(r() * 62), 2, 2);
+      c.fillStyle = '#3cbf55';
+      for (let i = 0; i < 5; i++) {
+        const x = Math.floor(r() * 56) + 4;
+        const y = Math.floor(r() * 56) + 4;
+        c.beginPath();
+        c.moveTo(x - 4, y + 3);
+        c.lineTo(x - 2, y - 3);
+        c.lineTo(x, y + 1);
+        c.lineTo(x + 2, y - 4);
+        c.lineTo(x + 4, y + 3);
+        c.fill();
+      }
+      for (let i = 0; i < 3; i++) {
+        const x = Math.floor(r() * 56) + 4;
+        const y = Math.floor(r() * 56) + 4;
+        c.fillStyle = ['#ffffff', '#ff5d8f', '#ffd60a'][i]!;
+        c.beginPath();
+        c.arc(x, y, 2.5, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#ffd60a';
+        c.fillRect(x - 0.5, y - 0.5, 1, 1);
       }
     }),
   sidewalk: () =>
     canvasTexture(64, 64, (c) => {
-      speckle(c, 64, '#ffe4dc', 0.04, 200, 3);
-      c.strokeStyle = 'rgba(232,160,170,0.45)';
-      for (let k = 0; k <= 64; k += 16) {
+      flat(c, '#ffe9a8');
+      // Gros pavés arrondis.
+      c.fillStyle = '#fff3cf';
+      for (let y = 0; y < 64; y += 32) for (let x = 0; x < 64; x += 32) {
         c.beginPath();
-        c.moveTo(k, 0);
-        c.lineTo(k, 64);
-        c.moveTo(0, k);
-        c.lineTo(64, k);
-        c.stroke();
+        c.roundRect(x + 3, y + 3, 26, 26, 7);
+        c.fill();
       }
     }),
-  road: () => canvasTexture(64, 64, (c) => speckle(c, 64, '#9a90c8', 0.05, 500, 4)),
-  majorRoad: () => canvasTexture(64, 64, (c) => speckle(c, 64, '#8b80bd', 0.05, 500, 5)),
-  yard: () => canvasTexture(64, 64, (c) => speckle(c, 64, '#e3dcef', 0.04, 300, 6)),
+  road: () => canvasTexture(64, 64, (c) => flat(c, '#6c7ae0')),
+  majorRoad: () => canvasTexture(64, 64, (c) => flat(c, '#5b68d1')),
+  yard: () => canvasTexture(64, 64, (c) => flat(c, '#f1d9ff')),
   rail: () =>
     canvasTexture(64, 64, (c) => {
-      speckle(c, 64, '#c9b39a', 0.1, 500, 7);
-      c.fillStyle = '#9a7a5e';
-      for (let x = 2; x < 64; x += 11) c.fillRect(x, 6, 5, 52);
-      c.fillStyle = '#c9ccd2';
-      c.fillRect(0, 18, 64, 3);
-      c.fillRect(0, 43, 64, 3);
+      flat(c, '#d9a066');
+      c.fillStyle = '#a0522d';
+      for (let x = 2; x < 64; x += 11) c.fillRect(x, 6, 6, 52);
+      c.fillStyle = '#e8e8f0';
+      c.fillRect(0, 17, 64, 4);
+      c.fillRect(0, 43, 64, 4);
     }),
   platform: () =>
     canvasTexture(64, 64, (c) => {
-      speckle(c, 64, '#f6efe6', 0.04, 200, 8);
-      c.fillStyle = '#ffd166';
-      c.fillRect(0, 0, 64, 6);
-      c.fillRect(0, 58, 64, 6);
+      flat(c, '#ffffff');
+      c.fillStyle = '#ffd60a';
+      c.fillRect(0, 0, 64, 7);
+      c.fillRect(0, 57, 64, 7);
     }),
 };
 
@@ -101,16 +112,14 @@ export function facadeTexture(style: FacadeStyle): THREE.CanvasTexture {
     c.fillStyle = style.wall;
     c.fillRect(0, 0, 64, 64);
     // Léger grain
-    const r = seeded(style.wall.length * 31);
-    for (let i = 0; i < 120; i++) {
-      c.fillStyle = `rgba(0,0,0,${r() * 0.04})`;
-      c.fillRect(r() * 64, r() * 64, 2, 2);
-    }
-    const glass = style.window ?? '#8fcdf0';
+    const glass = style.window ?? '#5ad1ff';
     const frame = style.frame ?? '#ffffff';
     // Mêmes emplacements que les fenêtres allumées la nuit (night.ts).
     const spots = style.wide ? [[6, 52]] : [[10, 16], [38, 16]];
     for (const [x, w] of spots as [number, number][]) {
+      // Contour sombre épais, puis cadre blanc : effet dessin animé.
+      c.fillStyle = OUTLINE;
+      roundRect(c, x - 4, 12, w + 8, 40, 8);
       c.fillStyle = frame;
       roundRect(c, x - 2, 14, w + 4, 36, 6);
       c.fillStyle = glass;
@@ -153,10 +162,14 @@ export function facadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       c.fillStyle = style.band;
       c.fillRect(0, 0, 64, 6);
     }
-    c.fillStyle = 'rgba(255,255,255,0.35)';
-    c.fillRect(0, 61, 64, 3);
+    // Plinthe sombre entre deux étages, comme des blocs empilés.
+    c.fillStyle = 'rgba(0,0,0,0.12)';
+    c.fillRect(0, 60, 64, 4);
   });
 }
+
+/** Contour des dessins (fenêtres, vitrines). */
+const OUTLINE = '#2d2a4a';
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   c.beginPath();
@@ -179,7 +192,7 @@ export interface FrontStyle {
 
 export function storefrontTexture(style: FrontStyle): THREE.CanvasTexture {
   return canvasTexture(128, 128, (c) => {
-    c.fillStyle = pastel(style.wall, 0.3);
+    c.fillStyle = vivid(style.wall);
     c.fillRect(0, 0, 128, 128);
     // Enseigne
     c.fillStyle = style.signBg;
@@ -208,14 +221,16 @@ export function storefrontTexture(style: FrontStyle): THREE.CanvasTexture {
       }
     }
     // Vitrine + porte
+    c.fillStyle = OUTLINE;
+    roundRect(c, 5, 56, 118, 70, 12);
     c.fillStyle = '#ffffff';
-    roundRect(c, 7, 58, 114, 66, 10);
-    c.fillStyle = pastel(style.glass ?? '#3d5570', 0.25);
+    roundRect(c, 8, 59, 112, 64, 10);
+    c.fillStyle = vivid(style.glass ?? '#3d9bd5');
     roundRect(c, 11, 62, 106, 62, 8);
     c.fillStyle = 'rgba(255,255,255,0.5)';
     c.fillRect(18, 66, 6, 30);
     c.fillRect(28, 66, 3, 14);
-    c.fillStyle = pastel(style.door ?? '#2a3442', 0.2);
+    c.fillStyle = vivid(style.door ?? '#c0392b');
     roundRect(c, 55, 66, 20, 58, 6);
   });
 }
@@ -223,14 +238,19 @@ export function storefrontTexture(style: FrontStyle): THREE.CanvasTexture {
 /** Texture de toit (gravillons, ardoise, zinc, tuiles). */
 export function roofTexture(base: string, lines?: string): THREE.CanvasTexture {
   return canvasTexture(64, 64, (c) => {
-    speckle(c, 64, base, 0.08, 300, base.length);
+    c.fillStyle = base;
+    c.fillRect(0, 0, 64, 64);
     if (lines) {
+      // Tuiles en écailles, rangée par rangée (décalées une sur deux).
       c.strokeStyle = lines;
-      for (let y = 4; y < 64; y += 8) {
-        c.beginPath();
-        c.moveTo(0, y);
-        c.lineTo(64, y);
-        c.stroke();
+      c.lineWidth = 2.5;
+      for (let row = 0; row < 4; row++) {
+        const y = row * 16 + 16;
+        for (let x = row % 2 ? -8 : 0; x < 64; x += 16) {
+          c.beginPath();
+          c.arc(x + 8, y - 8, 8, 0, Math.PI);
+          c.stroke();
+        }
       }
     }
   });

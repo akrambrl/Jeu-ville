@@ -54,7 +54,9 @@ export function buildGround(grid: MapGrid): THREE.Group {
     cells.forEach(([x, y], i) => {
       m.makeScale(1, top - BASE, 1).setPosition(x, (top + BASE) / 2, y);
       mesh.setMatrixAt(i, m);
-      color.setRGB(1, 1, 1).offsetHSL(0, 0, (((x * 7 + y * 13) % 5) - 2) * 0.008);
+      // Herbe et trottoirs en damier, façon plateau de jeu.
+      const checker = (code === TILE.grass || code === TILE.ground || code === TILE.pedestrian) && (x + y) % 2 === 0;
+      color.setRGB(1, 1, 1).offsetHSL(0, 0, checker ? -0.06 : 0);
       mesh.setColorAt(i, color);
     });
     group.add(mesh);

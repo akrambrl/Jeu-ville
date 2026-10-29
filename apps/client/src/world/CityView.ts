@@ -19,6 +19,7 @@ import { clockFromUrl, daylightAt, type Daylight } from './daylight.js';
 import { applyNight } from './night.js';
 import { canvasTexture, signTexture } from './textures.js';
 import { toonify } from './kawaii.js';
+import { Clouds } from './clouds.js';
 
 export interface CityViewOptions {
   map: DistrictMap;
@@ -240,6 +241,9 @@ export class CityView {
     this.scene.add(this.ambient.group);
     // Style kawaii : rendu en aplats ; les véhicules et marchands arrivent au fil du temps.
     for (const part of [ground, buildings.group, props, this.ambient.group]) toonify(part);
+    this.clouds = new Clouds(this.grid.width, this.grid.height);
+    this.clouds.setNight(this.daylight.night);
+    this.scene.add(this.clouds.group);
     const ambient = this.ambient;
     void ambient.spawnVendors(map.vendors).then(() => toonify(ambient.group));
     window.setInterval(() => toonify(ambient.group), TOONIFY_AMBIENT_MS);
@@ -285,6 +289,7 @@ export class CityView {
   }
 
   private homeTag: CSS2DObject | null = null;
+  private clouds: Clouds | null = null;
   private missionTag: CSS2DObject | null = null;
   private missionBeam: THREE.Mesh | null = null;
 
@@ -415,6 +420,7 @@ export class CityView {
       }
     }
     this.ambient?.update(dt, { x: this.controls.target.x, y: this.controls.target.z });
+    this.clouds?.update(dt);
     this.errandScene.update(dt);
     const self = this.avatars.get(this.opts.link.sessionId);
     this.updateMarker(dt, self);
@@ -563,6 +569,7 @@ export class CityView {
     this.sun.intensity = d.lightIntensity;
     this.renderer.toneMappingExposure = d.exposure;
     applyNight(d.night);
+    this.clouds?.setNight(d.night);
     document.body.classList.toggle('night', d.night > 0.5);
   }
 

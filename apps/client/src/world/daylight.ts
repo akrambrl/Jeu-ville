@@ -47,8 +47,8 @@ export function sunPosition(date: Date): { elevation: number; azimuth: number } 
 const smooth = (a: number, b: number, x: number) => THREE.MathUtils.smoothstep(x, a, b);
 const c = (hex: number) => new THREE.Color(hex);
 
-// Style kawaii : ciel bleu bonbon qui rosit à l'horizon.
-const DAY = { top: c(0x9fd9ff), bottom: c(0xffe6f1), fog: c(0xffeaf3), sky: c(0xfff6fa), ground: c(0xc2e8b8), sun: c(0xfff6e2) };
+// Monde « jouet » : grand ciel bleu vif, horizon clair.
+const DAY = { top: c(0x2ea8ff), bottom: c(0xbfeaff), fog: c(0xc9edff), sky: c(0xffffff), ground: c(0x8fe08f), sun: c(0xfffbe8) };
 const DUSK = { top: c(0x7a7fd6), bottom: c(0xffb38f), fog: c(0xe8b4b8), sky: c(0xffd2b8), ground: c(0x8a8aa0), sun: c(0xffb07a) };
 // Nuit de ville : ciel orangé en bas (éclairage public), ambiance bleutée mais lisible.
 const NIGHT = { top: c(0x0d1630), bottom: c(0x3a3550), fog: c(0x2a2d45), sky: c(0x8a9cd0), ground: c(0x3a3a48), sun: c(0xb4c6ff) };
@@ -82,7 +82,7 @@ export function daylightAt(date: Date): Daylight {
     skyTop: blend('top', dusk, night),
     skyBottom: blend('bottom', dusk, night),
     fog: blend('fog', dusk, night),
-    exposure: THREE.MathUtils.lerp(0.85, 1.35, night),
+    exposure: THREE.MathUtils.lerp(0.95, 1.35, night),
   };
 }
 

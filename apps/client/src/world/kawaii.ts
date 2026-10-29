@@ -1,13 +1,13 @@
 /**
- * Style « kawaii » de la ville : ombrage en aplats (toon, 3 paliers) au lieu
- * du rendu réaliste, et couleurs pastel. Les matériaux réalistes sont
- * remplacés une fois, après la construction de la ville.
+ * Monde « jouet » coloré : ombrage en aplats (toon, 3 paliers doux) au lieu
+ * du rendu réaliste, couleurs vives. Les matériaux réalistes sont remplacés
+ * une fois, après la construction de la ville.
  */
 import * as THREE from 'three';
 import { retargetGlow } from './night.js';
 
 /** Paliers de lumière du rendu toon (ombre, mi-teinte, lumière), 0 à 255. */
-const TOON_STEPS = [110, 190, 255];
+const TOON_STEPS = [150, 215, 255];
 
 let gradient: THREE.DataTexture | null = null;
 function gradientMap(): THREE.DataTexture {
@@ -57,8 +57,11 @@ export function toonify(root: THREE.Object3D): void {
   });
 }
 
-/** Version pastel d'une couleur CSS (#rrggbb) : mélangée avec du blanc. */
-export function pastel(hex: string, amount = 0.35): string {
-  const c = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), amount);
+/** Version « jouet » d'une couleur CSS (#rrggbb) : plus saturée et plus claire. */
+export function vivid(hex: string): string {
+  const c = new THREE.Color(hex);
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  c.setHSL(hsl.h, Math.min(1, hsl.s * 1.25 + 0.1), Math.min(0.72, Math.max(0.45, hsl.l + 0.12)));
   return `#${c.getHexString()}`;
 }

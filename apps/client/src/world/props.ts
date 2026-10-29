@@ -62,24 +62,8 @@ export async function buildProps(grid: MapGrid): Promise<THREE.Group> {
     }
   }
 
-  // Arbres Kenney (un seul maillage chacun → instanciables).
-  for (const name of ['tree-large', 'tree-small'] as const) {
-    const gltf = await loadModel('nature', name);
-    let source: THREE.Mesh | null = null;
-    gltf.scene.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && !source) source = o as THREE.Mesh;
-    });
-    if (!source) continue;
-    const mesh = source as THREE.Mesh;
-    // Géométrie dans le repère du modèle, posée au sol, ~1,5 case de haut.
-    gltf.scene.updateMatrixWorld(true);
-    const geo = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
-    geo.computeBoundingBox();
-    const bb = geo.boundingBox!;
-    const k = 1.5 / (bb.max.y - bb.min.y);
-    geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2).scale(k, k, k);
-    group.add(instanced(geo, mesh.material as THREE.Material, trees[name]));
-  }
+  // Arbres « jouet » : boule de feuillage sur un tronc (grands), buisson rond (petits).
+  group.add(...toyTrees(trees['tree-large'], trees['tree-small']));
 
   // Lampadaires : mât + lanterne.
   const dark = new THREE.MeshStandardMaterial({ color: 0x343a44, roughness: 0.6 });
@@ -316,4 +300,31 @@ function mergeBoxes(boxes: [number, number, number, number, number, number][]): 
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   return geo;
+}
+
+/** Verts du feuillage, un par arbre (choisi selon sa position). */
+const LEAF_GREENS = [0x2fd14a, 0x45e05c, 0x24b93f, 0x8bdc2f, 0x1fc28a];
+
+/** Arbres ronds et colorés, instanciés (un maillage par pièce). */
+function toyTrees(large: THREE.Matrix4[], small: THREE.Matrix4[]): THREE.Object3D[] {
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0xa8652e });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const trunk = new THREE.CylinderGeometry(0.07, 0.1, 0.75, 8).translate(0, 0.375, 0);
+  const crown = new THREE.SphereGeometry(0.48, 16, 12).translate(0, 1.05, 0);
+  const shortTrunk = new THREE.CylinderGeometry(0.05, 0.07, 0.3, 8).translate(0, 0.15, 0);
+  const bush = new THREE.SphereGeometry(0.36, 14, 10).scale(1, 0.9, 1).translate(0, 0.55, 0);
+  const color = new THREE.Color();
+  const tint = (mesh: THREE.InstancedMesh, matrices: THREE.Matrix4[]) => {
+    matrices.forEach((m, i) => {
+      const k = Math.abs(Math.round(m.elements[12]! * 7 + m.elements[14]! * 13)) % LEAF_GREENS.length;
+      mesh.setColorAt(i, color.setHex(LEAF_GREENS[k]!));
+    });
+    return mesh;
+  };
+  return [
+    instanced(trunk, trunkMat, large),
+    tint(instanced(crown, leafMat, large), large),
+    instanced(shortTrunk, trunkMat, small),
+    tint(instanced(bush, leafMat, small), small),
+  ];
 }
