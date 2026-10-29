@@ -45,6 +45,12 @@ export function startGame(
   let inShift = false;
   const isNear = (p: { x: number; y: number } | null | undefined, x: number, y: number) =>
     !!p && Math.hypot(x - p.x, y - p.y) <= MOVEMENT.foodInteractionRange;
+  const nearService = (p: { x: number; y: number } | null, x: number, y: number) =>
+    !!p && Math.hypot(x - p.x, y - p.y) <= MOVEMENT.serviceInteractionRange;
+  /** Agence choisie dans « Aller à… » : elle s'ouvre toute seule à l'arrivée. */
+  let pendingService: 'agency' | 'jobs' | null = null;
+  const serviceAt = (p: { x: number; y: number }) =>
+    agencyDoor && p.x === agencyDoor.x && p.y === agencyDoor.y ? 'agency' : jobCenterDoor && p.x === jobCenterDoor.x && p.y === jobCenterDoor.y ? 'jobs' : null;
   let position = { x: 0, y: 0 };
   /** Commerces de bouche tenus par des joueurs (on peut y manger). */
   let playerFood: FoodPlace[] = [];
@@ -79,8 +85,15 @@ export function startGame(
       hud.setNearShop(shopInReach(shops, x, y));
       hud.setPosition(x, y);
       position = { x, y };
-      hud.setNearAgency(isNear(agencyDoor, x, y));
-      hud.setNearJobCenter(isNear(jobCenterDoor, x, y));
+      const atAgency = nearService(agencyDoor, x, y);
+      const atJobCenter = nearService(jobCenterDoor, x, y);
+      hud.setNearAgency(atAgency);
+      hud.setNearJobCenter(atJobCenter);
+      if ((pendingService === 'agency' && atAgency) || (pendingService === 'jobs' && atJobCenter)) {
+        if (pendingService === 'agency') void agency.open(current, position);
+        else jobCenter.open(current, position);
+        pendingService = null;
+      }
       const work = allEmployers.find((e) => e.id === current.job?.employerId);
       // Devant son propre commerce de bouche : on peut tenir le comptoir.
       const counter = myCounters().find((c) => isNear(c.door, x, y));
@@ -93,7 +106,10 @@ export function startGame(
     onBusinesses: (open) => {
       playerFood = businessFoodPlaces(map, open);
     },
-    onGroundTap: () => conversations.cancel(),
+    onGroundTap: () => {
+      conversations.cancel();
+      pendingService = null;
+    },
   });
   const dialogue = new DialogueBox();
   ui.append(dialogue.root);
@@ -172,8 +188,14 @@ export function startGame(
     ui,
     {
       onGoHome: () => homeDoor && view.requestMove(homeDoor),
-      onGoTo: (point) => view.requestMove(point),
-      onBusTo: (point) => link.rideBus(point),
+      onGoTo: (point) => {
+        pendingService = serviceAt(point);
+        view.requestMove(point);
+      },
+      onBusTo: (point) => {
+        pendingService = serviceAt(point);
+        link.rideBus(point);
+      },
       onHomeAction: (action) => link.homeAction(action),
       onBuyFood: (placeId, itemId) => link.buyFood(placeId, itemId),
       onBuyItem: (placeId, itemId) => link.buyItem(placeId, itemId),
@@ -253,7 +275,10 @@ export function startGame(
     );
   };
   window.setInterval(() => void refreshForRent(), FOR_RENT_REFRESH_MS);
-  link.onNotice((n) => hud.notify(n.text, n.level));
+  link.onNotice((n) => {
+    hud.notify(n.text, n.level);
+    if (n.level === 'error') agency.showError(n.text);
+  });
   link.onArrival((a) => view.playArrival(a));
   link.onDisconnected(() => showFatal(ui, 'Déconnecté du serveur.', () => location.reload()));
 

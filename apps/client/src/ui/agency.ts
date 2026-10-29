@@ -90,6 +90,14 @@ export class AgencySheet {
     this.root.hidden = true;
   }
 
+  /** Une opération a échoué : on réaffiche les annonces (boutons réactivés) avec le message en haut. */
+  showError(text: string): void {
+    if (this.root.hidden) return;
+    this.show(this.tab, true);
+    this.body.prepend(el('p', { class: 'agency-error', text: `⚠️ ${text}` }));
+    this.body.scrollTop = 0;
+  }
+
   /** Nouvelle vue privée (après un achat…) : on rafraîchit si l'agence est ouverte. */
   update(self: CharacterSelf): void {
     this.self = self;
@@ -170,13 +178,12 @@ export class AgencySheet {
   /** Bouton à deux appuis : « Acheter » puis « Confirmer ? ». */
   private confirmButton(label: string, act: () => void, costCents: number): HTMLButtonElement {
     const b = el('button', { class: 'primary small', text: label });
-    const tooPoor = (this.self?.moneyCents ?? 0) < costCents;
-    if (tooPoor) {
-      b.disabled = true;
-      b.title = "Pas assez d'argent";
-    }
+    const missing = costCents - (this.self?.moneyCents ?? 0);
+    if (missing > 0) b.classList.add('too-poor');
     let armed = false;
     b.addEventListener('click', () => {
+      // Pas assez d'argent : on le dit plutôt que de griser le bouton sans explication.
+      if (missing > 0) return this.showError(`Pas assez d'argent : il te manque ${formatMoney(missing)}.`);
       if (!armed) {
         armed = true;
         b.textContent = costCents > 0 ? `Confirmer (${formatMoney(costCents)}) ?` : 'Confirmer ?';

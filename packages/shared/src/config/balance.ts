@@ -324,6 +324,8 @@ export const MOVEMENT = {
   homeInteractionRange: 1.5,
   /** Distance max (en cases) à un marchand ou à l'entrée d'un commerce pour acheter à manger. */
   foodInteractionRange: 1.6,
+  /** Agence immobilière, agence pour l'emploi : on y entre de plus loin (porte occupée, dépose du bus). */
+  serviceInteractionRange: 3,
   /** Longueur max d'un trajet demandé, pour borner le coût de l'A*. */
   maxPathLength: 600,
   /** Bloqué par quelqu'un sur la case suivante : on cherche un autre chemin au bout de… (ms). */
