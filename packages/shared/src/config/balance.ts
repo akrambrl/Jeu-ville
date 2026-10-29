@@ -219,6 +219,8 @@ export const REAL_ESTATE = {
   roundingCents: 100 * CENTS_PER_EURO,
   /** Le loyer est prélevé par tranches (h réelles) : 1/7 du loyer hebdomadaire par jour. */
   rentPeriodHours: 24,
+  /** Loyers affichés au mois (52 semaines / 12 mois). */
+  weeksPerMonth: 52 / 12,
   /** Déménagement : une fois toutes les deux semaines au plus. */
   moveCooldownDays: 14,
   /** Biens qu'un joueur peut détenir en même temps (achetés ou loués). */

@@ -1,4 +1,4 @@
-import { BUSINESS_FOOD, businessFoodPlaces, type FoodPlace, ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion, weeklyRentCents } from '@jeu-ville/shared';
+import { BUSINESS_FOOD, businessFoodPlaces, type FoodPlace, ERRAND_TYPES, MapGrid, MOVEMENT, dailyErrandOffers, realDayKey, reachableTiles, type ErrandOffer, type ErrandView, employers, foodPlaceInReach, foodPlaces, getDistrictMap, shopInReach, shopPlaces, type CharacterSelf, type DistrictMap, type MapPoi, type Religion, monthlyRentCents } from '@jeu-ville/shared';
 import { CityView } from '../world/CityView.js';
 import type { DistrictLink } from '../net/link.js';
 import { el, formatMoney } from '../ui/dom.js';
@@ -248,7 +248,7 @@ export function startGame(
     if (key === freeLocals) return;
     freeLocals = key;
     view.setForRent(
-      free.map((spot) => ({ spot, label: `🏪 À louer · ${formatMoney(weeklyRentCents(spot))} / sem.` })),
+      free.map((spot) => ({ spot, label: `🏪 À louer · ${formatMoney(monthlyRentCents(spot))} / mois` })),
       () => void agency.open(current, position, 'local'),
     );
   };

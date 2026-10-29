@@ -21,6 +21,11 @@ export function weeklyRentCents(spot: PropertySpot): number {
   return Math.round((REAL_ESTATE[spot.kind].weeklyRentPerRoomCents * spot.rooms * locationFactor(spot)) / 100) * 100;
 }
 
+/** Loyer mensuel affiché (arrondi à l'euro) ; il est prélevé chaque jour, au prorata. */
+export function monthlyRentCents(spot: PropertySpot): number {
+  return Math.round((weeklyRentCents(spot) * REAL_ESTATE.weeksPerMonth) / 100) * 100;
+}
+
 /** Loyer prélevé à chaque période (jour réel). Entier, en centimes. */
 export function rentPerPeriodCents(spot: PropertySpot): number {
   return Math.round((weeklyRentCents(spot) * REAL_ESTATE.rentPeriodHours) / (7 * 24));

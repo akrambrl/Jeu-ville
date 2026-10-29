@@ -12,7 +12,7 @@ import {
   reputationStars,
   rentPerPeriodCents,
   salePriceCents,
-  weeklyRentCents,
+  monthlyRentCents,
   type BusinessType,
   type CharacterSelf,
   type DistrictMap,
@@ -146,8 +146,8 @@ export class AgencySheet {
       tab === 'buy'
         ? `${formatMoney(salePriceCents(spot))}`
         : tab === 'rent'
-          ? `${formatMoney(weeklyRentCents(spot))} / semaine`
-          : `${formatMoney(weeklyRentCents(spot))} / sem. ou ${formatMoney(salePriceCents(spot))}`;
+          ? `${formatMoney(monthlyRentCents(spot))} / mois`
+          : `${formatMoney(monthlyRentCents(spot))} / mois ou ${formatMoney(salePriceCents(spot))}`;
     const visit = el('button', { class: 'agency-visit', text: '📍 Visiter' });
     visit.addEventListener('click', () => {
       this.actions.visit(spot.door);
@@ -205,7 +205,7 @@ export class AgencySheet {
       const spot = this.map.properties.find((s) => s.id === p.spotId);
       if (!spot) continue;
       const isHome = this.self?.home?.dwellingId.endsWith(spot.id) ?? false;
-      const status = p.relation === 'owner' ? 'Propriétaire' : `Locataire · ${formatMoney(weeklyRentCents(spot))} / semaine`;
+      const status = p.relation === 'owner' ? 'Propriétaire' : `Locataire · ${formatMoney(monthlyRentCents(spot))} / mois`;
       const actions: HTMLElement[] = [];
       const visit = el('button', { class: 'agency-visit', text: '📍 Y aller' });
       visit.addEventListener('click', () => {
