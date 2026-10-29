@@ -11,6 +11,7 @@ import {
   REAL_MS_PER_HOUR,
   businessPayoutCents,
   getDistrictMap,
+  nextReputation,
   rentPerPeriodCents,
   salePriceCents,
 } from '@jeu-ville/shared';
@@ -121,9 +122,13 @@ describe.skipIf(!hasDb)('agence immobilière (base réelle)', () => {
     expect((await mod.getCharacterSelf(mod.db, owner.id))!.moneyCents).toBe(ownerBefore + 1000);
     // Le commerçant mange gratuitement chez lui.
     expect((await sales.buyFoodAtBusiness(mod.db, owner.id, key, spot.id, 'fastfood', 'menu')).self.moneyCents).toBe(ownerBefore + 1000);
-    const paid = await sales.payCounterSale(mod.db, owner.id, spot.id, 1400, 'shift-own:0');
+    // Plat parfait : payé une fois, et la réputation du commerce monte une fois.
+    const paid = await sales.payCounterSale(mod.db, owner.id, key, spot.id, 1400, 'shift-own:0', 3);
     expect(paid.moneyCents).toBe(ownerBefore + 2400);
-    await expect(sales.payCounterSale(mod.db, owner.id, spot.id, 1400, 'shift-own:0')).rejects.toThrow();
+    const reputation = () => mod.getCharacterSelf(mod.db, owner.id).then((me) => me!.properties.find((p) => p.spotId === spot.id)!.business!.reputation);
+    expect(await reputation()).toBe(nextReputation(0, 3));
+    await expect(sales.payCounterSale(mod.db, owner.id, key, spot.id, 1400, 'shift-own:0', 3)).rejects.toThrow();
+    expect(await reputation()).toBe(nextReputation(0, 3));
     expect(await mod.ledgerBalance(mod.db, owner.id)).toBe(paid.moneyCents);
     expect(await mod.ledgerBalance(mod.db, client.id)).toBe(after.moneyCents);
   });

@@ -203,6 +203,7 @@ export async function releaseProperty(db: Db, characterId: string, districtKey: 
         businessName: null,
         businessOpenedAt: null,
         payoutPeriodsPaid: 0,
+        businessReputation: 0,
       })
       .where(eq(properties.id, id));
     if (row.homePropertyId === id) await backToStarter(tx, characterId, districtKey);
@@ -233,7 +234,7 @@ export async function openBusiness(
     await recordLedgerEntry(tx, { characterId, amountCents: -setup, reason: `business_setup:${type}`, idempotencyKey: `business:${id}:${nowMs}` });
     await tx
       .update(properties)
-      .set({ businessType: type, businessName: name, businessOpenedAt: new Date(nowMs), payoutPeriodsPaid: 0 })
+      .set({ businessType: type, businessName: name, businessOpenedAt: new Date(nowMs), payoutPeriodsPaid: 0, businessReputation: 0 })
       .where(eq(properties.id, id));
     return reload(tx, characterId);
   });
@@ -269,7 +270,7 @@ export async function economyTick(db: Db, nowMs = Date.now()): Promise<Set<strin
           if (!me || me.moneyCents < rent) {
             await tx
               .update(properties)
-              .set({ tenantCharacterId: null, leaseStartedAt: null, rentPeriodsPaid: 0, businessType: null, businessName: null, businessOpenedAt: null, payoutPeriodsPaid: 0 })
+              .set({ tenantCharacterId: null, leaseStartedAt: null, rentPeriodsPaid: 0, businessType: null, businessName: null, businessOpenedAt: null, payoutPeriodsPaid: 0, businessReputation: 0 })
               .where(eq(properties.id, id));
             if (me?.homePropertyId === id) await backToStarter(tx, tenant, prop.districtId);
             touched.add(tenant);
@@ -286,7 +287,7 @@ export async function economyTick(db: Db, nowMs = Date.now()): Promise<Set<strin
       if (holder && prop.businessType && prop.businessOpenedAt) {
         const due = payoutPeriodsDue(prop.businessOpenedAt.getTime(), nowMs);
         if (due > prop.payoutPeriodsPaid) {
-          const amount = (due - prop.payoutPeriodsPaid) * businessPayoutCents(prop.businessType as BusinessType, spot);
+          const amount = (due - prop.payoutPeriodsPaid) * businessPayoutCents(prop.businessType as BusinessType, spot, prop.businessReputation);
           if (amount > 0) {
             await recordLedgerEntry(tx, {
               characterId: holder,

@@ -76,6 +76,8 @@ export interface DistrictLink {
   startOwnShift(spotId: string): void;
   stopShift(): void;
   serve(items: string[]): void;
+  /** Son propre comptoir : servir le plat cuisiné, avec la note de chaque étape (0 à 1). */
+  cook(dish: string, scores: number[]): void;
   onMission(cb: (mission: MissionView) => void): void;
   /** Missions du quotidien : aider un habitant (il faut être à côté de lui). */
   acceptErrand(offerId: string): void;

@@ -80,12 +80,12 @@ export function sameOrder(asked: string[], served: string[]): boolean {
 export function ownCounter(
   map: DistrictMap,
   business: { spotId: string; type: string; name: string },
-): { employer: Employer; pay: (tip: boolean) => number } | null {
+): { employer: Employer; pay: (tipShare: number) => number } | null {
   const food = (BUSINESS_FOOD as Record<string, { servePayCents: number; tipCents: number } | undefined>)[business.type];
   const spot = map.properties.find((p) => p.id === business.spotId);
   if (!food || !spot) return null;
   return {
     employer: { id: `own-${business.spotId}`, name: business.name, jobType: 'counter', door: spot.door },
-    pay: (tip) => food.servePayCents + (tip ? food.tipCents : 0),
+    pay: (share) => food.servePayCents + Math.round(food.tipCents * share),
   };
 }

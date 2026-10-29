@@ -14,6 +14,7 @@ import {
   openBusinessSchema,
   applyJobSchema,
   serveSchema,
+  cookSchema,
   employers,
   Shift,
   JOBS,
@@ -217,6 +218,13 @@ export class DistrictRoom extends Room<DistrictState> {
       const parsed = serveSchema.safeParse(raw);
       if (!s?.shift || !parsed.success) return;
       const result = s.shift.serve(parsed.data.items, { x: s.x, y: s.y }, Date.now());
+      if (result) this.missionDone(s, result);
+    });
+    this.onMessage(ClientMessage.cook, (client, raw) => {
+      const s = this.sessions.get(client.sessionId);
+      const parsed = cookSchema.safeParse(raw);
+      if (!s?.shift || !parsed.success) return;
+      const result = s.shift.cook(parsed.data.dish, parsed.data.scores, { x: s.x, y: s.y }, Date.now());
       if (result) this.missionDone(s, result);
     });
     this.onMessage(ClientMessage.buyProperty, (client, raw) => this.handleDeal(client, raw, 'buy'));
@@ -611,7 +619,7 @@ export class DistrictRoom extends Room<DistrictState> {
     }
     if (this.sessions.get(client.sessionId) !== s || s.shift) return;
     s.ownSpot = parsed.data.spotId;
-    s.shift = new Shift(`${s.characterId}:own:${Date.now()}`, counter.employer, 0, this.grid.map, Math.random, counter.pay);
+    s.shift = new Shift(`${s.characterId}:own:${Date.now()}`, counter.employer, 0, this.grid.map, Math.random, counter.pay, op.type);
     s.shift.next({ x: s.x, y: s.y }, Date.now());
     client.send(ServerMessage.mission, s.shift.view(Date.now()));
   }
@@ -623,7 +631,7 @@ export class DistrictRoom extends Room<DistrictState> {
     if (result.payCents > 0) {
       const ownSpot = s.ownSpot;
       void (ownSpot
-        ? payCounterSale(db, s.characterId, ownSpot, result.payCents, result.key)
+        ? payCounterSale(db, s.characterId, this.districtKey, ownSpot, result.payCents, result.key, result.stars)
         : payMission(db, s.characterId, shift.employer.jobType, result.payCents, result.key))
         .then((self) => this.sessions.get(s.id) === s && this.sendSelf(s, self))
         .catch((err) => console.error('payMission', err));

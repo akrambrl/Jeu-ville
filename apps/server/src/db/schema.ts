@@ -177,6 +177,8 @@ export const properties = pgTable(
     businessOpenedAt: timestamp('business_opened_at', { withTimezone: true }),
     /** Périodes de recettes déjà versées (tick idempotent). */
     payoutPeriodsPaid: integer('payout_periods_paid').notNull().default(0),
+    /** Réputation du commerce (0 à 100) : monte quand on y cuisine bien, augmente les recettes. */
+    businessReputation: integer('business_reputation').notNull().default(0),
   },
   (t) => [
     index('properties_owner_idx').on(t.ownerCharacterId),

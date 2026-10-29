@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { JOBS } from '../config/balance.js';
+import { BUSINESS_FOOD, JOBS } from '../config/balance.js';
+import { COOKING } from '../config/cooking.js';
 import type { DistrictMap } from '../map/types.js';
 import { canBeHired, jobLevel, missionPayCents } from './jobs.js';
 import { Shift } from './shifts.js';
@@ -39,5 +40,26 @@ describe('métiers', () => {
     const next = shift.view(1000);
     if (next.kind !== 'counter') throw new Error('mauvaise mission');
     expect(shift.serve([...next.order].reverse(), shop, 2000)!.payCents).toBe(JOBS.counter.payCents + JOBS.counter.tipCents);
+  });
+
+  it('son propre fast-food : on cuisine le plat commandé, payé selon les étoiles', () => {
+    const food = BUSINESS_FOOD.fastfood;
+    const pay = (share: number) => food.servePayCents + Math.round(food.tipCents * share);
+    const shift = new Shift('s3', { id: 'own', name: 'Chez moi', jobType: 'counter', door: shop }, 0, map, () => 0, pay, 'fastfood');
+    shift.next(shop, 0);
+    const view = shift.view(0);
+    if (view.kind !== 'cook') throw new Error('mauvaise mission');
+    expect(view.dish).toBe('burger');
+    // Trop rapide pour être vrai : refusé.
+    expect(shift.cook('burger', [1, 1], shop, 10)!.payCents).toBe(0);
+    const t = 10 + 2 * COOKING.minStepMs;
+    const perfect = shift.cook('burger', [1, 0.9], shop, t)!;
+    expect(perfect.stars).toBe(3);
+    expect(perfect.payCents).toBe(food.servePayCents + food.tipCents);
+    const meh = shift.cook('burger', [0.2, 0.3], shop, t + 2 * COOKING.minStepMs)!;
+    expect(meh.stars).toBe(1);
+    expect(meh.payCents).toBe(food.servePayCents);
+    // Le client ne patiente pas indéfiniment.
+    expect(shift.tick(shop, t + 2 * COOKING.minStepMs + COOKING.customerTimeoutMs + 1)!.payCents).toBe(0);
   });
 });

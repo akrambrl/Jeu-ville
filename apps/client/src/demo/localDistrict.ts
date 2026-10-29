@@ -50,6 +50,7 @@ import {
   holdForTalk,
   businessFoodPlaces,
   ownCounter,
+  nextReputation,
   ERRANDS,
   Errand,
   addKindness,
@@ -137,7 +138,7 @@ interface DemoHolding {
   relation: 'owner' | 'tenant';
   leaseStart: number | null;
   rentPaid: number;
-  business: { type: BusinessType; name: string; openedAt: number; paid: number } | null;
+  business: { type: BusinessType; name: string; openedAt: number; paid: number; reputation?: number } | null;
   /** Prix payé à l'achat (remboursé si le bien disparaît de la carte). */
   paidCents?: number;
 }
@@ -261,7 +262,7 @@ export function demoSelf(map: DistrictMap, save: DemoSave, districtKey: string, 
     properties: (save.holdings ?? []).map((h) => ({
       spotId: h.spotId,
       relation: h.relation,
-      business: h.business ? { type: h.business.type, name: h.business.name } : null,
+      business: h.business ? { type: h.business.type, name: h.business.name, reputation: h.business.reputation ?? 0 } : null,
     })),
     movedAt: save.movedAt ?? null,
     job: save.job ? { ...save.job, employerName: employers(map).find((e) => e.id === save.job!.employerId)?.name ?? '' } : null,
@@ -561,7 +562,7 @@ export class LocalDistrict implements DistrictLink {
     const setup = BUSINESS_TYPES[type].setupCents;
     if (this.save.moneyCents < setup) return this.notice("Pas assez d'argent pour les travaux.");
     this.save.moneyCents -= setup;
-    h.business = { type, name: parsed.data.name, openedAt: Date.now(), paid: 0 };
+    h.business = { type, name: parsed.data.name, openedAt: Date.now(), paid: 0, reputation: 0 };
     this.businessHandlers?.opened(spotId, { type, name: parsed.data.name });
     this.commit();
   }
@@ -594,7 +595,7 @@ export class LocalDistrict implements DistrictLink {
       if (h.business && (this.save.holdings ?? []).includes(h)) {
         const due = payoutPeriodsDue(h.business.openedAt, now);
         if (due > h.business.paid) {
-          this.save.moneyCents += (due - h.business.paid) * businessPayoutCents(h.business.type, spot);
+          this.save.moneyCents += (due - h.business.paid) * businessPayoutCents(h.business.type, spot, h.business.reputation ?? 0);
           h.business.paid = due;
           changed = true;
         }
@@ -655,7 +656,7 @@ export class LocalDistrict implements DistrictLink {
       return this.notice('Va d’abord devant ton commerce.');
     }
     this.ownSpot = spotId;
-    this.shift = new Shift(`demo:own:${Date.now()}`, counter.employer, 0, this.map, Math.random, counter.pay);
+    this.shift = new Shift(`demo:own:${Date.now()}`, counter.employer, 0, this.map, Math.random, counter.pay, h.business!.type);
     this.shift.next({ x: me.x, y: me.y }, Date.now());
     this.missionCb(this.shift.view(Date.now()));
   }
@@ -670,6 +671,12 @@ export class LocalDistrict implements DistrictLink {
     if (result) this.missionDone(result);
   }
 
+  cook(dish: string, scores: number[]): void {
+    const me = this.walkers.get(SELF_ID)!;
+    const result = this.shift?.cook(dish, scores, { x: me.x, y: me.y }, Date.now());
+    if (result) this.missionDone(result);
+  }
+
   onMission(cb: (mission: MissionView) => void): void {
     this.missionCb = cb;
   }
@@ -680,6 +687,9 @@ export class LocalDistrict implements DistrictLink {
     if (result.payCents > 0) {
       const type = shift.employer.jobType;
       this.save.moneyCents += result.payCents;
+      // Plat cuisiné : la réputation du commerce évolue.
+      const own = result.stars && (this.save.holdings ?? []).find((h) => h.spotId === this.ownSpot)?.business;
+      if (own) own.reputation = nextReputation(own.reputation ?? 0, result.stars!);
       // Son propre comptoir : de l'argent, pas d'expérience de salarié.
       if (!this.ownSpot) this.save.jobXp = { ...this.save.jobXp, [type]: (this.save.jobXp?.[type] ?? 0) + JOBS[type].xpPerMission };
       this.commit();

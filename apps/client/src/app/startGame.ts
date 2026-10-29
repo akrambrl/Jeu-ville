@@ -85,7 +85,7 @@ export function startGame(
       // Devant son propre commerce de bouche : on peut tenir le comptoir.
       const counter = myCounters().find((c) => isNear(c.door, x, y));
       ownCounterSpot = counter?.spotId ?? null;
-      if (counter) hud.setCanStartShift(!inShift, '🧾 Tenir mon comptoir');
+      if (counter) hud.setCanStartShift(!inShift, '👩‍🍳 Cuisiner pour mes clients');
       else hud.setCanStartShift(!inShift && isNear(work?.door, x, y));
       conversations.update(position);
     },
@@ -208,10 +208,11 @@ export function startGame(
   const mission = new MissionPanel({
     goTo: (point) => view.requestMove(point),
     serve: (items) => link.serve(items),
+    cook: (dish, scores) => link.cook(dish, scores),
     stop: () => link.stopShift(),
     showTarget: (point) => view.setMissionTarget(point),
   });
-  ui.append(mission.root);
+  ui.append(mission.root, mission.kitchen.root);
   link.onMission((m) => {
     inShift = m.kind !== 'done';
     mission.show(m);

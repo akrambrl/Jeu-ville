@@ -18,6 +18,8 @@ export * from './formulas/shops.js';
 export * from './formulas/realEstate.js';
 export * from './formulas/jobs.js';
 export * from './formulas/shifts.js';
+export * from './config/cooking.js';
+export * from './formulas/cooking.js';
 export * from './map/types.js';
 export * from './map/grid.js';
 export * from './map/pathfinding.js';

@@ -4,6 +4,7 @@
  */
 import { BUSINESS_PAYOUT_HOURS, BUSINESS_TYPES, REAL_ESTATE } from '../config/balance.js';
 import type { PropertySpot } from '../map/types.js';
+import { reputationRevenueFactor } from './cooking.js';
 import { REAL_MS_PER_HOUR } from '../time/index.js';
 
 export type BusinessType = keyof typeof BUSINESS_TYPES;
@@ -35,10 +36,10 @@ export function homeHappiness(spot: PropertySpot | null): number {
   return spot ? REAL_ESTATE[spot.kind].happinessPerRoom * spot.rooms : 0;
 }
 
-/** Bénéfice versé à chaque période de recettes (heure réelle) par un commerce ouvert. */
-export function businessPayoutCents(type: BusinessType, spot: PropertySpot): number {
+/** Bénéfice versé à chaque période de recettes (heure réelle) par un commerce ouvert ; la réputation l'augmente. */
+export function businessPayoutCents(type: BusinessType, spot: PropertySpot, reputation = 0): number {
   const b = BUSINESS_TYPES[type];
-  const perDay = b.dailyRevenueCents * (1 - b.chargesShare) * locationFactor(spot);
+  const perDay = b.dailyRevenueCents * (1 - b.chargesShare) * locationFactor(spot) * reputationRevenueFactor(reputation);
   return Math.round((perDay * BUSINESS_PAYOUT_HOURS) / 24);
 }
 

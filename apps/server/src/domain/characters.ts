@@ -116,7 +116,7 @@ export function toCharacterSelf(
     properties: owned.properties.map((p) => ({
       spotId: p.spotId,
       relation: p.ownerCharacterId === row.id ? ('owner' as const) : ('tenant' as const),
-      business: p.businessType ? { type: p.businessType as BusinessType, name: p.businessName ?? '' } : null,
+      business: p.businessType ? { type: p.businessType as BusinessType, name: p.businessName ?? '', reputation: p.businessReputation } : null,
     })),
     movedAt: row.movedAt?.getTime() ?? null,
     job: owned.job

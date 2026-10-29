@@ -1,0 +1,1 @@
+ALTER TABLE "properties" ADD COLUMN "business_reputation" integer DEFAULT 0 NOT NULL;

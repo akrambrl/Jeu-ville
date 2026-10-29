@@ -4,7 +4,7 @@
  * et le commerçant qui sert lui-même au comptoir encaisse chaque client servi.
  */
 import { and, eq, isNotNull } from 'drizzle-orm';
-import { resolveFood, type CharacterSelf, type FoodPlaceKind } from '@jeu-ville/shared';
+import { nextReputation, resolveFood, type CharacterSelf, type FoodPlaceKind } from '@jeu-ville/shared';
 import type { Db } from '../db/client.js';
 import { characters, properties } from '../db/schema.js';
 import { selfOf, storedGauges } from './characters.js';
@@ -65,10 +65,27 @@ export async function buyFoodAtBusiness(
   });
 }
 
-/** Client servi à son propre comptoir : encaissé une seule fois par client (clé de mission). */
-export async function payCounterSale(db: Db, characterId: string, spotId: string, amountCents: number, missionKey: string): Promise<CharacterSelf> {
+/**
+ * Client servi à son propre comptoir : encaissé une seule fois par client (clé
+ * de mission). Un plat cuisiné (`stars`) fait aussi évoluer la réputation du
+ * commerce, dans la même transaction (donc une seule fois, elle aussi).
+ */
+export async function payCounterSale(
+  db: Db,
+  characterId: string,
+  districtKey: string,
+  spotId: string,
+  amountCents: number,
+  missionKey: string,
+  stars?: 1 | 2 | 3,
+): Promise<CharacterSelf> {
   return db.transaction(async (tx) => {
     await tx.select({ id: characters.id }).from(characters).where(eq(characters.id, characterId)).for('update');
+    if (stars) {
+      const where = and(eq(properties.districtId, districtKey), eq(properties.spotId, spotId), isNotNull(properties.businessType));
+      const [prop] = await tx.select({ reputation: properties.businessReputation }).from(properties).where(where).for('update');
+      if (prop) await tx.update(properties).set({ businessReputation: nextReputation(prop.reputation, stars) }).where(where);
+    }
     await recordLedgerEntry(tx, {
       characterId,
       amountCents,

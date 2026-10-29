@@ -5,6 +5,7 @@
  */
 import {
   COUNTER_ITEMS,
+  RECIPES,
   JOBS,
   MOVEMENT,
   employers,
@@ -18,6 +19,7 @@ import {
   type MissionView,
   type TilePoint,
 } from '@jeu-ville/shared';
+import { KitchenGame } from './cooking.js';
 import { el, formatMoney } from './dom.js';
 
 export interface JobActions {
@@ -151,6 +153,7 @@ export class JobCenterSheet {
 export interface MissionActions {
   goTo(point: TilePoint): void;
   serve(items: string[]): void;
+  cook(dish: string, scores: number[]): void;
   stop(): void;
   /** Cible de livraison à montrer sur la carte (null : rien). */
   showTarget(point: TilePoint | null): void;
@@ -159,6 +162,10 @@ export interface MissionActions {
 /** Carte de mission pendant un service. */
 export class MissionPanel {
   readonly root = el('div', { class: 'hud-card mission' });
+  /** Écran de cuisine (son propre commerce de bouche). */
+  readonly kitchen = new KitchenGame();
+  /** Mission pour laquelle la cuisine est ouverte (index). */
+  private cooking = 0;
   private deadline = 0;
   private readonly timer: number;
   private tray: string[] = [];
@@ -170,6 +177,8 @@ export class MissionPanel {
   }
 
   show(m: MissionView): void {
+    // Le client est parti (ou le service s'arrête) pendant qu'on cuisinait.
+    if (this.kitchen.isOpen && (m.kind !== 'cook' || m.index !== this.cooking)) this.kitchen.close();
     if (m.kind === 'done') {
       this.root.hidden = true;
       this.actions.showTarget(null);
@@ -181,7 +190,7 @@ export class MissionPanel {
     const stop = el('button', { class: 'small mission-stop', text: 'Arrêter' });
     stop.addEventListener('click', () => this.actions.stop());
     const head = el('div', { class: 'mission-head' }, [
-      el('strong', { text: `${m.kind === 'courier' ? '🛵 Livraison' : '🧾 Client'} ${m.index}/${m.total}` }),
+      el('strong', { text: `${m.kind === 'courier' ? '🛵 Livraison' : m.kind === 'cook' ? '👩‍🍳 Client' : '🧾 Client'} ${m.index}/${m.total}` }),
       this.timeEl,
       el('span', { class: 'mission-earned', text: `+${formatMoney(m.earnedCents)}` }),
       stop,
@@ -191,6 +200,26 @@ export class MissionPanel {
       const go = el('button', { class: 'primary small', text: '📍 Y aller' });
       go.addEventListener('click', () => this.actions.goTo(m.target));
       this.root.replaceChildren(head, el('div', { class: 'mission-body' }, [el('span', { text: `📦 ${m.address}` }), go]));
+    } else if (m.kind === 'cook') {
+      this.actions.showTarget(null);
+      const recipe = Object.values(RECIPES)
+        .flat()
+        .find((r) => r.id === m.dish);
+      const cook = el('button', { class: 'primary', text: '👩‍🍳 Cuisiner' });
+      const start = () => {
+        if (!recipe) return;
+        this.cooking = m.index;
+        this.kitchen.play(recipe, (scores) => this.actions.cook(m.dish, scores));
+      };
+      cook.addEventListener('click', start);
+      this.root.replaceChildren(
+        head,
+        el('div', { class: 'mission-order' }, [
+          el('span', { text: '🧑 Je voudrais :' }),
+          el('span', { class: 'order-icons', text: `${recipe?.icon ?? '🍽️'} ${recipe?.label ?? m.dish}` }),
+        ]),
+        cook,
+      );
     } else {
       this.actions.showTarget(null);
       this.tray = [];

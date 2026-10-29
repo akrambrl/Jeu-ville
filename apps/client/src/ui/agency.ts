@@ -9,6 +9,7 @@ import {
   MOVEMENT,
   REAL_ESTATE,
   businessPayoutCents,
+  reputationStars,
   rentPerPeriodCents,
   salePriceCents,
   weeklyRentCents,
@@ -227,8 +228,10 @@ export class AgencySheet {
           p.business
             ? el('span', {
                 class: 'agency-price',
-                text: `${BUSINESS_TYPES[p.business.type].icon} ${p.business.name} · ≈ ${formatMoney(businessPayoutCents(p.business.type, spot) * 24)} / jour${
-                  p.business.type in BUSINESS_FOOD ? ' · 🧾 sers toi-même au comptoir pour gagner plus' : ''
+                text: `${BUSINESS_TYPES[p.business.type].icon} ${p.business.name} · ≈ ${formatMoney(businessPayoutCents(p.business.type, spot, p.business.reputation) * 24)} / jour${
+                  p.business.type in BUSINESS_FOOD
+                    ? ` · réputation ${'★'.repeat(reputationStars(p.business.reputation))}${'☆'.repeat(5 - reputationStars(p.business.reputation))} · 👩‍🍳 cuisine toi-même pour gagner plus et faire monter ta réputation`
+                    : ''
                 }`,
               })
             : el('span'),

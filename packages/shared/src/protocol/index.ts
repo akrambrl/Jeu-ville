@@ -96,7 +96,8 @@ export interface OwnedProperty {
   /** Identifiant du bien sur la carte (PropertySpot.id). */
   spotId: string;
   relation: 'owner' | 'tenant';
-  business: { type: BusinessType; name: string } | null;
+  /** Commerce ouvert ; réputation de 0 à 100 (les plats bien cuisinés la font monter). */
+  business: { type: BusinessType; name: string; reputation: number } | null;
 }
 
 export interface MeResponse {
@@ -234,6 +235,8 @@ export const ClientMessage = {
   stopShift: 'stopShift',
   /** Comptoir : servir ces articles au client actuel. */
   serve: 'serve',
+  /** Son propre comptoir : servir le plat cuisiné (CookMessage). */
+  cook: 'cook',
   /** Tenir soi-même le comptoir de son commerce de bouche (devant le local). */
   startOwnShift: 'startOwnShift',
   /** Parler à un passant (bot) : il s'arrête et se tourne vers le joueur. */
@@ -263,6 +266,13 @@ export const serveSchema = z.object({
   items: z.array(z.string().min(1).max(16)).max(8),
 });
 export type ServeMessage = z.infer<typeof serveSchema>;
+
+/** Plat cuisiné à son comptoir : une note (0 à 1) par étape ; le serveur vérifie et note. */
+export const cookSchema = z.object({
+  dish: z.string().min(1).max(32),
+  scores: z.array(z.number().min(0).max(1)).max(8),
+});
+export type CookMessage = z.infer<typeof cookSchema>;
 
 /** Acheter ou louer un bien ; `requestId` rend le clic idempotent (double clic, réseau). */
 export const propertyDealSchema = z.object({
@@ -354,6 +364,8 @@ export const ServerMessage = {
 export type MissionView =
   | { kind: 'courier'; index: number; total: number; target: TilePoint; address: string; remainingMs: number; earnedCents: number }
   | { kind: 'counter'; index: number; total: number; order: string[]; remainingMs: number; earnedCents: number }
+  /** Son propre commerce : un plat à cuisiner (identifiant de RECIPES). */
+  | { kind: 'cook'; index: number; total: number; dish: string; remainingMs: number; earnedCents: number }
   | { kind: 'done'; earnedCents: number; succeeded: number; total: number };
 
 export interface Listings {

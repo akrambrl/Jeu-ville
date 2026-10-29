@@ -12,6 +12,7 @@ import {
   type ApplyJobMessage,
   type MissionView,
   type ServeMessage,
+  type CookMessage,
   type Listings,
   type OpenBusinessMessage,
   type PropertyDealMessage,
@@ -142,6 +143,10 @@ export class ColyseusLink implements DistrictLink {
 
   serve(items: string[]): void {
     this.room.send(ClientMessage.serve, { items } satisfies ServeMessage);
+  }
+
+  cook(dish: string, scores: number[]): void {
+    this.room.send(ClientMessage.cook, { dish, scores } satisfies CookMessage);
   }
 
   onMission(cb: (mission: MissionView) => void): void {
