@@ -4,6 +4,14 @@ Le cahier des charges complet est dans `docs/GAME_DESIGN.md`. Ce fichier n'en
 est que le résumé opérationnel : en cas de doute, le cahier des charges fait foi,
 et on demande à l'utilisateur plutôt que d'inventer.
 
+## Mode de jeu actuel : cache-cache géant
+
+La boucle de jeu active est un **cache-cache multijoueur** sur un seul quartier
+(règles et architecture : `docs/HIDE_AND_SEEK.md`, équilibrage :
+`packages/shared/src/config/hideSeek.ts`). Le client (`main.ts` et la démo)
+lance `app/startHideSeek.ts` et la room `hideSeek`. Le code de la simulation de
+vie décrite ci-dessous reste dans le dépôt mais n'est plus lancé par le client.
+
 ## Méthode de travail
 
 - On avance **phase par phase** (feuille de route ci-dessous). Ne pas anticiper
@@ -120,6 +128,7 @@ apps/client/src      world/ (vue 3D : sol, bâtiments, props, persos, tram/RER)
 apps/server/src      api/ (routes REST) · domain/ (logique métier) · rooms/ (Colyseus)
                      db/ (schéma Drizzle, migrations, seed) · drizzle/ (SQL généré)
 packages/shared/src  config/ (ÉQUILIBRAGE) · time/ · formulas/ · map/ · protocol/
+                     hideseek/ (cache-cache : quartier, cachettes, vue, partie, bots)
 packages/shared/maps cartes de quartier JSON générées depuis OSM
 tools/osm-import     OSM → grille isométrique
 tools/character-import  personnages Quaternius (CC0) → GLB allégés (assets/models/people)

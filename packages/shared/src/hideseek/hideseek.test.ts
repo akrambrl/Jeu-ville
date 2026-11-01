@@ -48,7 +48,7 @@ describe('quartier et cachettes', () => {
     expect(new Set(spots.map((s) => s.id)).size).toBe(spots.length);
   });
 
-  it('toutes les cachettes restent accessibles depuis la mairie malgré les objets posés', () => {
+  it('toutes les cachettes restent accessibles depuis le départ malgré les objets posés', () => {
     const grid = new MapGrid(arena.map);
     const blocked = new Set(spots.filter(spotBlocksTile).map((s) => `${s.x},${s.y}`));
     const open = { ...grid, isWalkable: (x: number, y: number) => grid.isWalkable(x, y) && !blocked.has(`${x},${y}`) } as MapGrid;

@@ -1,9 +1,9 @@
 import { Client } from 'colyseus.js';
-import { ROOM_CHAT, ROOM_DISTRICT, type CharacterSelf, type ChatJoinOptions, type DistrictJoinOptions } from '@jeu-ville/shared';
-import { showFatal, startGame } from './app/startGame.js';
+import { ROOM_HIDE_SEEK, type CharacterSelf, type HideSeekJoinOptions } from '@jeu-ville/shared';
+import { showFatal } from './app/startGame.js';
+import { startHideSeek } from './app/startHideSeek.js';
 import { ApiError, SERVER_URL, api, tokenStore } from './net/api.js';
-import { ColyseusChat } from './net/chat.js';
-import { ColyseusLink } from './net/colyseusLink.js';
+import { ColyseusHideSeekLink } from './net/hideSeekLink.js';
 import { showCreationScreen } from './ui/creationScreen.js';
 import { showLoginScreen } from './ui/loginScreen.js';
 import './ui/styles.css';
@@ -33,18 +33,11 @@ async function ensureCharacter(): Promise<CharacterSelf> {
 
 async function start(): Promise<void> {
   try {
-    const character = await ensureCharacter();
+    // Le personnage (pseudo, apparence) sert d'avatar dans le cache-cache.
+    await ensureCharacter();
     const client = new Client(SERVER_URL);
-    const room = await client.joinOrCreate(ROOM_DISTRICT, {
-      token: tokenStore.get()!,
-      districtId: character.districtId,
-    } satisfies DistrictJoinOptions);
-    // Le chat est un plus : s'il ne répond pas, on joue quand même.
-    const chatRoom = await client.joinOrCreate(ROOM_CHAT, { token: tokenStore.get()! } satisfies ChatJoinOptions).catch((err: Error) => {
-      console.warn('Chat indisponible :', err.message);
-      return null;
-    });
-    startGame(ui, character, new ColyseusLink(room), () => (chatRoom ? new ColyseusChat(chatRoom, character.id) : null));
+    const room = await client.joinOrCreate(ROOM_HIDE_SEEK, { token: tokenStore.get()! } satisfies HideSeekJoinOptions);
+    startHideSeek(ui, new ColyseusHideSeekLink(room));
   } catch (err) {
     showFatal(ui, (err as Error).message, () => void start());
   }

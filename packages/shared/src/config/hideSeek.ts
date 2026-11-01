@@ -9,8 +9,8 @@ export const HIDE_SEEK = {
     districtKey: 'noisy-le-sec:centre-ville-mairie',
     name: 'Centre-ville – Mairie',
     bounds: { x: 40, y: 54, width: 52, height: 48 },
-    /** Point de départ de tout le monde (devant la mairie), en coordonnées de la carte d'origine. */
-    start: { x: 65, y: 92 },
+    /** Point de départ de tout le monde (place Jeanne-d'Arc), en coordonnées de la carte d'origine. */
+    start: { x: 66, y: 86 },
   },
 
   /** Déroulement d'une partie : 5 minutes au total. */

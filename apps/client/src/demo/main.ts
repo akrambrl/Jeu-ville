@@ -5,18 +5,16 @@ import {
   getDistrictMap,
   type CharacterSelf,
 } from '@jeu-ville/shared';
-import { startGame } from '../app/startGame.js';
+import { startHideSeek } from '../app/startHideSeek.js';
+import { LocalHideSeekLink } from '../net/hideSeekLink.js';
 import { showCreationScreen } from '../ui/creationScreen.js';
 import { el } from '../ui/dom.js';
 import { showLoginScreen } from '../ui/loginScreen.js';
-import { DemoChat } from '../net/chat.js';
-import { LocalDistrict, SELF_PLAYER_ID, createDemoSave, demoSelf, demoStore, repairDemoSave, type DemoSave } from './localDistrict.js';
+import { createDemoSave, demoSelf, demoStore, repairDemoSave, type DemoSave } from './localDistrict.js';
 import '../ui/styles.css';
 
 const ui = document.getElementById('ui')!;
 const map = getDistrictMap(DEFAULT_DISTRICT_KEY)!;
-/** Dans la démo, un passant à moins de tant de cases « écrit » dans le chat (bulle visible). */
-const DEMO_CHAT_SPEAKER_RANGE = 15;
 
 async function newGame(): Promise<DemoSave> {
   let pseudo = '';
@@ -43,7 +41,7 @@ function showDemoBadge(): void {
     const overlay = el('div', { class: 'overlay' }, [
       el('div', { class: 'card' }, [
         el('h1', { text: 'Recommencer ?' }),
-        el('p', { text: 'Ton personnage, ton argent et tes jauges seront effacés de ce téléphone.' }),
+        el('p', { text: 'Ton personnage sera effacé de ce téléphone.' }),
         el('div', { class: 'actions two' }, [no, yes]),
       ]),
     ]);
@@ -60,9 +58,8 @@ function showDemoBadge(): void {
 async function start(): Promise<void> {
   const loaded = demoStore.load();
   const save = loaded ? repairDemoSave(map, loaded) : await newGame();
-  const link = new LocalDistrict(map, DEFAULT_DISTRICT_KEY, save);
-  const self = link.self();
-  startGame(ui, self, link, (view) => new DemoChat(SELF_PLAYER_ID, self.name, self.districtId, () => view.nearestBot(DEMO_CHAT_SPEAKER_RANGE)));
+  // Démo solo : tu te caches, les chercheurs sont des bots.
+  startHideSeek(ui, new LocalHideSeekLink(save.name, { ...save.look }));
   showDemoBadge();
 }
 

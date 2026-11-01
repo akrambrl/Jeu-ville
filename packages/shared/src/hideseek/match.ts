@@ -338,7 +338,7 @@ export class HideSeekMatch {
       bot.role = 'seeker';
       bot.status = 'playing';
     }
-    // Tout le monde part de devant la mairie.
+    // Tout le monde part du même endroit (place Jeanne-d'Arc).
     for (const p of this.participants.values()) {
       this.vacate(p);
       this.placeNear(p, this.start);

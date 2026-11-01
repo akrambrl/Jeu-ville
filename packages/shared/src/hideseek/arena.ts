@@ -56,7 +56,7 @@ export function cropDistrictMap(map: DistrictMap, bounds: ArenaBounds, districtN
 export interface Arena {
   /** Sous-carte du quartier joué. */
   map: DistrictMap;
-  /** Point de départ (devant la mairie), en coordonnées du quartier. */
+  /** Point de départ (place Jeanne-d'Arc), en coordonnées du quartier. */
   start: TilePoint;
 }
 
@@ -70,6 +70,7 @@ export function getArena(): Arena {
   if (!full) throw new Error(`Quartier inconnu : ${cfg.districtKey}`);
   const map = cropDistrictMap(full, cfg.bounds, cfg.name);
   const start = { x: cfg.start.x - cfg.bounds.x, y: cfg.start.y - cfg.bounds.y };
-  cached = { map: { ...map, spawn: start }, start };
+  // Pas de marchands ambulants : on ne doit pas les prendre pour des joueurs.
+  cached = { map: { ...map, spawn: start, vendors: [] }, start };
   return cached;
 }
