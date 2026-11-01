@@ -387,3 +387,38 @@ export interface Notice {
   level: 'info' | 'error';
   text: string;
 }
+
+// ---------- Cache-cache (room ROOM_HIDE_SEEK) ----------
+
+export const ROOM_HIDE_SEEK = 'hideSeek';
+
+export const hideSeekJoinSchema = z.object({ token: z.string().min(1) });
+export type HideSeekJoinOptions = z.infer<typeof hideSeekJoinSchema>;
+
+/** Intentions du joueur : le serveur vérifie tout (phase, rôle, distance, temps d'attente). */
+export const HideSeekClientMessage = {
+  /** Aller sur une case (MoveMessage). */
+  move: 'move',
+  /** Caché : entrer dans une cachette proche. */
+  hide: 'hide',
+  /** Caché : sortir de sa cachette. */
+  leaveSpot: 'leaveSpot',
+  /** Chercheur : fouiller une cachette proche. */
+  search: 'search',
+  /** Chercheur : désigner un caché à découvert qu'il voit. */
+  tag: 'tag',
+} as const;
+
+export const spotIntentSchema = z.object({ spotId: z.string().min(1).max(64) });
+export type SpotIntentMessage = z.infer<typeof spotIntentSchema>;
+export const tagSchema = z.object({ targetId: z.string().min(1).max(64) });
+export type TagMessage = z.infer<typeof tagSchema>;
+
+export const HideSeekServerMessage = {
+  /** Cachés que ce joueur a le droit de voir (BodyView[]), lui compris. */
+  sight: 'sight',
+  /** Événement de la partie (HideSeekEvent), pour tout le monde. */
+  event: 'event',
+  /** Message d'information/erreur (Notice). */
+  notice: 'notice',
+} as const;

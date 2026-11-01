@@ -100,6 +100,7 @@ export class Conversations {
       this.dialogue.open(VENDOR_NAMES[v.kind] ?? 'Marchand', botDialogue(v.id, v.kind, visit));
       return;
     }
+    if (person.kind === 'object') return;
     const { id, view } = person;
     const offer = this.errands.offers().find((o) => `giver-${o.id}` === id);
     if (offer) return this.talkGiver(offer);

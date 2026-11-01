@@ -8,6 +8,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { BODY_TYPES, MapGrid, TRAVEL, type Arrival, type CharacterLook, type DistrictMap, type MapPoi, type PropertySpot, type StreetVendor, type TilePoint, ERRAND_TYPES, type ErrandOffer, type ErrandView } from '@jeu-ville/shared';
 import type { DistrictLink, PlayerView } from '../net/link.js';
+
+/** Ce dont la vue a besoin du lien : ville (DistrictLink) ou cache-cache. */
+export type ViewLink = Pick<DistrictLink, 'sessionId' | 'move' | 'subscribePlayers'> & Partial<Pick<DistrictLink, 'subscribeBusinesses'>>;
 import { Ambient, busMesh } from './ambient.js';
 import { buildBuildings } from './buildings.js';
 import { Character3D } from './characters.js';
@@ -23,7 +26,7 @@ import { Clouds } from './clouds.js';
 
 export interface CityViewOptions {
   map: DistrictMap;
-  link: DistrictLink;
+  link: ViewLink;
   homeDoor: TilePoint | null;
   /** Appelé à chaque image avec la position affichée du joueur local. */
   onLocalPosition: (x: number, y: number) => void;
@@ -33,14 +36,21 @@ export interface CityViewOptions {
   onGroundTap?: () => void;
   /** Les commerces de joueurs ont changé (ouverture, fermeture, nom). */
   onBusinesses?: (open: { spotId: string; type: string; name: string }[]) => void;
+  /** Objets que l'on peut toucher en plus des persos (cachettes…), position et hauteur visée. */
+  pickables?: () => { id: string; x: number; y: number; h: number }[];
+  /** Appelé à chaque image (animations d'un mode de jeu). */
+  onFrame?: (dt: number) => void;
 }
 
 export type PersonTap =
   | { kind: 'avatar'; id: string; view: PlayerView }
-  | { kind: 'vendor'; vendor: StreetVendor };
+  | { kind: 'vendor'; vendor: StreetVendor }
+  | { kind: 'object'; id: string };
 
 /** Rayon (pixels écran) autour d'un perso dans lequel un appui le désigne. */
 const PERSON_PICK_PX = 34;
+/** Rayon (pixels écran) autour d'un objet (cachette) dans lequel un appui le désigne. */
+const OBJECT_PICK_PX = 42;
 /** Hauteur visée (cases) pour repérer un perso à l'écran : à mi-corps. */
 const PERSON_PICK_HEIGHT = 0.45;
 
@@ -273,7 +283,7 @@ export class CityView {
     this.bindPlayers();
     const open = new Map<string, { spotId: string; type: string; name: string }>();
     const changed = () => this.opts.onBusinesses?.([...open.values()]);
-    this.opts.link.subscribeBusinesses({
+    this.opts.link.subscribeBusinesses?.({
       opened: (spotId, b) => {
         this.setBusinessSign(spotId, b.type, b.name);
         open.set(spotId, { spotId, type: b.type, name: b.name });
@@ -393,6 +403,24 @@ export class CityView {
     this.forRent.delete(spotId);
   }
 
+  /** Ajoute un objet à la scène (calques d'un mode de jeu). */
+  addObject(obj: THREE.Object3D): void {
+    this.scene.add(obj);
+  }
+
+  /** Hauteur du sol en (x, y). */
+  groundAt(x: number, y: number): number {
+    return groundTop(this.grid.tileAt(Math.round(x), Math.round(y)));
+  }
+
+  /** Centre la caméra sur un point (sans suivre le joueur ensuite). */
+  lookAt(point: TilePoint): void {
+    const delta = new THREE.Vector3(point.x, 0, point.y).sub(this.controls.target);
+    this.controls.target.add(delta);
+    this.camera.position.add(delta);
+    this.following = false;
+  }
+
   /** Recentre la caméra sur le joueur. */
   recenter(): void {
     this.following = true;
@@ -422,6 +450,7 @@ export class CityView {
     this.ambient?.update(dt, { x: this.controls.target.x, y: this.controls.target.z });
     this.clouds?.update(dt);
     this.errandScene.update(dt);
+    this.opts.onFrame?.(dt);
     const self = this.avatars.get(this.opts.link.sessionId);
     this.updateMarker(dt, self);
     this.updateArrivals(dt);
@@ -607,9 +636,9 @@ export class CityView {
   }
 
   private tap(clientX: number, clientY: number): void {
-    const person = this.opts.onPersonTap ? this.pickPerson(clientX, clientY) : null;
+    const person = this.opts.onPersonTap || this.opts.pickables ? this.pickPerson(clientX, clientY) : null;
     if (person) {
-      this.opts.onPersonTap!(person);
+      this.opts.onPersonTap?.(person);
       return;
     }
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -639,13 +668,20 @@ export class CityView {
     let bestD = PERSON_PICK_PX;
     for (const [id, c] of this.avatars) {
       const view = this.views.get(id);
-      if (id === this.opts.link.sessionId || !view) continue;
+      if (id === this.opts.link.sessionId || !view || view.hidden) continue;
       const d = screen(c.root.position.clone().add(new THREE.Vector3(0, PERSON_PICK_HEIGHT, 0)));
       if (d < bestD) [best, bestD] = [{ kind: 'avatar', id, view }, d];
     }
     for (const vendor of this.opts.map.vendors) {
       const d = screen(new THREE.Vector3(vendor.x, PERSON_PICK_HEIGHT, vendor.y));
       if (d < bestD) [best, bestD] = [{ kind: 'vendor', vendor }, d];
+    }
+    // Les persos passent avant les objets (on vise d'abord quelqu'un).
+    if (best) return best;
+    bestD = OBJECT_PICK_PX;
+    for (const o of this.opts.pickables?.() ?? []) {
+      const d = screen(new THREE.Vector3(o.x, o.h, o.y));
+      if (d < bestD) [best, bestD] = [{ kind: 'object', id: o.id }, d];
     }
     return best;
   }
@@ -744,13 +780,17 @@ export class CityView {
         if (mark) c.setMark(mark);
         this.syncPet(id, p.pet);
         c.setVehicle(p.vehicle ?? '');
+        c.root.visible = !p.hidden;
       },
       changed: (id, p) => {
         // Pendant l'arrivée en bus, le perso attend dans le bus.
         this.views.set(id, { ...p });
         if (this.arrivals.some((a) => a.who === id && !a.landed)) return;
-        this.avatars.get(id)?.setTarget(p.x, p.y, p.moving, p.dir);
-        this.avatars.get(id)?.setVehicle(p.vehicle ?? '');
+        const c = this.avatars.get(id);
+        if (c && p.hidden) c.teleport(p.x, p.y);
+        else c?.setTarget(p.x, p.y, p.moving, p.dir);
+        c?.setVehicle(p.vehicle ?? '');
+        if (c) c.root.visible = !p.hidden;
         this.syncPet(id, p.pet);
       },
       removed: (id) => {

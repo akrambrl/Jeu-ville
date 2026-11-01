@@ -17,6 +17,8 @@ export interface PlayerView {
   pet: string;
   /** Véhicule utilisé (« bike », « scooter ») ou ''. */
   vehicle: string;
+  /** Présent mais invisible (caché dans une cachette) : la caméra le suit quand même. */
+  hidden?: boolean;
 }
 
 export interface BusinessView {
