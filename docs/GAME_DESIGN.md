@@ -45,6 +45,14 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
 Un joueur dont le paquet est vide ne pose plus de carte, mais sa pile reste en
 jeu : il doit gagner un duel pour s'en débarrasser et finir.
 
+## À l'écran
+
+Comme à la bataille : les **tas de tous les joueurs sont au milieu**, sur le
+tapis, autour de la lettre tirée. Chacun garde son paquet devant lui (face
+cachée). À chaque manche, une carte vole de chaque paquet vers son tas ; à la
+fin d'un duel, les tas du gagnant et du perdant volent vers le **paquet du
+perdant**.
+
 ## Réponses
 
 - Elles sont vérifiées avec la **liste de mots du jeu**

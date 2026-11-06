@@ -336,7 +336,8 @@ button.link {
 }
 
 .card.face.fresh {
-  animation: flip 0.35s ease-out;
+  /* Retournée une fois arrivée sur le tas (après le vol depuis le paquet). */
+  animation: flip 0.35s ease-out 0.45s backwards;
 }
 
 .card.big.face {
@@ -379,7 +380,19 @@ button.link {
 @keyframes flip {
   from {
     transform: rotateY(90deg) scale(0.9);
+    opacity: 0;
   }
+}
+
+/* Carte qui vole d'un paquet vers un tas, ou d'un tas vers le paquet du perdant. */
+.card.flying {
+  --w: 58px;
+  position: fixed;
+  z-index: 70;
+  margin: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.3, 1);
 }
 
 /* ---------- Table ---------- */
@@ -399,7 +412,59 @@ button.link {
   padding-bottom: 240px;
 }
 
-.table-screen.with-duel .center {
+.table-screen.with-duel .tapis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px 18px;
+  padding: 14px 16px 10px;
+  border-radius: 40px;
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.25);
+  max-width: 100%;
+}
+
+.pile-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pile-tile.mine .card {
+  --w: 88px;
+}
+
+.pile-tile.mine .card.face {
+  font-size: 11px;
+}
+
+.heap .layer {
+  position: absolute;
+  inset: 0;
+}
+
+.pile-tile.in-duel .heap > .card.face {
+  box-shadow:
+    0 0 0 3px var(--duel),
+    0 0 18px var(--duel);
+  animation: beat 1s infinite;
+}
+
+.pile-name {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 999px;
+  max-width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.center {
   min-height: 0;
 }
 
@@ -452,18 +517,14 @@ button.link {
   background: rgba(0, 0, 0, 0.18);
   border: 3px solid transparent;
   border-radius: 16px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-width: 150px;
+  gap: 10px;
 }
 
-.seat.in-duel {
-  border-color: var(--duel);
-  box-shadow: 0 0 18px var(--duel);
-  animation: beat 1s infinite;
+.seat.mine .card {
+  --w: 64px;
 }
 
 .seat.left {
@@ -496,17 +557,12 @@ button.link {
   text-overflow: ellipsis;
 }
 
-.seat .stack {
-  display: flex;
-  gap: 8px;
-}
-
 .seat .deck,
-.seat .pile {
+.heap {
   position: relative;
 }
 
-.seat .count {
+.count {
   position: absolute;
   right: -6px;
   bottom: -6px;
@@ -536,6 +592,58 @@ button.link {
   color: var(--text);
   left: -8px;
   right: auto;
+}
+
+.tapis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px 18px;
+  padding: 14px 16px 10px;
+  border-radius: 40px;
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.25);
+  max-width: 100%;
+}
+
+.pile-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pile-tile.mine .card {
+  --w: 88px;
+}
+
+.pile-tile.mine .card.face {
+  font-size: 11px;
+}
+
+.heap .layer {
+  position: absolute;
+  inset: 0;
+}
+
+.pile-tile.in-duel .heap > .card.face {
+  box-shadow:
+    0 0 0 3px var(--duel),
+    0 0 18px var(--duel);
+  animation: beat 1s infinite;
+}
+
+.pile-name {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 999px;
+  max-width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .center {
@@ -605,7 +713,6 @@ button.link {
 
 .my-seat .seat {
   background: rgba(0, 0, 0, 0.25);
-  min-width: 260px;
 }
 
 .duel-panel {
@@ -716,11 +823,21 @@ button.link {
 
 @media (max-width: 520px) {
   .seat {
-    min-width: 0;
-    padding: 6px;
+    padding: 4px 8px;
+    gap: 6px;
   }
   .opponents .card {
-    --w: 52px;
+    --w: 44px;
+  }
+  .opponents .seat .deck .card.back {
+    font-size: 16px;
+  }
+  .tapis .card {
+    --w: 54px;
+  }
+  .tapis {
+    gap: 10px 12px;
+    padding: 10px;
   }
   /* Petites cartes : seulement les icônes (la couleur compte avant tout). */
   .opponents .card.face {
@@ -728,6 +845,13 @@ button.link {
     justify-content: center;
     gap: 2px;
   }
+  .tapis .pile-tile:not(.mine) .card.face {
+    font-size: 11px;
+    justify-content: center;
+    gap: 2px;
+  }
+  .tapis .pile-tile:not(.mine) .card.face .cat span:not(.icon),
+  .tapis .pile-tile:not(.mine) .card.face .slash,
   .opponents .card.face .cat span:not(.icon),
   .opponents .card.face .slash {
     display: none;

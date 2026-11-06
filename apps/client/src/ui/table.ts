@@ -31,6 +31,17 @@ function vibrate(pattern: readonly number[]): void {
   }
 }
 
+/** Tas : nombre max de cartes dessinées sous celle du dessus. */
+const PILE_LAYERS = 3;
+/** Cartes qui volent (ms) : durée du vol (voir .flying dans styles.css), écart entre deux cartes… */
+const FLY_DURATION_MS = 600;
+const FLY_STEP_MS = 90;
+const FLY_STAGGER_MS = 150;
+/** … et le tas du gagnant part juste après celui du perdant. */
+const FLY_WINNER_DELAY_MS = 250;
+/** Au plus tant de cartes animées par tas (au-delà, on ne voit pas la différence). */
+const FLY_MAX_CARDS = 6;
+
 const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb8500'];
 
 export function showTable(root: HTMLElement, link: TableLink, onExit: () => void): void {
@@ -49,6 +60,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const roundLabel = el('div', { class: 'round-label' });
   const timer = el('div', { class: 'timer' });
   const opponents = el('div', { class: 'opponents' });
+  /** Le tapis, au milieu : le tas de chaque joueur, comme à la bataille. */
+  const tapis = el('div', { class: 'tapis' });
   const letterBox = el('div', { class: 'letter-box' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]);
   const status = el('div', { class: 'status' });
   const mySeat = el('div', { class: 'my-seat' });
@@ -57,7 +70,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const screen = el('div', { class: 'table-screen' }, [
     el('div', { class: 'topbar' }, [quit, roundLabel, timer, help]),
     opponents,
-    el('div', { class: 'center' }, [letterBox, status]),
+    el('div', { class: 'center' }, [letterBox, tapis, status]),
     mySeat,
     duelPanel,
     overlay,
@@ -78,26 +91,47 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   // ---------- Rendu ----------
 
+  /** Siège d'un joueur : son nom et son paquet (face cachée). */
   const seat = (p: PlayerView, big: boolean): HTMLElement => {
-    const duel = view?.duels.find((d) => d.playerIds.includes(p.id));
-    const inDuel = !!duel && duel.winnerId === null;
-    const node = el('div', { class: `seat${big ? ' mine' : ''}${inDuel ? ' in-duel' : ''}${p.left ? ' left' : ''}` });
+    const node = el('div', { class: `seat${big ? ' mine' : ''}${p.left ? ' left' : ''}` });
+    node.dataset.player = p.id;
     const avatar = el('div', { class: 'avatar', text: p.name.slice(0, 1).toUpperCase() });
-    avatar.style.background = AVATAR_COLORS[hash(p.id) % AVATAR_COLORS.length]!;
-    const badge = badges.get(p.id);
-    const fresh = !!p.top && shownTop.get(p.id) !== p.top.id;
-    shownTop.set(p.id, p.top?.id ?? 0);
+    avatar.style.background = colorOf(p.id);
+    const size = 'small';
     node.append(
       el('div', { class: 'who' }, [
         avatar,
         el('div', { class: 'name', text: `${p.bot ? '🤖 ' : ''}${p.id === link.myId ? `${p.name} (toi)` : p.name}` }),
       ]),
-      el('div', { class: 'stack' }, [
-        el('div', { class: 'deck' }, [p.deckCount > 0 ? cardBack(big ? 'big' : 'small') : cardSlot(big ? 'big' : 'small'), el('span', { class: 'count', text: String(p.deckCount) })]),
-        el('div', { class: 'pile' }, [p.top ? cardFace(p.top, big ? 'big' : 'small', fresh) : cardSlot(big ? 'big' : 'small'), el('span', { class: 'count', text: String(p.pileCount) })]),
-      ]),
+      el('div', { class: 'deck' }, [p.deckCount > 0 ? cardBack(size) : cardSlot(size), el('span', { class: 'count', text: String(p.deckCount) })]),
     );
-    if (inDuel) node.append(el('div', { class: 'duel-tag', text: '⚔️ Duel' }));
+    return node;
+  };
+
+  /** Tas d'un joueur sur le tapis : les cartes posées, celle du dessus visible. */
+  const pileTile = (p: PlayerView): HTMLElement => {
+    const duel = view?.duels.find((d) => d.playerIds.includes(p.id));
+    const inDuel = !!duel && duel.winnerId === null;
+    const node = el('div', { class: `pile-tile${inDuel ? ' in-duel' : ''}${p.id === link.myId ? ' mine' : ''}` });
+    node.dataset.player = p.id;
+    const fresh = !!p.top && shownTop.get(p.id) !== p.top.id;
+    shownTop.set(p.id, p.top?.id ?? 0);
+    // Épaisseur du tas : quelques cartes décalées sous celle du dessus.
+    const under = Math.min(Math.max(0, p.pileCount - 1), PILE_LAYERS);
+    const stack = el('div', { class: 'heap' }, [
+      ...Array.from({ length: under }, (_, k) => {
+        const layer = el('div', { class: 'card back small layer' });
+        layer.style.transform = `translate(${(k + 1) * 2}px, ${(k + 1) * 2}px) rotate(${((hash(p.id) + k * 7) % 9) - 4}deg)`;
+        return layer;
+      }),
+      p.top ? cardFace(p.top, 'small', fresh) : cardSlot('small'),
+    ]);
+    if (p.pileCount > 0) stack.append(el('span', { class: 'count', text: String(p.pileCount) }));
+    const label = el('div', { class: 'pile-name', text: p.id === link.myId ? 'Toi' : p.name });
+    label.style.background = colorOf(p.id);
+    node.append(stack, label);
+    if (inDuel) node.append(el('div', { class: 'duel-tag', text: '⚔️' }));
+    const badge = badges.get(p.id);
     if (badge) node.append(el('div', { class: 'badge', text: badge }));
     return node;
   };
@@ -108,6 +142,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     opponents.replaceChildren(...view.players.filter((p) => p.id !== link.myId).map((p) => seat(p, false)));
     const mine = me();
     mySeat.replaceChildren(...(mine ? [seat(mine, true)] : []));
+    tapis.replaceChildren(...view.players.filter((p) => p.rank === null || p.pileCount > 0).map(pileTile));
+    tapis.hidden = view.phase === 'waiting' || view.phase === 'finished';
     if (!rolling) letterEl.textContent = view.letter || '?';
     letterBox.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished');
     renderDuelPanel();
@@ -250,6 +286,10 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         break;
       case 'reveal':
         status.textContent = 'Cartes retournées !';
+        // Chacun pose la carte du dessus de son paquet sur son tas, au milieu.
+        for (const p of view?.players ?? []) {
+          if (p.deckCount > 0 && p.rank === null) flyCards(deckEl(p.id), pileEl(p.id), 1, 0);
+        }
         break;
       case 'noDuel':
         status.textContent = 'Pas de couleur en commun : on continue !';
@@ -279,6 +319,15 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   });
 
   const onDuelWon = (d: Duel) => {
+    // Les tas du gagnant et des perdants partent dans le paquet du perdant.
+    const piles = (id: string) => view?.players.find((p) => p.id === id)?.pileCount ?? 0;
+    const winnerPile = piles(d.winnerId!);
+    d.losers.forEach((l, k) => {
+      const target = deckEl(l.id);
+      flyCards(pileEl(l.id), target, Math.min(piles(l.id), FLY_MAX_CARDS), k * FLY_STAGGER_MS);
+      const share = Math.ceil(winnerPile / d.losers.length);
+      flyCards(pileEl(d.winnerId!), target, Math.min(share, FLY_MAX_CARDS), FLY_WINNER_DELAY_MS + k * FLY_STAGGER_MS);
+    });
     const winner = nameOf(d.winnerId!);
     const cat = d.category ? CATEGORIES[d.category].label : '';
     const losers = d.losers.map((l) => `${nameOf(l.id)} récupère ${l.cards} carte${l.cards > 1 ? 's' : ''}`).join(', ');
@@ -290,6 +339,26 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       vibrate(VIBRATION.right);
     }
     else if (d.playerIds.includes(link.myId)) showToast(screen, `😩 ${winner} a été plus rapide : « ${d.word} »`, 'error');
+  };
+
+  const deckEl = (id: string) => screen.querySelector(`.seat[data-player="${id}"] .deck`);
+  const pileEl = (id: string) => screen.querySelector(`.pile-tile[data-player="${id}"] .heap`);
+
+  /** Fait voler `count` cartes (dos) de `from` vers `to`, l'une après l'autre. */
+  const flyCards = (from: Element | null, to: Element | null, count: number, delayMs: number) => {
+    if (!from || !to || count <= 0) return;
+    const a = from.getBoundingClientRect();
+    const b = to.getBoundingClientRect();
+    for (let k = 0; k < count; k++) {
+      const ghost = el('div', { class: 'card back small flying' });
+      ghost.style.left = `${a.left + a.width / 2}px`;
+      ghost.style.top = `${a.top + a.height / 2}px`;
+      document.body.append(ghost);
+      window.setTimeout(() => {
+        ghost.style.transform = `translate(calc(-50% + ${b.left + b.width / 2 - a.left - a.width / 2}px), calc(-50% + ${b.top + b.height / 2 - a.top - a.height / 2}px)) rotate(${(k % 2 ? 1 : -1) * 12}deg)`;
+      }, delayMs + k * FLY_STEP_MS + 20);
+      window.setTimeout(() => ghost.remove(), delayMs + k * FLY_STEP_MS + FLY_DURATION_MS + 60);
+    }
   };
 
   link.onNotice((n) => {
@@ -313,4 +382,8 @@ function hash(s: string): number {
   let h = 0;
   for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return h;
+}
+
+function colorOf(id: string): string {
+  return AVATAR_COLORS[hash(id) % AVATAR_COLORS.length]!;
 }
