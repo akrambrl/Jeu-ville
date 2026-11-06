@@ -1,10 +1,6 @@
 node_modules/
 dist/
+dist-demo/
 .env
 *.log
 .DS_Store
-# Données OSM brutes (re-téléchargeables via `pnpm map:fetch`)
-tools/osm-import/data/*.osm
-dist-demo/
-# Personnages d'origine (re-téléchargeables via `pnpm --filter @jeu-ville/character-import download`)
-tools/character-import/data/

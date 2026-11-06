@@ -1,0 +1,384 @@
+/**
+ * Une partie de « Bac Bataille » autour d'une table. Logique pure (temps et
+ * hasard injectés) : le serveur la fait tourner dans sa room, le mode solo dans
+ * la page. Les joueurs n'envoient qu'une intention : « je réponds X dans la
+ * catégorie Y » ; tout le reste (cartes, lettre, duels) est décidé ici.
+ *
+ * Déroulement d'une manche :
+ * 1. une lettre est tirée au hasard ;
+ * 2. chacun retourne la carte du dessus de son paquet sur sa pile (on ne choisit pas) ;
+ * 3. les joueurs dont la carte du dessus a la même couleur s'affrontent en duel :
+ *    le premier qui donne un mot valide (lettre + une des deux catégories de sa carte)
+ *    gagne ; le perdant récupère les deux piles sous son paquet ;
+ * 4. le premier qui n'a plus aucune carte (paquet et pile vides) gagne la partie.
+ */
+import { CARD_COLORS, CARD_GAME, type CardColor } from '../config/cards.js';
+import { checkAnswer, wordsStartingWith } from './answers.js';
+import { CATEGORY_IDS, type CategoryId } from './categories.js';
+
+export interface Card {
+  id: number;
+  color: CardColor;
+  categories: [CategoryId, CategoryId];
+}
+
+export type GamePhase = 'waiting' | 'letter' | 'reveal' | 'duel' | 'result' | 'finished';
+
+export interface TablePlayer {
+  id: string;
+  name: string;
+  bot: boolean;
+  /** Vrai joueur parti en cours de partie : un bot le remplace. */
+  left: boolean;
+  /** Paquet face cachée (on retourne la première carte). */
+  deck: Card[];
+  /** Cartes posées devant soi, face visible (la dernière est sur le dessus). */
+  pile: Card[];
+  /** Place au classement final, sinon null. */
+  rank: number | null;
+  /** Mauvaise réponse : pas de nouvel essai avant (ms). */
+  lockedUntil: number;
+  /** Bot en duel : instant (ms) où il répond. */
+  botAnswerAt: number | null;
+}
+
+export interface Duel {
+  id: number;
+  color: CardColor;
+  playerIds: string[];
+  winnerId: string | null;
+  word: string | null;
+  category: CategoryId | null;
+  /** Cartes récupérées par chaque perdant. */
+  losers: { id: string; cards: number }[];
+}
+
+export type GameEvent =
+  | { kind: 'letter'; letter: string; round: number }
+  | { kind: 'reveal' }
+  | { kind: 'duels'; duels: Duel[] }
+  | { kind: 'noDuel' }
+  | { kind: 'duelWon'; duel: Duel }
+  | { kind: 'duelTimeout'; duel: Duel }
+  | { kind: 'finished'; ranking: RankingLine[] }
+  | { kind: 'waiting' };
+
+export interface RankingLine {
+  id: string;
+  name: string;
+  rank: number;
+  cards: number;
+}
+
+/** Ce que tout le monde voit de la table (les paquets restent secrets). */
+export interface PlayerView {
+  id: string;
+  name: string;
+  bot: boolean;
+  left: boolean;
+  deckCount: number;
+  pileCount: number;
+  top: Card | null;
+  rank: number | null;
+}
+
+export interface GameView {
+  phase: GamePhase;
+  /** Temps restant dans la phase (0 : pas de limite). */
+  endsInMs: number;
+  round: number;
+  letter: string;
+  players: PlayerView[];
+  duels: Duel[];
+  ranking: RankingLine[];
+}
+
+export interface AnswerResult {
+  /** null si accepté ; sinon le message à montrer au joueur. */
+  error: string | null;
+  events: GameEvent[];
+}
+
+export class CardGame {
+  phase: GamePhase = 'waiting';
+  /** Fin de la phase en cours (ms), 0 : pas de limite. */
+  endsAt = 0;
+  round = 0;
+  letter = '';
+  duels: Duel[] = [];
+  ranking: RankingLine[] = [];
+  readonly players: TablePlayer[] = [];
+  private nextCardId = 1;
+  private nextDuelId = 1;
+
+  constructor(private readonly rand: () => number = Math.random) {}
+
+  // ---------- Table ----------
+
+  /** Un joueur s'assoit (avant le début seulement). */
+  addPlayer(id: string, name: string, bot: boolean): string | null {
+    if (this.phase !== 'waiting') return 'La partie a déjà commencé.';
+    if (this.players.length >= CARD_GAME.players.max) return 'La table est complète.';
+    if (this.players.some((p) => p.id === id)) return null;
+    this.players.push({ id, name, bot, left: false, deck: [], pile: [], rank: null, lockedUntil: 0, botAnswerAt: null });
+    return null;
+  }
+
+  /** Un vrai joueur s'en va : avant la partie il quitte la table, pendant elle un bot joue à sa place. */
+  removePlayer(id: string): void {
+    const k = this.players.findIndex((p) => p.id === id);
+    if (k < 0) return;
+    if (this.phase === 'waiting' || this.phase === 'finished') this.players.splice(k, 1);
+    else Object.assign(this.players[k]!, { bot: true, left: true });
+  }
+
+  humans(): TablePlayer[] {
+    return this.players.filter((p) => !p.bot);
+  }
+
+  /** En ligne : la partie démarre toute seule après un court délai dès qu'on est assez. */
+  scheduleStart(now: number): void {
+    if (this.phase !== 'waiting') return;
+    const enough = this.players.length >= CARD_GAME.players.min;
+    if (!enough) this.endsAt = 0;
+    else if (this.endsAt === 0) this.endsAt = now + CARD_GAME.timing.lobbyMs;
+    if (this.players.length >= CARD_GAME.players.max) this.endsAt = Math.min(this.endsAt, now);
+  }
+
+  /** Distribue les cartes et lance la première manche. */
+  start(now: number): GameEvent[] {
+    if (this.players.length < CARD_GAME.players.min) return [];
+    const deck = this.newDeck(this.players.length * CARD_GAME.cardsPerPlayer);
+    this.players.forEach((p, k) => {
+      Object.assign(p, { pile: [], rank: null, lockedUntil: 0, botAnswerAt: null });
+      p.deck = deck.slice(k * CARD_GAME.cardsPerPlayer, (k + 1) * CARD_GAME.cardsPerPlayer);
+    });
+    this.round = 0;
+    this.ranking = [];
+    this.duels = [];
+    return this.nextRound(now);
+  }
+
+  // ---------- Intention du joueur ----------
+
+  /** « Je réponds `text` dans la catégorie `category` » pendant un duel. */
+  answer(playerId: string, category: CategoryId, text: string, now: number): AnswerResult {
+    const none = (error: string | null): AnswerResult => ({ error, events: [] });
+    if (this.phase !== 'duel') return none('Pas de duel en cours.');
+    const p = this.players.find((x) => x.id === playerId);
+    const duel = this.duels.find((d) => d.winnerId === null && d.playerIds.includes(playerId));
+    if (!p || !duel) return none('Tu n’es pas dans un duel.');
+    const top = p.pile.at(-1);
+    if (!top?.categories.includes(category)) return none('Choisis une des deux catégories de ta carte.');
+    if (now < p.lockedUntil) return none('Attends une seconde avant de réessayer.');
+    if (text.length > CARD_GAME.answer.maxLength) return none('Réponse trop longue.');
+    const check = checkAnswer(category, this.letter, text);
+    if (!check.ok) {
+      p.lockedUntil = now + CARD_GAME.answer.wrongLockMs;
+      return none(check.reason);
+    }
+    const events: GameEvent[] = [{ kind: 'duelWon', duel: this.resolveDuel(duel, p, check.word, category) }];
+    if (this.duels.every((d) => d.winnerId !== null)) events.push(...this.toResult(now, CARD_GAME.timing.resultMs));
+    return { error: null, events };
+  }
+
+  // ---------- Simulation ----------
+
+  tick(now: number): GameEvent[] {
+    const events: GameEvent[] = [];
+    if (this.phase === 'duel') events.push(...this.botsAnswer(now));
+    if (this.endsAt > 0 && now >= this.endsAt) events.push(...this.advance(now));
+    return events;
+  }
+
+  view(now: number): GameView {
+    return {
+      phase: this.phase,
+      endsInMs: this.endsAt > 0 ? Math.max(0, this.endsAt - now) : 0,
+      round: this.round,
+      letter: this.letter,
+      players: this.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        bot: p.bot,
+        left: p.left,
+        deckCount: p.deck.length,
+        pileCount: p.pile.length,
+        top: p.pile.at(-1) ?? null,
+        rank: p.rank,
+      })),
+      duels: this.duels,
+      ranking: this.ranking,
+    };
+  }
+
+  private advance(now: number): GameEvent[] {
+    switch (this.phase) {
+      case 'waiting':
+        return this.start(now);
+      case 'letter':
+        return this.reveal(now);
+      case 'reveal':
+        return this.findDuels(now);
+      case 'duel': {
+        const events: GameEvent[] = this.duels.filter((d) => d.winnerId === null).map((duel) => ({ kind: 'duelTimeout', duel }) as const);
+        return [...events, ...this.toResult(now, CARD_GAME.timing.resultMs)];
+      }
+      case 'result':
+        return this.afterResult(now);
+      case 'finished':
+        return this.backToWaiting();
+    }
+  }
+
+  private nextRound(now: number): GameEvent[] {
+    if (this.round >= CARD_GAME.maxRounds) return this.finish(now);
+    this.round += 1;
+    const pool = [...CARD_GAME.letters].filter((l) => l !== this.letter);
+    this.letter = pool[Math.floor(this.rand() * pool.length)]!;
+    this.duels = [];
+    this.phase = 'letter';
+    this.endsAt = now + CARD_GAME.timing.letterMs;
+    return [{ kind: 'letter', letter: this.letter, round: this.round }];
+  }
+
+  /** Tout le monde retourne la carte du dessus de son paquet, en même temps. */
+  private reveal(now: number): GameEvent[] {
+    let flipped = 0;
+    for (const p of this.players) {
+      const card = p.rank === null ? p.deck.shift() : undefined;
+      if (card) {
+        p.pile.push(card);
+        flipped += 1;
+      }
+    }
+    // Plus personne ne peut poser et aucun duel possible : la partie est bloquée.
+    if (flipped === 0 && this.colorGroups().length === 0) return this.finish(now);
+    this.phase = 'reveal';
+    this.endsAt = now + CARD_GAME.timing.revealMs;
+    return [{ kind: 'reveal' }];
+  }
+
+  /** Cartes du dessus de même couleur = duel entre leurs joueurs. */
+  private colorGroups(): { color: CardColor; ids: string[] }[] {
+    const byColor = new Map<CardColor, string[]>();
+    for (const p of this.players) {
+      const top = p.pile.at(-1);
+      if (!top || p.rank !== null) continue;
+      byColor.set(top.color, [...(byColor.get(top.color) ?? []), p.id]);
+    }
+    return [...byColor].filter(([, ids]) => ids.length >= 2).map(([color, ids]) => ({ color, ids }));
+  }
+
+  private findDuels(now: number): GameEvent[] {
+    this.duels = this.colorGroups().map(({ color, ids }) => ({
+      id: this.nextDuelId++,
+      color,
+      playerIds: ids,
+      winnerId: null,
+      word: null,
+      category: null,
+      losers: [],
+    }));
+    if (this.duels.length === 0) return [{ kind: 'noDuel' }, ...this.toResult(now, CARD_GAME.timing.noDuelMs)];
+    const [min, max] = CARD_GAME.bots.answerDelayMs;
+    for (const d of this.duels) {
+      for (const id of d.playerIds) {
+        const p = this.players.find((x) => x.id === id)!;
+        p.lockedUntil = 0;
+        p.botAnswerAt = p.bot ? now + min + this.rand() * (max - min) : null;
+      }
+    }
+    this.phase = 'duel';
+    this.endsAt = now + CARD_GAME.timing.duelMs;
+    return [{ kind: 'duels', duels: this.duels }];
+  }
+
+  /** Le gagnant se débarrasse de sa pile : les perdants récupèrent les deux piles sous leur paquet. */
+  private resolveDuel(duel: Duel, winner: TablePlayer, word: string, category: CategoryId): Duel {
+    const losers = duel.playerIds.filter((id) => id !== winner.id).map((id) => this.players.find((p) => p.id === id)!);
+    const given = winner.pile;
+    winner.pile = [];
+    const counts = new Map(losers.map((l) => [l.id, l.pile.length]));
+    for (const l of losers) {
+      l.deck.push(...l.pile);
+      l.pile = [];
+    }
+    // À plusieurs perdants, la pile du gagnant est partagée entre eux.
+    given.forEach((card, k) => {
+      const l = losers[k % losers.length]!;
+      l.deck.push(card);
+      counts.set(l.id, (counts.get(l.id) ?? 0) + 1);
+    });
+    Object.assign(duel, { winnerId: winner.id, word, category, losers: losers.map((l) => ({ id: l.id, cards: counts.get(l.id) ?? 0 })) });
+    for (const p of [winner, ...losers]) p.botAnswerAt = null;
+    return duel;
+  }
+
+  private botsAnswer(now: number): GameEvent[] {
+    const events: GameEvent[] = [];
+    for (const p of this.players) {
+      if (p.botAnswerAt === null || now < p.botAnswerAt || this.phase !== 'duel') continue;
+      p.botAnswerAt = null;
+      if (this.rand() >= CARD_GAME.bots.successRate) continue;
+      const top = p.pile.at(-1);
+      if (!top) continue;
+      const options = top.categories.flatMap((c) => wordsStartingWith(c, this.letter).map((w) => ({ c, w })));
+      const pick = options[Math.floor(this.rand() * options.length)];
+      if (pick) events.push(...this.answer(p.id, pick.c, pick.w, now).events);
+    }
+    return events;
+  }
+
+  private toResult(now: number, ms: number): GameEvent[] {
+    this.phase = 'result';
+    this.endsAt = now + ms;
+    return [];
+  }
+
+  private afterResult(now: number): GameEvent[] {
+    if (this.players.some((p) => p.deck.length === 0 && p.pile.length === 0)) return this.finish(now);
+    return this.nextRound(now);
+  }
+
+  /** Classement : moins on a de cartes, mieux on est classé (0 carte = vainqueur). */
+  private finish(now: number): GameEvent[] {
+    const total = (p: TablePlayer) => p.deck.length + p.pile.length;
+    for (const p of this.players) p.rank = 1 + this.players.filter((o) => total(o) < total(p)).length;
+    this.ranking = [...this.players]
+      .sort((a, b) => a.rank! - b.rank!)
+      .map((p) => ({ id: p.id, name: p.name, rank: p.rank!, cards: total(p) }));
+    this.phase = 'finished';
+    this.endsAt = now + CARD_GAME.timing.finishedMs;
+    this.duels = [];
+    return [{ kind: 'finished', ranking: this.ranking }];
+  }
+
+  /** Retour au salon : les joueurs partis et les bots quittent la table. */
+  private backToWaiting(): GameEvent[] {
+    for (let k = this.players.length - 1; k >= 0; k--) if (this.players[k]!.bot) this.players.splice(k, 1);
+    for (const p of this.players) Object.assign(p, { deck: [], pile: [], rank: null });
+    this.phase = 'waiting';
+    this.endsAt = 0;
+    this.letter = '';
+    this.round = 0;
+    this.ranking = [];
+    return [{ kind: 'waiting' }];
+  }
+
+  /** Paquet mélangé : couleurs équilibrées, deux catégories différentes par carte. */
+  private newDeck(size: number): Card[] {
+    const cards: Card[] = [];
+    for (let k = 0; k < size; k++) {
+      const a = CATEGORY_IDS[Math.floor(this.rand() * CATEGORY_IDS.length)]!;
+      const others = CATEGORY_IDS.filter((c) => c !== a);
+      const b = others[Math.floor(this.rand() * others.length)]!;
+      cards.push({ id: this.nextCardId++, color: CARD_COLORS[k % CARD_COLORS.length]!, categories: [a, b] });
+    }
+    for (let k = cards.length - 1; k > 0; k--) {
+      const j = Math.floor(this.rand() * (k + 1));
+      [cards[k], cards[j]] = [cards[j]!, cards[k]!];
+    }
+    return cards;
+  }
+}

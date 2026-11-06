@@ -1,9 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { createCharacterSchema, createSessionSchema, type MeResponse } from '@jeu-ville/shared';
+import { createSessionSchema, type MeResponse } from '@jeu-ville/shared';
 import type { Db } from '../db/client.js';
 import { createSession, playerFromToken, type AuthenticatedPlayer } from '../domain/auth.js';
-import { createCharacter, getCharacterByPlayer, getCharacterSelf } from '../domain/characters.js';
 import { GameError } from '../domain/errors.js';
 
 function bearerToken(req: FastifyRequest): string | null {
@@ -37,18 +36,6 @@ export function registerRoutes(app: FastifyInstance, db: Db): void {
 
   app.get('/api/me', async (req): Promise<MeResponse> => {
     const player = await requirePlayer(db, req);
-    const row = await getCharacterByPlayer(db, player.id);
-    return {
-      playerId: player.id,
-      pseudo: player.pseudo,
-      character: row ? await getCharacterSelf(db, row.id) : null,
-    };
-  });
-
-  app.post('/api/character', async (req, reply) => {
-    const player = await requirePlayer(db, req);
-    const input = createCharacterSchema.parse(req.body);
-    const character = await createCharacter(db, player, input);
-    return reply.status(201).send(character);
+    return { playerId: player.id, pseudo: player.pseudo };
   });
 }

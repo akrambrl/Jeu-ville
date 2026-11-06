@@ -1,4 +1,4 @@
-import type { CharacterSelf, CreateCharacterRequest, MeResponse, SessionResponse } from '@jeu-ville/shared';
+import type { MeResponse, SessionResponse } from '@jeu-ville/shared';
 
 /**
  * URL du serveur de jeu. En ligne, le serveur sert aussi le jeu : même adresse
@@ -7,7 +7,7 @@ import type { CharacterSelf, CreateCharacterRequest, MeResponse, SessionResponse
 export const SERVER_URL: string =
   import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? location.origin : `${location.protocol}//${location.hostname}:2567`);
 
-const TOKEN_KEY = 'jeu-ville.token';
+const TOKEN_KEY = 'bac-bataille.token';
 
 export const tokenStore = {
   get(): string | null {
@@ -65,5 +65,4 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   createSession: (pseudo: string) => request<SessionResponse>('POST', '/api/session', { pseudo }),
   me: () => request<MeResponse>('GET', '/api/me'),
-  createCharacter: (input: CreateCharacterRequest) => request<CharacterSelf>('POST', '/api/character', input),
 };

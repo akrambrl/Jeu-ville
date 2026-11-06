@@ -9,12 +9,12 @@ const read = (ext) => Promise.all(files.filter((f) => f.endsWith(ext)).map((f) =
 const js = (await read('.js')).join('\n').replaceAll('</script', '<\\/script');
 const css = (await read('.css')).join('\n');
 
-const page = `<title>Jeu de ville 93</title>
-<meta name="theme-color" content="#1c7868">
+const page = `<title>Bac Bataille</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#3a0ca3">
 <style>${css}</style>
-<div id="game"></div>
 <div id="ui"></div>
 <script type="module">${js}</script>
 `;
-await writeFile(join(dist, 'jeu-ville-93.html'), page);
-console.log(`dist-demo/jeu-ville-93.html : ${(page.length / 1024).toFixed(0)} Ko`);
+await writeFile(join(dist, 'bac-bataille.html'), page);
+console.log(`dist-demo/bac-bataille.html : ${(page.length / 1024).toFixed(0)} Ko`);

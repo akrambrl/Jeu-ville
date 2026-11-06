@@ -1,6 +1,6 @@
 /**
  * Sessions du prototype : un pseudo, sans mot de passe, et un jeton aléatoire
- * conservé par le navigateur. Les vrais comptes arrivent en phase 3.
+ * conservé par le navigateur.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
