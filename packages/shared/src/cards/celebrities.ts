@@ -24,7 +24,7 @@ export const FAMOUS_PEOPLE = `
   Sadio Mané, Samuel Eto'o, Sébastien Loeb, Sexion d'Assaut, Simone Veil, Sinik, Squeezie, Stevie Wonder, Sylvester Stallone, Samy Naceri,
   Théo Hernandez, Tiakola, Tom Cruise, Tom Holland, Tupac, Travis Scott, Tiger Woods,
   Vianney, Vincent Cassel, Vegedream, Vinicius,
-  Warren Zaïre-Emery, Whitney Houston, Wejdene, Yannick Noah, Yves Saint Laurent, Zaho, Zazie, Zendaya, Zlatan Ibrahimovic
+  Warren Zaïre-Emery, Whitney Houston, Wejdene, Yannick Noah, Yves Saint Laurent, Zaho, Zazie, Zendaya, Zlatan, Zlatan Ibrahimovic
 `;
 
 export const FAMOUS_CHARACTERS = `
