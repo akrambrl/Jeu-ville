@@ -4,6 +4,7 @@
  * pluriels sont ignorés). Pour accepter un nouveau mot, l'ajouter ici.
  */
 import type { CategoryId } from './categories.js';
+import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE } from './celebrities.js';
 import { FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES } from './places.js';
 
 const list = (...parts: string[]) => [
@@ -137,7 +138,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     Taylor Swift, Teddy Riner, Thomas Pesquet, Thierry Henry, Tony Parker,
     Usain Bolt, Victor Hugo, Victor Wembanyama,
     Will Smith, Zinédine Zidane, Zidane
-  `),
+  `, FAMOUS_PEOPLE, FAMOUS_CHARACTERS),
   brand: list(`
     Adidas, Airbus, Amazon, Apple, Asus, Audi,
     Bic, BMW, Burger King, Bonduelle, Banania, Barbie,

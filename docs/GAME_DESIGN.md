@@ -50,8 +50,9 @@ jeu : il doit gagner un duel pour s'en débarrasser et finir.
 - Elles sont vérifiées avec la **liste de mots du jeu**
   (`packages/shared/src/cards/words.ts`).
 - On ignore accents, majuscules, tirets, apostrophes, articles (« la banane »)
-  et pluriels. Célébrité : le nom seul suffit (« Mbappé »), et la lettre peut
-  être celle du prénom ou du nom.
+  et pluriels. Célébrité : vraies personnes et personnages célèbres (Garfield,
+  Pikachu…) ; le nom seul suffit (« Mbappé »), et la lettre peut être celle du
+  prénom ou du nom.
 - Mauvaise réponse : petit temps d'attente avant de réessayer.
 
 ## Modes

@@ -50,6 +50,12 @@ describe('réponses', () => {
     }
   });
 
+  it('célébrité : personnes et personnages célèbres', () => {
+    for (const [letter, name] of [['G', 'Garfield'], ['P', 'Pikachu'], ['S', 'Squeezie'], ['Z', 'Zlatan'], ['A', 'Astérix']]) {
+      expect(checkAnswer('celebrity', letter!, name!).ok, name).toBe(true);
+    }
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
