@@ -6,7 +6,7 @@ export function showRules(root: HTMLElement): void {
   const close = el('button', { class: 'primary', text: 'Compris !' });
   const overlay = el('div', { class: 'overlay' }, [
     el('div', { class: 'panel rules' }, [
-      el('h2', { text: '📖 Règles' }),
+      el('h2', { text: 'Comment on joue ?' }),
       el('ol', {}, [
         el('li', { text: `Chacun reçoit ${CARD_GAME.cardsPerPlayer} cartes face cachée. Le but : se débarrasser de toutes ses cartes.` }),
         el('li', { text: 'À chaque manche, une lettre est tirée au hasard, puis tout le monde retourne en même temps la carte du dessus de son paquet.' }),

@@ -63,8 +63,8 @@ export const CARD_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
 export type CardColor = (typeof CARD_COLORS)[number];
 
 export const CARD_COLOR_LABELS: Record<CardColor, { name: string; hex: string }> = {
-  red: { name: 'Rouge', hex: '#e63946' },
-  blue: { name: 'Bleu', hex: '#277da1' },
-  green: { name: 'Vert', hex: '#2a9d5c' },
-  yellow: { name: 'Jaune', hex: '#f4b400' },
+  red: { name: 'Rouge', hex: '#ff4d6d' },
+  blue: { name: 'Bleu', hex: '#3a86ff' },
+  green: { name: 'Vert', hex: '#21c07a' },
+  yellow: { name: 'Jaune', hex: '#ffb703' },
 };

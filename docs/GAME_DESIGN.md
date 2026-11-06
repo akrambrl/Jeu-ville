@@ -53,6 +53,18 @@ cachée). À chaque manche, une carte vole de chaque paquet vers son tas ; à la
 fin d'un duel, les tas du gagnant et du perdant volent vers le **paquet du
 perdant**.
 
+## Direction artistique
+
+Ambiance **jeu télé / stickers** : fond nuit violet éclairé de projecteurs,
+accents néon (rose `#ff3d7f`, or `#ffc93c`, cyan `#2ee6d6`), contours épais
+encre (`#1b1340`) et ombres dures façon cartoon. Typo **Lilita One** (titres,
+boutons, lettre) et **Nunito** (texte). Cartes en papier crème avec bandeau de
+couleur et médaillons de catégorie ; dos de carte nuit à monogramme doré « BB ».
+Animations : roue de la lettre à rayons, tampon « DUEL ! », barre de temps,
+confettis quand on gagne. Petits sons synthétisés (coupables avec 🔊).
+Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
+`apps/client/src/ui/fx.ts` (sons, confettis).
+
 ## Réponses
 
 - Elles sont vérifiées avec la **liste de mots du jeu**
