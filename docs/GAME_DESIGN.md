@@ -14,6 +14,9 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
 - Chaque joueur reçoit le même nombre de cartes, face cachée (son **paquet**).
 - Chaque carte a une **couleur** (rouge, bleu, vert, jaune) et **deux catégories**,
   par exemple « Prénom / Pays ou ville ».
+- Le nombre de couleurs dépend du nombre de joueurs, pour que les duels ne se
+  fassent pas attendre : **2 couleurs à 2 joueurs** (un duel une manche sur
+  deux), **3 à 3 joueurs**, **4 à partir de 4**.
 - Catégories : Prénom, Fruit ou légume, Métier, Pays ou ville, Animal,
   Célébrité, Marque, Sport, Objet de la maison, Plat ou dessert, Vêtement,
   Partie du corps.

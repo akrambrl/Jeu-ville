@@ -8,6 +8,11 @@ export const CARD_GAME = {
   players: { min: 2, max: 6 },
   /** Mode solo : nombre de bots adversaires. */
   soloBots: { min: 1, max: 5, default: 3 },
+  /**
+   * Nombre de couleurs selon le nombre de joueurs : à peu de joueurs, moins de
+   * couleurs, sinon les duels (même couleur) se font attendre. Au-delà : toutes.
+   */
+  colorsByPlayers: { 2: 2, 3: 3 } as Readonly<Record<number, number>>,
   /** Cartes distribuées à chacun au début de la partie. */
   cardsPerPlayer: 12,
 

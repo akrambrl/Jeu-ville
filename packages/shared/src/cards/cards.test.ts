@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CARD_GAME } from '../config/cards.js';
 import { checkAnswer, normalizeWord, wordsStartingWith } from './answers.js';
 import { CATEGORY_IDS } from './categories.js';
-import { CardGame, type GameEvent, type TablePlayer } from './game.js';
+import { CardGame, colorsFor, type GameEvent, type TablePlayer } from './game.js';
 import { WORDS } from './words.js';
 
 const { letterMs, revealMs, duelMs } = CARD_GAME.timing;
@@ -68,6 +68,14 @@ describe('partie', () => {
     expect(game.players.map((p) => p.deck.length)).toEqual([CARD_GAME.cardsPerPlayer, CARD_GAME.cardsPerPlayer]);
     expect(game.phase).toBe('letter');
     expect(CARD_GAME.letters).toContain(game.letter);
+  });
+
+  it('moins de couleurs quand il y a peu de joueurs (duels plus fréquents)', () => {
+    const { game } = twoPlayersAtReveal();
+    const used = new Set(game.players.flatMap((p) => p.deck.map((c) => c.color)));
+    expect(used.size).toBe(2);
+    expect(colorsFor(3)).toHaveLength(3);
+    expect(colorsFor(6)).toHaveLength(4);
   });
 
   it('tout le monde retourne sa carte en même temps', () => {

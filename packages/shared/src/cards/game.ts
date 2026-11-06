@@ -148,7 +148,7 @@ export class CardGame {
   /** Distribue les cartes et lance la première manche. */
   start(now: number): GameEvent[] {
     if (this.players.length < CARD_GAME.players.min) return [];
-    const deck = this.newDeck(this.players.length * CARD_GAME.cardsPerPlayer);
+    const deck = this.newDeck(this.players.length * CARD_GAME.cardsPerPlayer, colorsFor(this.players.length));
     this.players.forEach((p, k) => {
       Object.assign(p, { pile: [], rank: null, lockedUntil: 0, botAnswerAt: null });
       p.deck = deck.slice(k * CARD_GAME.cardsPerPlayer, (k + 1) * CARD_GAME.cardsPerPlayer);
@@ -367,13 +367,13 @@ export class CardGame {
   }
 
   /** Paquet mélangé : couleurs équilibrées, deux catégories différentes par carte. */
-  private newDeck(size: number): Card[] {
+  private newDeck(size: number, colors: readonly CardColor[]): Card[] {
     const cards: Card[] = [];
     for (let k = 0; k < size; k++) {
       const a = CATEGORY_IDS[Math.floor(this.rand() * CATEGORY_IDS.length)]!;
       const others = CATEGORY_IDS.filter((c) => c !== a);
       const b = others[Math.floor(this.rand() * others.length)]!;
-      cards.push({ id: this.nextCardId++, color: CARD_COLORS[k % CARD_COLORS.length]!, categories: [a, b] });
+      cards.push({ id: this.nextCardId++, color: colors[k % colors.length]!, categories: [a, b] });
     }
     for (let k = cards.length - 1; k > 0; k--) {
       const j = Math.floor(this.rand() * (k + 1));
@@ -381,4 +381,9 @@ export class CardGame {
     }
     return cards;
   }
+}
+
+/** Couleurs en jeu pour `players` joueurs (voir CARD_GAME.colorsByPlayers). */
+export function colorsFor(players: number): readonly CardColor[] {
+  return CARD_COLORS.slice(0, CARD_GAME.colorsByPlayers[players] ?? CARD_COLORS.length);
 }
