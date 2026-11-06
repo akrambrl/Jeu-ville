@@ -4,12 +4,17 @@
  * pluriels sont ignorés). Pour accepter un nouveau mot, l'ajouter ici.
  */
 import type { CategoryId } from './categories.js';
+import { FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES } from './places.js';
 
-const list = (s: string) =>
-  s
-    .split(',')
-    .map((w) => w.trim())
-    .filter(Boolean);
+const list = (...parts: string[]) => [
+  ...new Set(
+    parts
+      .join(',')
+      .split(',')
+      .map((w) => w.trim())
+      .filter(Boolean),
+  ),
+];
 
 export const WORDS: Record<CategoryId, readonly string[]> = {
   firstName: list(`
@@ -94,7 +99,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     Saint-Denis, Saint-Étienne, Saint-Ouen, Sevran, Séville, Stains, Strasbourg, Sydney,
     Tanger, Tokyo, Toulon, Toulouse, Tours, Tremblay-en-France, Tunis,
     Valence, Varsovie, Venise, Versailles, Vienne, Villemomble, Villepinte
-  `),
+  `, FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES),
   animal: list(`
     abeille, agneau, aigle, alligator, alpaga, âne, anguille, antilope, araignée, autruche,
     baleine, bélier, biche, bison, blaireau, bœuf, bouc, bourdon, buffle, buse,

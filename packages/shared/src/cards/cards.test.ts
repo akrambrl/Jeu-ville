@@ -44,6 +44,12 @@ describe('réponses', () => {
     expect(checkAnswer('fruitVeg', 'B', 'BANANES')).toEqual({ ok: true, word: 'banane' });
     expect(checkAnswer('place', 'C', 'cote d ivoire')).toEqual({ ok: true, word: "Côte d'Ivoire" });
   });
+  it('connaît les villes moyennes de France et du monde', () => {
+    for (const [letter, city] of [['C', 'Castres'], ['M', 'Montauban'], ['S', 'Sevran'], ['F', 'Fort-de-France'], ['B', 'Bamako'], ['O', 'Oujda']]) {
+      expect(checkAnswer('place', letter!, city!).ok, city).toBe(true);
+    }
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
