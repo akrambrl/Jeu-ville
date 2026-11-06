@@ -2,7 +2,7 @@
  * La table de jeu : adversaires en haut, lettre tirée au centre, sa propre pile
  * en bas, et le panneau de duel quand sa carte a la même couleur qu'une autre.
  */
-import { CARD_COLOR_LABELS, CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
+import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
 import type { TableLink } from '../net/tableLink.js';
 import { cardBack, cardFace, cardSlot } from './cardView.js';
 import { el, showToast } from './dom.js';
@@ -63,7 +63,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     const duel = view?.duels.find((d) => d.playerIds.includes(p.id));
     const inDuel = !!duel && duel.winnerId === null;
     const node = el('div', { class: `seat${big ? ' mine' : ''}${inDuel ? ' in-duel' : ''}${p.left ? ' left' : ''}` });
-    if (duel) node.style.setProperty('--duel', CARD_COLOR_LABELS[duel.color].hex);
     const avatar = el('div', { class: 'avatar', text: p.name.slice(0, 1).toUpperCase() });
     avatar.style.background = AVATAR_COLORS[hash(p.id) % AVATAR_COLORS.length]!;
     const badge = badges.get(p.id);
@@ -107,12 +106,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     }
     if (duelPanelFor === duel.id) return;
     duelPanelFor = duel.id;
-    selectedCategory = top.categories[0];
+    selectedCategory = duel.categories[0] ?? null;
     const rivals = duel.playerIds.filter((id) => id !== link.myId).map(nameOf).join(', ');
     const input = el('input', { type: 'text', maxlength: String(CARD_GAME.answer.maxLength), placeholder: `Un mot en ${view.letter}…`, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
     const send = el('button', { class: 'primary', text: 'Valider' });
     const feedback = el('div', { class: 'feedback' });
-    const choices = top.categories.map((c) => {
+    const choices = duel.categories.map((c) => {
       const b = el('button', { class: `choice${c === selectedCategory ? ' selected' : ''}`, type: 'button' }, [el('span', { text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]);
       b.addEventListener('click', () => {
         selectedCategory = c;
@@ -137,7 +136,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       el('div', { class: 'answer-row' }, [input, send]),
       feedback,
     );
-    duelPanel.style.setProperty('--duel', CARD_COLOR_LABELS[duel.color].hex);
     duelPanel.hidden = false;
     input.focus();
   };
@@ -239,7 +237,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         break;
       case 'duels': {
         const mine = e.duels.some((d) => d.playerIds.includes(link.myId));
-        status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' vs ')}`).join('   ');
+        status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' vs ')} · ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
         if (mine) {
           showToast(screen, '⚔️ DUEL ! Vite, un mot !', 'win', 1500);
           navigator.vibrate?.(200);

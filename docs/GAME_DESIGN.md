@@ -12,11 +12,12 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
 ## Les cartes
 
 - Chaque joueur reçoit le même nombre de cartes, face cachée (son **paquet**).
-- Chaque carte a une **couleur** (rouge, bleu, vert, jaune) et **deux catégories**,
-  par exemple « Prénom / Pays ou ville ».
-- Le nombre de couleurs dépend du nombre de joueurs, pour que les duels ne se
-  fassent pas attendre : **2 couleurs à 2 joueurs** (un duel une manche sur
-  deux), **3 à 3 joueurs**, **4 à partir de 4**.
+- Chaque carte porte **deux catégories**, par exemple « Prénom / Pays ou ville ».
+  Sa **couleur** (rouge, bleu, vert, jaune) est décorative : elle ne compte pas.
+- Le nombre de catégories en jeu dépend du nombre de joueurs (tirées au hasard à
+  chaque partie), pour que les duels ne se fassent pas attendre : **7 à
+  2 joueurs** (un duel environ une manche sur deux), **9 à 3**, **10 à 4**,
+  toutes (12) à 5 ou 6.
 - Catégories : Prénom, Fruit ou légume, Métier, Pays ou ville, Animal,
   Célébrité, Marque, Sport, Objet de la maison, Plat ou dessert, Vêtement,
   Partie du corps.
@@ -27,15 +28,18 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
    Y, Z — sont exclues).
 2. Tout le monde **retourne en même temps** la carte du dessus de son paquet et
    la pose sur sa **pile**, face visible. On ne choisit pas sa carte.
-3. Si la carte du dessus de ma pile a **la même couleur** que celle d'un autre
-   joueur : **duel** entre nous (à 3 ou plus si plusieurs ont la même couleur).
-4. Pendant le duel, chacun choisit **une des deux catégories de sa propre carte**
-   et écrit le plus vite possible un mot qui commence par la lettre.
+3. Si la carte du dessus de ma pile a **au moins une catégorie en commun** avec
+   celle d'un autre joueur : **duel** entre nous (à 3 ou plus si plusieurs ont
+   cette catégorie). Chaque joueur ne fait qu'un duel par manche : on forme
+   d'abord le plus grand groupe autour d'une même catégorie.
+4. Pendant le duel, chacun écrit le plus vite possible un mot qui commence par
+   la lettre, **dans la catégorie commune** (si les cartes ont leurs deux
+   catégories en commun, au choix).
 5. Le **premier qui donne un mot valide gagne** : il se débarrasse de sa pile, et
    le perdant **récupère les deux piles** sous son paquet. À plusieurs perdants,
    chacun reprend sa pile et la pile du gagnant est partagée entre eux.
 6. Sans bonne réponse dans le temps imparti, les piles restent sur la table.
-   Sans couleur en commun, on passe directement à la manche suivante : les
+   Sans catégorie en commun, on passe directement à la manche suivante : les
    piles grossissent, et les duels suivants rapportent gros.
 
 Un joueur dont le paquet est vide ne pose plus de carte, mais sa pile reste en

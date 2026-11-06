@@ -7,9 +7,9 @@
  * Déroulement d'une manche :
  * 1. une lettre est tirée au hasard ;
  * 2. chacun retourne la carte du dessus de son paquet sur sa pile (on ne choisit pas) ;
- * 3. les joueurs dont la carte du dessus a la même couleur s'affrontent en duel :
- *    le premier qui donne un mot valide (lettre + une des deux catégories de sa carte)
- *    gagne ; le perdant récupère les deux piles sous son paquet ;
+ * 3. les joueurs dont les cartes du dessus ont une catégorie en commun s'affrontent
+ *    en duel (la couleur ne compte pas) : le premier qui donne un mot valide (lettre +
+ *    catégorie commune) gagne ; le perdant récupère les deux piles sous son paquet ;
  * 4. le premier qui n'a plus aucune carte (paquet et pile vides) gagne la partie.
  */
 import { CARD_COLORS, CARD_GAME, type CardColor } from '../config/cards.js';
@@ -44,7 +44,8 @@ export interface TablePlayer {
 
 export interface Duel {
   id: number;
-  color: CardColor;
+  /** Catégories communes à toutes les cartes du duel : on répond dans l'une d'elles. */
+  categories: CategoryId[];
   playerIds: string[];
   winnerId: string | null;
   word: string | null;
@@ -148,7 +149,7 @@ export class CardGame {
   /** Distribue les cartes et lance la première manche. */
   start(now: number): GameEvent[] {
     if (this.players.length < CARD_GAME.players.min) return [];
-    const deck = this.newDeck(this.players.length * CARD_GAME.cardsPerPlayer, colorsFor(this.players.length));
+    const deck = this.newDeck(this.players.length * CARD_GAME.cardsPerPlayer, this.categoriesInPlay(this.players.length));
     this.players.forEach((p, k) => {
       Object.assign(p, { pile: [], rank: null, lockedUntil: 0, botAnswerAt: null });
       p.deck = deck.slice(k * CARD_GAME.cardsPerPlayer, (k + 1) * CARD_GAME.cardsPerPlayer);
@@ -169,7 +170,7 @@ export class CardGame {
     const duel = this.duels.find((d) => d.winnerId === null && d.playerIds.includes(playerId));
     if (!p || !duel) return none('Tu n’es pas dans un duel.');
     const top = p.pile.at(-1);
-    if (!top?.categories.includes(category)) return none('Choisis une des deux catégories de ta carte.');
+    if (!top || !duel.categories.includes(category)) return none('Réponds dans la catégorie commune du duel.');
     if (now < p.lockedUntil) return none('Attends une seconde avant de réessayer.');
     if (text.length > CARD_GAME.answer.maxLength) return none('Réponse trop longue.');
     const check = checkAnswer(category, this.letter, text);
@@ -253,27 +254,38 @@ export class CardGame {
       }
     }
     // Plus personne ne peut poser et aucun duel possible : la partie est bloquée.
-    if (flipped === 0 && this.colorGroups().length === 0) return this.finish(now);
+    if (flipped === 0 && this.duelGroups().length === 0) return this.finish(now);
     this.phase = 'reveal';
     this.endsAt = now + CARD_GAME.timing.revealMs;
     return [{ kind: 'reveal' }];
   }
 
-  /** Cartes du dessus de même couleur = duel entre leurs joueurs. */
-  private colorGroups(): { color: CardColor; ids: string[] }[] {
-    const byColor = new Map<CardColor, string[]>();
-    for (const p of this.players) {
-      const top = p.pile.at(-1);
-      if (!top || p.rank !== null) continue;
-      byColor.set(top.color, [...(byColor.get(top.color) ?? []), p.id]);
+  /**
+   * Cartes du dessus avec une catégorie en commun = duel entre leurs joueurs.
+   * Chacun ne fait qu'un duel par manche : on forme d'abord le plus grand groupe
+   * autour d'une même catégorie, puis le suivant parmi les joueurs restants.
+   */
+  private duelGroups(): { categories: CategoryId[]; ids: string[] }[] {
+    const tops = new Map(this.players.filter((p) => p.rank === null && p.pile.length > 0).map((p) => [p.id, p.pile.at(-1)!]));
+    const free = new Set(tops.keys());
+    const groups: { categories: CategoryId[]; ids: string[] }[] = [];
+    for (;;) {
+      let ids: string[] = [];
+      for (const c of CATEGORY_IDS) {
+        const withC = [...free].filter((id) => tops.get(id)!.categories.includes(c));
+        if (withC.length > ids.length) ids = withC;
+      }
+      if (ids.length < 2) return groups;
+      const categories = CATEGORY_IDS.filter((c) => ids.every((id) => tops.get(id)!.categories.includes(c)));
+      groups.push({ categories, ids });
+      for (const id of ids) free.delete(id);
     }
-    return [...byColor].filter(([, ids]) => ids.length >= 2).map(([color, ids]) => ({ color, ids }));
   }
 
   private findDuels(now: number): GameEvent[] {
-    this.duels = this.colorGroups().map(({ color, ids }) => ({
+    this.duels = this.duelGroups().map(({ categories, ids }) => ({
       id: this.nextDuelId++,
-      color,
+      categories,
       playerIds: ids,
       winnerId: null,
       word: null,
@@ -321,9 +333,9 @@ export class CardGame {
       if (p.botAnswerAt === null || now < p.botAnswerAt || this.phase !== 'duel') continue;
       p.botAnswerAt = null;
       if (this.rand() >= CARD_GAME.bots.successRate) continue;
-      const top = p.pile.at(-1);
-      if (!top) continue;
-      const options = top.categories.flatMap((c) => wordsStartingWith(c, this.letter).map((w) => ({ c, w })));
+      const duel = this.duels.find((d) => d.winnerId === null && d.playerIds.includes(p.id));
+      if (!duel) continue;
+      const options = duel.categories.flatMap((c) => wordsStartingWith(c, this.letter).map((w) => ({ c, w })));
       const pick = options[Math.floor(this.rand() * options.length)];
       if (pick) events.push(...this.answer(p.id, pick.c, pick.w, now).events);
     }
@@ -366,24 +378,30 @@ export class CardGame {
     return [{ kind: 'waiting' }];
   }
 
-  /** Paquet mélangé : couleurs équilibrées, deux catégories différentes par carte. */
-  private newDeck(size: number, colors: readonly CardColor[]): Card[] {
+  /** Catégories tirées au hasard pour cette partie (moins à peu de joueurs). */
+  private categoriesInPlay(players: number): CategoryId[] {
+    const pool = [...CATEGORY_IDS];
+    this.shuffle(pool);
+    return pool.slice(0, CARD_GAME.categoriesByPlayers[players] ?? pool.length);
+  }
+
+  private shuffle<T>(items: T[]): void {
+    for (let k = items.length - 1; k > 0; k--) {
+      const j = Math.floor(this.rand() * (k + 1));
+      [items[k], items[j]] = [items[j]!, items[k]!];
+    }
+  }
+
+  /** Paquet mélangé : couleurs équilibrées (décoratives), deux catégories différentes par carte. */
+  private newDeck(size: number, categories: readonly CategoryId[]): Card[] {
     const cards: Card[] = [];
     for (let k = 0; k < size; k++) {
-      const a = CATEGORY_IDS[Math.floor(this.rand() * CATEGORY_IDS.length)]!;
-      const others = CATEGORY_IDS.filter((c) => c !== a);
+      const a = categories[Math.floor(this.rand() * categories.length)]!;
+      const others = categories.filter((c) => c !== a);
       const b = others[Math.floor(this.rand() * others.length)]!;
-      cards.push({ id: this.nextCardId++, color: colors[k % colors.length]!, categories: [a, b] });
+      cards.push({ id: this.nextCardId++, color: CARD_COLORS[k % CARD_COLORS.length]!, categories: [a, b] });
     }
-    for (let k = cards.length - 1; k > 0; k--) {
-      const j = Math.floor(this.rand() * (k + 1));
-      [cards[k], cards[j]] = [cards[j]!, cards[k]!];
-    }
+    this.shuffle(cards);
     return cards;
   }
-}
-
-/** Couleurs en jeu pour `players` joueurs (voir CARD_GAME.colorsByPlayers). */
-export function colorsFor(players: number): readonly CardColor[] {
-  return CARD_COLORS.slice(0, CARD_GAME.colorsByPlayers[players] ?? CARD_COLORS.length);
 }

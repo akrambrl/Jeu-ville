@@ -9,10 +9,11 @@ export const CARD_GAME = {
   /** Mode solo : nombre de bots adversaires. */
   soloBots: { min: 1, max: 5, default: 3 },
   /**
-   * Nombre de couleurs selon le nombre de joueurs : à peu de joueurs, moins de
-   * couleurs, sinon les duels (même couleur) se font attendre. Au-delà : toutes.
+   * Nombre de catégories en jeu selon le nombre de joueurs (tirées au hasard à
+   * chaque partie) : à peu de joueurs, moins de catégories, sinon les duels
+   * (catégorie en commun) se font attendre. Au-delà : toutes.
    */
-  colorsByPlayers: { 2: 2, 3: 3 } as Readonly<Record<number, number>>,
+  categoriesByPlayers: { 2: 7, 3: 9, 4: 10 } as Readonly<Record<number, number>>,
   /** Cartes distribuées à chacun au début de la partie. */
   cardsPerPlayer: 12,
 
@@ -57,7 +58,7 @@ export const CARD_GAME = {
   maxRounds: 250,
 } as const;
 
-/** Couleurs des cartes (deux cartes de même couleur sur la table = duel). */
+/** Couleurs des cartes (décoratives : seules les catégories comptent pour les duels). */
 export const CARD_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
 export type CardColor = (typeof CARD_COLORS)[number];
 

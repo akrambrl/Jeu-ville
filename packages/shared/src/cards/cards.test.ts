@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CARD_GAME } from '../config/cards.js';
 import { checkAnswer, normalizeWord, wordsStartingWith } from './answers.js';
 import { CATEGORY_IDS } from './categories.js';
-import { CardGame, colorsFor, type GameEvent, type TablePlayer } from './game.js';
+import { CardGame, type GameEvent, type TablePlayer } from './game.js';
 import { WORDS } from './words.js';
 
 const { letterMs, revealMs, duelMs } = CARD_GAME.timing;
@@ -28,10 +28,11 @@ function twoPlayersAtReveal() {
   return { game, a: game.players[0]!, b: game.players[1]!, t: letterMs };
 }
 
-/** Force les cartes du dessus de deux joueurs à la même couleur, puis passe au duel. */
+/** Donne aux cartes du dessus de deux joueurs une seule catégorie commune, puis passe au duel. */
 function forceDuel(game: CardGame, a: TablePlayer, b: TablePlayer, t: number) {
   run(game, 0, t);
-  b.pile.at(-1)!.color = a.pile.at(-1)!.color;
+  const [shared, other] = a.pile.at(-1)!.categories;
+  b.pile.at(-1)!.categories = [shared, CATEGORY_IDS.find((c) => c !== shared && c !== other)!];
   run(game, t, t + revealMs);
   return t + revealMs;
 }
@@ -70,12 +71,29 @@ describe('partie', () => {
     expect(CARD_GAME.letters).toContain(game.letter);
   });
 
-  it('moins de couleurs quand il y a peu de joueurs (duels plus fréquents)', () => {
+  it('moins de catégories en jeu quand il y a peu de joueurs (duels plus fréquents)', () => {
     const { game } = twoPlayersAtReveal();
-    const used = new Set(game.players.flatMap((p) => p.deck.map((c) => c.color)));
-    expect(used.size).toBe(2);
-    expect(colorsFor(3)).toHaveLength(3);
-    expect(colorsFor(6)).toHaveLength(4);
+    const used = new Set(game.players.flatMap((p) => p.deck.flatMap((c) => c.categories)));
+    expect(used.size).toBe(CARD_GAME.categoriesByPlayers[2]);
+  });
+
+  it('duel seulement sur une catégorie en commun, quelle que soit la couleur', () => {
+    const { game, a, b, t } = twoPlayersAtReveal();
+    run(game, 0, t);
+    a.pile.at(-1)!.categories = ['animal', 'sport'];
+    b.pile.at(-1)!.categories = ['job', 'brand'];
+    b.pile.at(-1)!.color = a.pile.at(-1)!.color;
+    expect(run(game, t, t + CARD_GAME.timing.revealMs)).toContainEqual({ kind: 'noDuel' });
+  });
+
+  it('en duel, il faut répondre dans la catégorie commune', () => {
+    const { game, a, b, t } = twoPlayersAtReveal();
+    run(game, 0, t);
+    a.pile.at(-1)!.categories = ['animal', 'sport'];
+    b.pile.at(-1)!.categories = ['animal', 'brand'];
+    run(game, t, t + CARD_GAME.timing.revealMs);
+    expect(game.duels[0]?.categories).toEqual(['animal']);
+    expect(game.answer('a', 'sport', 'basket', t + 2000).error).toMatch(/catégorie commune/);
   });
 
   it('tout le monde retourne sa carte en même temps', () => {
@@ -89,9 +107,9 @@ describe('partie', () => {
     const { game, a, b, t } = twoPlayersAtReveal();
     const now = forceDuel(game, a, b, t);
     expect(game.phase).toBe('duel');
-    const category = a.pile.at(-1)!.categories[0];
-    const word = wordsStartingWith(category, game.letter)[0] ?? wordsStartingWith(a.pile.at(-1)!.categories[1], game.letter)[0]!;
-    const usedCategory = wordsStartingWith(category, game.letter).length > 0 ? category : a.pile.at(-1)!.categories[1];
+    const usedCategory = game.duels[0]!.categories[0]!;
+    game.letter = wordsStartingWith(usedCategory, 'A').length > 0 ? 'A' : 'B';
+    const word = wordsStartingWith(usedCategory, game.letter)[0]!;
     const res = game.answer('a', usedCategory, word, now + 500);
     expect(res.error).toBeNull();
     expect(a.pile).toHaveLength(0);
@@ -104,11 +122,11 @@ describe('partie', () => {
   it('une mauvaise réponse bloque un instant, une catégorie hors carte est refusée', () => {
     const { game, a, b, t } = twoPlayersAtReveal();
     const now = forceDuel(game, a, b, t);
-    const [c1] = a.pile.at(-1)!.categories;
+    const c1 = game.duels[0]!.categories[0]!;
     expect(game.answer('a', c1, 'zzzz', now).error).not.toBeNull();
     expect(game.answer('a', c1, 'zzzz', now + 100).error).toMatch(/Attends/);
     const other = CATEGORY_IDS.find((c) => !a.pile.at(-1)!.categories.includes(c))!;
-    expect(game.answer('a', other, 'x', now + 5000).error).toMatch(/deux catégories/);
+    expect(game.answer('a', other, 'x', now + 5000).error).toMatch(/catégorie commune/);
   });
 
   it('sans réponse, le duel s’arrête et les piles restent', () => {
@@ -124,8 +142,8 @@ describe('partie', () => {
     const { game, a, b, t } = twoPlayersAtReveal();
     const now = forceDuel(game, a, b, t);
     a.deck = [];
-    const [c1, c2] = a.pile.at(-1)!.categories;
-    const c = wordsStartingWith(c1, game.letter).length > 0 ? c1 : c2;
+    const c = game.duels[0]!.categories[0]!;
+    game.letter = wordsStartingWith(c, 'A').length > 0 ? 'A' : 'B';
     game.answer('a', c, wordsStartingWith(c, game.letter)[0]!, now);
     const events = run(game, now, now + CARD_GAME.timing.resultMs);
     const end = events.find((e) => e.kind === 'finished');

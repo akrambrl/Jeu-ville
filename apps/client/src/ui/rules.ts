@@ -10,8 +10,8 @@ export function showRules(root: HTMLElement): void {
       el('ol', {}, [
         el('li', { text: `Chacun reçoit ${CARD_GAME.cardsPerPlayer} cartes face cachée. Le but : se débarrasser de toutes ses cartes.` }),
         el('li', { text: 'À chaque manche, une lettre est tirée au hasard, puis tout le monde retourne en même temps la carte du dessus de son paquet.' }),
-        el('li', { text: 'Chaque carte a une couleur et deux catégories (par exemple Prénom / Pays ou ville). À 2 joueurs il y a 2 couleurs, à 3 joueurs 3 couleurs, à partir de 4 joueurs 4 couleurs.' }),
-        el('li', { text: 'Si ta carte a la même couleur que celle d’un autre joueur : ⚔️ DUEL ! Le premier qui écrit un mot qui commence par la lettre, dans une des deux catégories de SA carte, gagne.' }),
+        el('li', { text: 'Chaque carte porte deux catégories (par exemple Prénom / Pays ou ville). La couleur est juste pour faire joli.' }),
+        el('li', { text: 'Si ta carte a au moins une catégorie en commun avec celle d’un autre joueur : ⚔️ DUEL ! Le premier qui écrit un mot qui commence par la lettre, dans la catégorie commune, gagne.' }),
         el('li', { text: 'Le gagnant se débarrasse de sa pile : le perdant récupère les deux piles sous son paquet.' }),
         el('li', { text: 'Le premier qui n’a plus aucune carte gagne la partie !' }),
       ]),

@@ -1,4 +1,6 @@
 :root {
+  /* Couleur des duels (cadre des sièges et du panneau). */
+  --duel: #f72585;
   --bg1: #3a0ca3;
   --bg2: #7209b7;
   --felt: #1b7a4b;
@@ -589,6 +591,7 @@ button.link {
 }
 
 .status {
+  white-space: pre-line;
   text-align: center;
   font-weight: 700;
   min-height: 1.3em;
