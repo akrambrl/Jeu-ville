@@ -54,6 +54,9 @@ jeu : il doit gagner un duel pour s'en débarrasser et finir.
   Pikachu…) ; le nom seul suffit (« Mbappé »), et la lettre peut être celle du
   prénom ou du nom.
 - Mauvaise réponse : petit temps d'attente avant de réessayer.
+- **Vibrations** (téléphones Android) : un coup au début d'un duel, deux petits
+  coups rapides pour une bonne réponse gagnante, un long « bzzz » pour une
+  mauvaise réponse. Les iPhone ne permettent pas aux pages web de vibrer.
 
 ## Modes
 

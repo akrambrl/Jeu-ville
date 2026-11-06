@@ -12,6 +12,25 @@ import { showRules } from './rules.js';
 const ROLL_STEP_MS = 70;
 /** La lettre s'arrête un peu avant la fin du tirage. */
 const ROLL_STOP_BEFORE_MS = 700;
+/**
+ * Vibrations (ms : vibre, pause, vibre…). Bonne réponse : deux petits coups
+ * joyeux ; mauvaise réponse : un long « bzzz » ; début de duel : un coup.
+ * Sans effet là où le navigateur ne sait pas vibrer (iPhone, ordinateur).
+ */
+const VIBRATION = {
+  duel: [200],
+  right: [60, 60, 60],
+  wrong: [400],
+} as const;
+
+function vibrate(pattern: readonly number[]): void {
+  try {
+    navigator.vibrate?.([...pattern]);
+  } catch {
+    /* vibration indisponible */
+  }
+}
+
 const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb8500'];
 
 export function showTable(root: HTMLElement, link: TableLink, onExit: () => void): void {
@@ -240,7 +259,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' vs ')} · ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
         if (mine) {
           showToast(screen, '⚔️ DUEL ! Vite, un mot !', 'win', 1500);
-          navigator.vibrate?.(200);
+          vibrate(VIBRATION.duel);
         }
         break;
       }
@@ -266,7 +285,10 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     status.textContent = `🏆 ${winner} : « ${d.word} » (${cat}) · ${losers}`;
     badges.set(d.winnerId!, '🏆');
     for (const l of d.losers) badges.set(l.id, `+${l.cards}`);
-    if (d.winnerId === link.myId) showToast(screen, `🏆 Bien joué ! « ${d.word} »`, 'win');
+    if (d.winnerId === link.myId) {
+      showToast(screen, `🏆 Bien joué ! « ${d.word} »`, 'win');
+      vibrate(VIBRATION.right);
+    }
     else if (d.playerIds.includes(link.myId)) showToast(screen, `😩 ${winner} a été plus rapide : « ${d.word} »`, 'error');
   };
 
@@ -274,6 +296,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     const feedback = duelPanel.querySelector('.feedback');
     if (feedback && !duelPanel.hidden && n.level === 'error') {
       feedback.textContent = `❌ ${n.text}`;
+      vibrate(VIBRATION.wrong);
       duelPanel.classList.remove('shake');
       void duelPanel.offsetWidth;
       duelPanel.classList.add('shake');
