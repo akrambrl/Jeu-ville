@@ -6,7 +6,7 @@ name: Jeu web (GitHub Pages)
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/hide-and-seek-multiplayer-3d8icz]
   workflow_dispatch:
 
 permissions:
