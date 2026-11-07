@@ -46,6 +46,12 @@ export const CARD_GAME = {
 
   answer: {
     maxLength: 40,
+    /**
+     * Fautes de frappe tolérées : un mot à `maxEdits` faute près (lettre en trop,
+     * en moins, remplacée, ou deux lettres voisines inversées) d'un mot de la
+     * liste est accepté, s'il fait au moins `minLength` lettres.
+     */
+    typos: { maxEdits: 1, minLength: 5 },
     /** Mauvaise réponse : on ne peut pas retenter avant… */
     wrongLockMs: 1_500,
   },

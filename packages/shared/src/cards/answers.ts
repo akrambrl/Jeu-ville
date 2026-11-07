@@ -3,6 +3,7 @@
  * et figurer dans la liste de mots de la catégorie. On ignore accents,
  * majuscules, tirets, apostrophes, articles (« la banane ») et pluriels.
  */
+import { CARD_GAME } from '../config/cards.js';
 import type { CategoryId } from './categories.js';
 import { WORDS } from './words.js';
 
@@ -117,10 +118,51 @@ export function checkAnswer(category: CategoryId, letter: string, text: string):
     wrongLetter = true;
   }
   if (wrongLetter) return { ok: false, reason: `Ça ne commence pas par ${letter.toUpperCase()} !` };
-  if (!variants(n, category).some((v) => (category === 'celebrity' ? v.split(' ').some((p) => p.startsWith(l)) : v.startsWith(l)))) {
-    return { ok: false, reason: `Ça ne commence pas par ${letter.toUpperCase()} !` };
-  }
+  const startsWith = (v: string) => (category === 'celebrity' ? v.split(' ').some((p) => p.startsWith(l)) : v.startsWith(l));
+  if (!variants(n, category).some(startsWith)) return { ok: false, reason: `Ça ne commence pas par ${letter.toUpperCase()} !` };
+  // Faute de frappe : le mot le plus proche de la liste, s'il commence aussi par la lettre.
+  const close = closestWord(known, variants(n, category).filter(startsWith), startsWith);
+  if (close) return { ok: true, word: close };
   return { ok: false, reason: 'Ce mot n’est pas dans la liste du jeu.' };
+}
+
+/**
+ * Distance d'édition (Damerau restreinte) entre deux mots, plafonnée : au-delà
+ * de `max`, renvoie `max + 1`. Une lettre en trop, en moins, remplacée, ou deux
+ * lettres voisines inversées comptent chacune pour une faute.
+ */
+export function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const rows: number[][] = [Array.from({ length: b.length + 1 }, (_, j) => j)];
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let d = Math.min(rows[i - 1]![j]! + 1, row[j - 1]! + 1, rows[i - 1]![j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d = Math.min(d, rows[i - 2]![j - 2]! + 1);
+      row.push(d);
+      best = Math.min(best, d);
+    }
+    if (best > max) return max + 1;
+    rows.push(row);
+  }
+  return rows[a.length]![b.length]!;
+}
+
+/** Mot de la liste le plus proche (fautes de frappe tolérées, voir CARD_GAME.answer.typos), ou null. */
+function closestWord(known: Map<string, string>, typed: string[], startsWith: (v: string) => boolean): string | null {
+  const { maxEdits, minLength } = CARD_GAME.answer.typos;
+  let best: { word: string; d: number } | null = null;
+  for (const t of typed) {
+    if (t.replace(/ /g, '').length < minLength) continue;
+    for (const [form, word] of known) {
+      if (form.replace(/ /g, '').length < minLength || !startsWith(form)) continue;
+      const d = editDistance(t, form, maxEdits);
+      if (d <= maxEdits && (!best || d < best.d)) best = { word, d };
+    }
+  }
+  return best?.word ?? null;
 }
 
 /** Mots de la liste qui commencent par `letter` (pour les bots). */

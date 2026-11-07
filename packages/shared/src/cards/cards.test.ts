@@ -95,6 +95,18 @@ describe('réponses', () => {
     for (const [category, letter, word] of cases) expect(checkAnswer(category, letter, word).ok, word).toBe(true);
   });
 
+  it('tolère une faute de frappe sur les mots d’au moins 5 lettres', () => {
+    const ok: [Parameters<typeof checkAnswer>[0], string, string, string][] = [
+      ['animal', 'M', 'mamouth', 'mammouth'], ['animal', 'E', 'élephan', 'éléphant'], ['animal', 'G', 'girfae', 'girafe'],
+      ['place', 'M', 'Marseile', 'Marseille'], ['dish', 'T', 'tarte tatn', 'tarte tatin'],
+    ];
+    for (const [category, letter, typed, word] of ok) expect(checkAnswer(category, letter, typed), typed).toEqual({ ok: true, word });
+    // Deux fautes, mot trop court, ou première lettre changée : refusé.
+    expect(checkAnswer('animal', 'M', 'mammhout').ok).toBe(false);
+    expect(checkAnswer('animal', 'C', 'cht').ok).toBe(false);
+    expect(checkAnswer('animal', 'R', 'rion').ok).toBe(false);
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });

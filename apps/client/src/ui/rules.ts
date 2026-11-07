@@ -18,7 +18,7 @@ export function showRules(root: HTMLElement): void {
         el('li', { text: 'Le gagnant se débarrasse de sa pile : le perdant récupère les deux piles sous son paquet.' }),
         el('li', { text: 'Le premier qui n’a plus aucune carte gagne la partie !' }),
       ]),
-      el('p', { class: 'muted', text: 'Accents, majuscules, articles et pluriels ne comptent pas. Les mots sont vérifiés avec la liste du jeu.' }),
+      el('p', { class: 'muted', text: 'Accents, majuscules, articles et pluriels ne comptent pas, et une faute de frappe passe sur les mots de 5 lettres ou plus. Les mots sont vérifiés avec la liste du jeu.' }),
       el('div', { class: 'chips' }, CATEGORY_IDS.map((c) => tintCategory(el('span', { class: 'chip', text: `${CATEGORIES[c].icon} ${CATEGORIES[c].label}` }), c))),
       el('div', { class: 'actions' }, [tuto, close]),
     ]),

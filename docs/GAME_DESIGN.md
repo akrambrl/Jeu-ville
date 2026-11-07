@@ -101,6 +101,9 @@ Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
   coiffeuse, actrice). Célébrité : vraies personnes et personnages célèbres (Garfield,
   Pikachu…) ; le nom seul suffit (« Mbappé »), et la lettre peut être celle du
   prénom ou du nom.
+- **Une faute de frappe est tolérée** pour les mots d'au moins 5 lettres (lettre
+  en trop, en moins, remplacée, ou deux lettres inversées) : « mamouth » compte
+  pour « mammouth ». La première lettre doit rester la bonne.
 - Mauvaise réponse : petit temps d'attente avant de réessayer.
 - **Vibrations** (téléphones Android) : un coup au début d'un duel, deux petits
   coups rapides pour une bonne réponse gagnante, un long « bzzz » pour une
