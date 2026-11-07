@@ -69,12 +69,16 @@ toujours).
 
 ### 2.3 Le jeu web gratuit sur GitHub Pages
 
-1. Sur GitHub, dépôt `Jeu-ville` → *Settings → Pages* → Source : **GitHub Actions**.
-2. *Settings → Secrets and variables → Actions → Variables* : ajoute
-   `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
-3. Fusionne le travail sur la branche `main` : le jeu est publié à chaque envoi,
-   à l'adresse **`https://akrambrl.github.io/Jeu-ville/`**, et la page légale à
-   **`https://akrambrl.github.io/Jeu-ville/legal.html`** (l'adresse à donner aux stores).
+Déjà en ligne : **`https://akrambrl.github.io/Jeu-ville/`** (servi depuis la
+branche `gh-pages`), et la page légale à
+**`https://akrambrl.github.io/Jeu-ville/legal.html`** (l'adresse à donner aux stores).
+
+- Mise à jour automatique : à chaque envoi sur la branche du jeu (ou `main`),
+  le workflow `.github/workflows/pages.yml` recompile et republie le site.
+- Pour activer le jeu en ligne sur ce lien : *Settings → Secrets and variables
+  → Actions → Variables* → ajoute `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`.
+- Sur iPhone : ouvrir le lien dans Safari → Partager → « Sur l'écran
+  d'accueil » : le jeu s'installe avec son icône et s'ouvre en plein écran.
 
 ### 2.4 Compiler l'appli
 

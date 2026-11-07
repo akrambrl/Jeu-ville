@@ -1,7 +1,8 @@
-# Publie le jeu web (et la page légale) gratuitement sur GitHub Pages à chaque
-# envoi sur la branche principale. À activer une fois : Settings → Pages →
-# Source : « GitHub Actions », et Settings → Secrets and variables → Actions →
-# Variables : VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (voir docs/STORES.md).
+# Publie le jeu web (et la page légale) gratuitement sur GitHub Pages :
+# à chaque envoi, le jeu est compilé puis copié sur la branche « gh-pages »,
+# servie à l'adresse https://<compte>.github.io/<dépôt>/.
+# Jeu en ligne : ajouter dans Settings → Secrets and variables → Actions →
+# Variables : VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY (voir docs/STORES.md).
 name: Jeu web (GitHub Pages)
 
 on:
@@ -10,16 +11,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,16 +34,11 @@ jobs:
           BASE_PATH: /${{ github.event.repository.name }}/
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/client/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Copier le jeu compilé sur la branche gh-pages
+        run: |
+          cd apps/client/dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Jeu web compilé depuis ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

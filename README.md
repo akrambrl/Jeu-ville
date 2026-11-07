@@ -18,6 +18,11 @@ Puis ouvrir http://localhost:5173 (sur un téléphone du même réseau :
 `http://<ip-de-ton-pc>:5173`). Pour essayer le jeu en ligne sans Supabase,
 ouvrir plusieurs onglets sur http://localhost:5173/?online=local.
 
+## Jouer
+
+**https://akrambrl.github.io/Jeu-ville/** — sur iPhone, dans Safari : Partager →
+« Sur l'écran d'accueil » pour l'installer comme une appli.
+
 ## Jouer en ligne (gratuit)
 
 Le jeu en ligne passe par **Supabase Realtime** (offre gratuite) : le téléphone
