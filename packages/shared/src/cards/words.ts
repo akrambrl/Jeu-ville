@@ -4,7 +4,7 @@
  * pluriels sont ignorés). Pour accepter un nouveau mot, l'ajouter ici.
  */
 import type { CategoryId } from './categories.js';
-import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE } from './celebrities.js';
+import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE, FAMOUS_POLITICIANS } from './celebrities.js';
 import { AFRICAN_FIRST_NAMES, ASIAN_FIRST_NAMES, ENGLISH_FIRST_NAMES, LATIN_FIRST_NAMES, MORE_FIRST_NAMES, TURKISH_FIRST_NAMES } from './firstNames.js';
 import { MORE_BRANDS } from './brands.js';
 import { MORE_BODY_PARTS, MORE_CLOTHING, MORE_DISHES, MORE_HOUSE_OBJECTS, MORE_SPORTS } from './moreWords.js';
@@ -142,7 +142,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     Taylor Swift, Teddy Riner, Thomas Pesquet, Thierry Henry, Tony Parker,
     Usain Bolt, Victor Hugo, Victor Wembanyama,
     Will Smith, Zinédine Zidane, Zidane
-  `, FAMOUS_PEOPLE, FAMOUS_CHARACTERS),
+  `, FAMOUS_PEOPLE, FAMOUS_CHARACTERS, FAMOUS_POLITICIANS),
   brand: list(`
     Adidas, Airbus, Amazon, Apple, Asus, Audi,
     Bic, BMW, Burger King, Bonduelle, Banania, Barbie,

@@ -40,3 +40,14 @@ export const FAMOUS_CHARACTERS = `
   Raiponce, Rambo, Rocky, Sangoku, Scooby-Doo, Shrek, Simba, Sonic, Spider-Man, Spirou, Stitch, Superman, Schtroumpf, Shazam,
   Tarzan, Timon, Tintin, Titeuf, Tom, Totoro, Vegeta, Wolverine, Woody, Winnie l'ourson, Wonder Woman, Yoda, Zelda, Zorro
 `;
+
+/** Personnalités politiques, françaises et étrangères, d'hier et d'aujourd'hui. */
+export const FAMOUS_POLITICIANS = `
+  Agnès Buzyn, Alain Juppé, Angela Merkel, Anne Hidalgo, Arnaud Montebourg, Bruno Le Maire, Benoît Hamon, Bernard Cazeneuve, Bernie Sanders,
+  Charles de Gaulle, Christiane Taubira, Clémentine Autain, Darmanin, Dominique de Villepin, Donald Trump, Édouard Philippe, Éric Ciotti, Éric Zemmour, Élisabeth Borne,
+  Fabien Roussel, Fidel Castro, François Bayrou, François Fillon, François Hollande, François Mitterrand, François Ruffin, Gabriel Attal, Georges Pompidou, Gérald Darmanin,
+  Hillary Clinton, Jacques Delors, Jean Castex, Jean Jaurès, Jean Lassalle, Jean-Luc Mélenchon, Jean-Marie Le Pen, Jean-Michel Blanquer, Joe Biden, John Kennedy, JFK, Jordan Bardella,
+  Kamala Harris, Lionel Jospin, Manuel Valls, Marion Maréchal, Marine Tondelier, Mathilde Panot, Michel Barnier, Michelle Obama, Nathalie Arthaud, Nicolas Dupont-Aignan, Nicolas Hulot,
+  Olivier Faure, Philippe Poutou, Raphaël Glucksmann, Rishi Sunak, Roselyne Bachelot, Ségolène Royal, Sandrine Rousseau, Sébastien Lecornu, Valérie Pécresse, Valéry Giscard d'Estaing, Vladimir Poutine, Volodymyr Zelensky,
+  Winston Churchill, Xi Jinping, Yannick Jadot, Abraham Lincoln, Che Guevara, Napoléon, Napoléon Bonaparte, Jules César, Cléopâtre, Jeanne d'Arc, Louis XIV, Marie-Antoinette, Charlemagne, Robespierre, Lénine, Staline, Mao, Thomas Sankara, Patrice Lumumba, Malcolm X, Rosa Parks, Kim Jong-un, Justin Trudeau, Giorgia Meloni, Erdogan, Recep Tayyip Erdogan, Lula
+`;
