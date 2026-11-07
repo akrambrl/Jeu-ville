@@ -46,9 +46,9 @@ const STEPS: Step[] = [
     visual: () => el('div', { class: 'tuto-visual' }, [purse(9), el('span', { class: 'tuto-arrow', text: '➜' }), el('div', { class: 'tuto-pot' }, [coin(), coin(), coin()]), el('span', { class: 'tuto-arrow back', text: '⬅' }), purse(9)]),
   },
   {
-    title: 'Ça tourne… MATCH !',
-    text: 'Une lettre est tirée au milieu de la table. Puis les catégories défilent devant chaque joueur et s’arrêtent sur la même.',
-    visual: () => el('div', { class: 'tuto-visual' }, [categoryTile('sport', 'landed'), el('div', { class: 'letter-badge tuto-letter' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter', text: 'T' })]), categoryTile('sport', 'landed')]),
+    title: 'Ça tourne… GO !',
+    text: 'Une lettre est tirée au milieu de la table. Puis le rouleau des catégories tourne et s’arrête sur la catégorie de la manche.',
+    visual: () => el('div', { class: 'tuto-visual' }, [el('div', { class: 'letter-badge tuto-letter' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter', text: 'T' })]), el('span', { class: 'tuto-arrow', text: '+' }), categoryTile('sport', 'landed')]),
   },
   {
     title: 'Le plus rapide rafle tout',

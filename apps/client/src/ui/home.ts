@@ -74,7 +74,7 @@ export function showHome(root: HTMLElement, options: HomeOptions, start: (choice
     floatingLetters(),
     el('div', { class: 'home-tools' }, [muteButton('icon-button'), settingsButton]),
     el('div', { class: 'logo' }, [
-      el('div', { class: 'logo-reels' }, [categoryTile('animal', 'landed'), el('div', { class: 'logo-coins' }, [coin(), coin(), coin()]), categoryTile('animal', 'landed')]),
+      el('div', { class: 'logo-reels' }, [el('div', { class: 'logo-coins' }, [coin(), coin(), coin()]), categoryTile('animal', 'landed'), el('div', { class: 'logo-coins' }, [coin(), coin()])]),
       el('h1', {}, [el('span', { class: 'word-bac', text: 'Bac' }), el('span', { class: 'word-bataille', text: 'Bataille' })]),
       el('p', { class: 'tagline', text: 'Le petit bac version casino. Sois le plus rapide, rafle tout l’or !' }),
     ]),

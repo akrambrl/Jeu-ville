@@ -1,9 +1,9 @@
 /**
- * La table de jeu, sur tout l'écran : adversaires en bandeau en haut (avec leur
- * bourse), lettre en badge dans la barre, le tapis avec le rouleau de catégories
- * de chaque joueur et le tas de pièces d'or au milieu, sa bourse en bas, et le
- * panneau de réponse. Cinématiques : pièces qui volent vers le tas puis vers le
- * gagnant, rouleaux qui défilent et s'arrêtent sur la même catégorie (« MATCH ! »).
+ * La table de jeu, sur tout l'écran : lettre en badge dans la barre, le tapis
+ * avec les adversaires autour (en face, sur les côtés), le rouleau de catégories
+ * et le tas de pièces d'or au milieu, sa bourse en bas, et le panneau de réponse.
+ * Cinématiques : roue de la lettre, pièces qui volent vers le tas, rouleau qui
+ * défile puis ralentit jusqu'à la catégorie, pièces qui glissent vers le gagnant.
  */
 import { CARD_GAME, CATEGORIES, CATEGORY_IDS, type CategoryId, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
 import { haptic, isNative } from '../native.js';
@@ -13,12 +13,10 @@ import { confetti, muteButton, play } from './fx.js';
 import { showRules } from './rules.js';
 import { categoryFace, coin, tintCategory } from './tiles.js';
 
-/** Rouleaux : vitesse de défilement (ms entre deux catégories)… */
-const REEL_STEP_MS = 90;
-/** … le premier rouleau s'arrête à ce moment du défilement, les suivants l'un après l'autre… */
-const REEL_FIRST_STOP_MS = 1_400;
-const REEL_STOP_STEP_MS = 380;
-/** … et tous sont arrêtés au plus tard tant de ms avant la fin du défilement. */
+/** Rouleau du milieu : il défile vite puis ralentit (ms entre deux catégories, au début et à la fin)… */
+const REEL_FAST_MS = 55;
+const REEL_SLOW_MS = 300;
+/** … et s'arrête tant de ms avant la fin du défilement. */
 const REEL_DONE_BEFORE_MS = 450;
 /** Tirage de la lettre : une lettre au hasard tous les tant de ms… */
 const ROLL_STEP_MS = 140;
@@ -44,25 +42,23 @@ const COIN_CLINKS_MIN = 3;
 const COIN_CLINK_EARLY_MS = 120;
 /** Pièces dessinées dans le tas du milieu (au-delà, seul le nombre change). */
 const POT_DRAWN_MAX = 14;
-/** Rouleaux : largeur des tuiles entre ces bornes (px), écart entre eux… */
-const TILE_MIN_W = 36;
-const TILE_MAX_W = 150;
-const REEL_GAP = 12;
-/** … place prise autour d'une tuile (cadre du rouleau, bordures comprises ; nom en dessous). */
-const REEL_FRAME = 14;
-const REEL_LABEL_H = 14;
-/** La bourse et le nom débordent un peu sur les côtés du rouleau (voir .reel-tile .purse). */
-const TAG_OVERFLOW = 12;
-/** Le tas du milieu : largeur et hauteur réservées (voir .pot). */
-const POT_W = 76;
+/** Rouleau du milieu : largeur de la tuile entre ces bornes (px)… */
+const TILE_MIN_W = 64;
+const TILE_MAX_W = 180;
+/** … écart entre les éléments du tapis, cadre du rouleau (bordures comprises)… */
+const TABLE_GAP = 12;
+const REEL_FRAME = 22;
+/** … place d'un joueur autour du tapis (avatar, nom, bourse : voir .table-seat)… */
+const SEAT_W = 88;
+const SEAT_H = 96;
+/** … et du tas (voir .pot). */
 const POT_H = 100;
 /** Rapport hauteur / largeur d'une tuile (voir .cat-tile). */
 const TILE_RATIO = 1.05;
-/** En dessous de cette largeur, les tuiles n'affichent que le médaillon. */
-const TILE_TINY_W = 66;
 /**
  * Place des adversaires autour de la table, selon leur nombre (on est toujours
- * en bas) : 1 en face ; 2 à gauche et à droite ; 3 à gauche, en face, à droite…
+ * en bas, sa bourse sous le tapis) : 1 en face ; 2 à gauche et à droite ; 3 à
+ * gauche, en face, à droite…
  * Les places suivent l'ordre de la table, dans le sens des aiguilles d'une montre.
  */
 const SEATING: Record<number, Side[]> = {
@@ -72,7 +68,7 @@ const SEATING: Record<number, Side[]> = {
   4: ['left', 'top', 'top', 'right'],
   5: ['left', 'top', 'top', 'top', 'right'],
 };
-type Side = 'top' | 'left' | 'right' | 'bottom';
+type Side = 'top' | 'left' | 'right';
 
 const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb8500'];
 
@@ -97,18 +93,20 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const help = el('button', { class: 'icon-button', text: '?', title: 'Règles' });
   const roundLabel = el('div', { class: 'round-label' });
   const timer = el('div', { class: 'timer' });
-  /** Places autour du tapis : rouleau, nom et bourse de chaque joueur (soi en bas). */
+  /** Places des adversaires autour du tapis : avatar, nom et bourse. */
   const sides: Record<Side, HTMLElement> = {
     top: el('div', { class: 'side side-top' }),
     left: el('div', { class: 'side side-left' }),
     right: el('div', { class: 'side side-right' }),
-    bottom: el('div', { class: 'side side-bottom' }),
   };
+  /** Le rouleau de catégories, au milieu de la table. */
+  const reel = el('div', { class: 'reel' });
   /** Le tas de pièces au milieu. */
   const potCoins = el('div', { class: 'pot-coins' });
   const potCount = el('div', { class: 'pot-count' });
   const pot = el('div', { class: 'pot' }, [potCoins, potCount]);
-  const tapis = el('div', { class: 'tapis' }, [sides.top, sides.left, pot, sides.right, sides.bottom]);
+  const center = el('div', { class: 'center' }, [reel, pot]);
+  const tapis = el('div', { class: 'tapis' }, [sides.top, sides.left, center, sides.right]);
   const letterBadge = el('div', { class: 'letter-badge' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]);
   const status = el('div', { class: 'status' });
   const stage = el('div', { class: 'stage' }, [tapis, status]);
@@ -155,46 +153,38 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return node;
   };
 
-  /** Rouleau d'un joueur sur le tapis, avec son nom et sa bourse (créé une fois : le défilement continue entre deux rendus). */
-  const tiles = new Map<string, HTMLElement>();
-  const reelTile = (p: PlayerView): HTMLElement => {
-    const mine = p.id === link.myId;
-    let node = tiles.get(p.id);
+  /** Place d'un adversaire autour du tapis (créée une fois, mise à jour à chaque rendu). */
+  const seats = new Map<string, HTMLElement>();
+  const seatTile = (p: PlayerView): HTMLElement => {
+    let node = seats.get(p.id);
     if (!node) {
-      node = el('div', { class: `reel-tile${mine ? ' mine' : ''}` }, [
-        el('div', { class: 'reel' }, [el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '?' })])]),
-        el('div', { class: 'reel-tag' }, [el('div', { class: 'reel-name' })]),
-        ...(mine ? [] : [el('div', { class: 'purse' })]),
-      ]);
+      node = el('div', { class: 'table-seat' }, [el('div', { class: 'seat-avatar' }), el('div', { class: 'seat-name' }), el('div', { class: 'purse' })]);
       node.dataset.player = p.id;
-      tiles.set(p.id, node);
+      seats.set(p.id, node);
     }
     node.classList.toggle('out', p.out);
     node.classList.toggle('left', p.left);
-    const label = node.querySelector<HTMLElement>('.reel-name')!;
-    label.textContent = mine ? 'Toi' : p.name;
-    label.style.background = colorOf(p.id);
-    const purse = node.querySelector<HTMLElement>('.purse');
-    if (purse) {
-      const text = p.out ? '💀' : String(shownCoins(p));
-      if (purse.textContent !== text) purse.replaceChildren(...(p.out ? [] : [coin()]), el('span', { text }));
-      purse.classList.toggle('out', p.out);
-    }
+    const avatar = node.querySelector<HTMLElement>('.seat-avatar')!;
+    avatar.textContent = p.out ? '💀' : p.bot ? '🤖' : p.name.slice(0, 1).toUpperCase();
+    avatar.style.background = colorOf(p.id);
+    node.querySelector('.seat-name')!.textContent = p.name;
+    const purse = node.querySelector<HTMLElement>('.purse')!;
+    const text = p.out ? 'éliminé' : String(shownCoins(p));
+    if (purse.textContent !== text) purse.replaceChildren(...(p.out ? [] : [coin()]), el('span', { text }));
+    purse.classList.toggle('out', p.out);
     node.querySelector('.badge')?.remove();
     const badge = badges.get(p.id);
     if (badge) node.append(el('div', { class: 'badge', text: badge }));
     return node;
   };
 
-  /** Place chaque joueur autour du tapis : soi en bas, les autres dans l'ordre de la table. */
+  /** Place les adversaires autour du tapis, dans l'ordre de la table (soi en bas). */
   const placeSeats = (players: PlayerView[]): boolean => {
     const k = Math.max(0, players.findIndex((p) => p.id === link.myId));
     const others = [...players.slice(k + 1), ...players.slice(0, k)].filter((p) => p.id !== link.myId);
     const layout = SEATING[others.length] ?? others.map(() => 'top' as Side);
-    const wanted: Record<Side, HTMLElement[]> = { top: [], left: [], right: [], bottom: [] };
-    others.forEach((p, i) => wanted[layout[i]!].push(reelTile(p)));
-    const mine = players.find((p) => p.id === link.myId);
-    if (mine) wanted.bottom.push(reelTile(mine));
+    const wanted: Record<Side, HTMLElement[]> = { top: [], left: [], right: [] };
+    others.forEach((p, i) => wanted[layout[i]!].push(seatTile(p)));
     let moved = false;
     for (const side of Object.keys(sides) as Side[]) {
       const box = sides[side];
@@ -206,17 +196,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return moved;
   };
 
-  /** Affiche une catégorie (ou « ? ») dans un rouleau. */
-  const setReel = (tile: Element | null, c: CategoryId | null, extra = '') => {
-    const reel = tile?.querySelector('.reel');
-    if (!reel) return;
+  /** Affiche une catégorie (ou « ? ») dans le rouleau du milieu. */
+  const setReel = (c: CategoryId | null, extra = '') => {
     const face = c ? tintCategory(el('div', { class: `cat-tile ${extra}`.trim() }, categoryFace(c)), c) : el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '?' })]);
     face.dataset.cat = c ?? '';
     reel.replaceChildren(face);
   };
-
-  /** Rouleaux des joueurs encore en lice. */
-  const liveTiles = () => [...tapis.querySelectorAll<HTMLElement>('.reel-tile:not(.out)')];
 
   const render = () => {
     if (!view) return;
@@ -228,16 +213,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     if (placeSeats(view.players) || wasHidden !== tapis.hidden) fitReels();
     if (!spinning) {
       const c = view.phase === 'spin' || view.phase === 'duel' || view.phase === 'result' ? view.category : null;
-      for (const t of tapis.querySelectorAll<HTMLElement>('.reel-tile')) {
-        const shown = t.querySelector<HTMLElement>('.reel .cat-tile');
-        if (t.classList.contains('out')) {
-          if (shown?.dataset.cat !== 'out') {
-            const face = el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '💀' })]);
-            face.dataset.cat = 'out';
-            t.querySelector('.reel')!.replaceChildren(face);
-          }
-        } else if ((shown?.dataset.cat || null) !== c) setReel(t, c, 'landed');
-      }
+      const shown = reel.querySelector<HTMLElement>('.cat-tile');
+      if (!shown || (shown.dataset.cat || null) !== c) setReel(c, 'landed');
     }
     if (!rolling) letterEl.textContent = view.phase === 'ante' ? '?' : view.letter || '?';
     renderPot(view.pot);
@@ -438,65 +415,54 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return a;
   };
 
-  /** Taille des rouleaux : la plus grande qui fasse tenir toutes les places autour du tapis. */
+  /** Taille du rouleau du milieu : la plus grande qui laisse la place aux adversaires et au tas. */
   const fitReels = () => {
     if (tapis.hidden) return;
     const css = getComputedStyle(tapis);
     const W = tapis.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
     const H = tapis.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
-    const top = sides.top.childElementCount;
+    const top = sides.top.childElementCount > 0;
     const besides = sides.left.childElementCount + sides.right.childElementCount > 0;
     // Panneau de réponse ouvert : le tas se cache (le panneau dit ce qu'il y a à rafler).
     const potShown = !screen.classList.contains('with-duel');
-    const rows = (top > 0 ? 1 : 0) + (besides ? 1 : 0) + 1;
-    const potRow = !besides && potShown ? POT_H + REEL_GAP : 0;
-    const byH = ((H - potRow - (rows - 1) * REEL_GAP) / rows - REEL_FRAME - REEL_LABEL_H) / TILE_RATIO;
-    const byTop = top > 0 ? (W - (top - 1) * REEL_GAP) / top - REEL_FRAME - TAG_OVERFLOW : Infinity;
-    const bySides = besides ? (W - 2 * REEL_GAP - (potShown ? POT_W : 0)) / 2 - REEL_FRAME - TAG_OVERFLOW : Infinity;
-    const w = Math.floor(Math.max(TILE_MIN_W, Math.min(TILE_MAX_W, byH, byTop, bySides)));
+    const byH = (H - (top ? SEAT_H + TABLE_GAP : 0) - (potShown ? POT_H + TABLE_GAP : 0) - REEL_FRAME) / TILE_RATIO;
+    const byW = W - (besides ? 2 * (SEAT_W + TABLE_GAP) : 0) - REEL_FRAME;
+    const w = Math.floor(Math.max(TILE_MIN_W, Math.min(TILE_MAX_W, byH, byW)));
     tapis.style.setProperty('--tile-w', `${w}px`);
-    tapis.classList.toggle('tiny', w < TILE_TINY_W);
   };
   new ResizeObserver(() => fitReels()).observe(tapis);
 
   // ---------- Cinématiques ----------
 
   /**
-   * Les rouleaux de chacun font défiler des catégories au hasard, s'arrêtent
-   * l'un après l'autre… tous sur la même : MATCH ! La lettre tourne dans son
-   * badge (tirée juste avant, voir rollLetter).
+   * Le rouleau du milieu fait défiler les catégories de plus en plus lentement,
+   * jusqu'à s'arrêter sur celle de la manche (la lettre est tirée juste avant).
    */
   const spinReels = (category: CategoryId, letter: string) => {
     spinning = true;
-    // Ordre d'arrêt : en face d'abord, soi en dernier (suspense).
-    const tiles = liveTiles().sort((a, b) => Number(a.classList.contains('mine')) - Number(b.classList.contains('mine')));
-    const n = Math.max(1, tiles.length);
-    const lastStop = CARD_GAME.timing.spinMs - REEL_DONE_BEFORE_MS;
-    const step = n > 1 ? Math.min(REEL_STOP_STEP_MS, (lastStop - REEL_FIRST_STOP_MS) / (n - 1)) : 0;
+    reel.classList.remove('matched');
+    const stopAt = CARD_GAME.timing.spinMs - REEL_DONE_BEFORE_MS;
     const others = CATEGORY_IDS.filter((c) => c !== category);
-    const loops = tiles.map((tile, k) => {
-      tile.classList.remove('matched');
-      let i = Math.floor(Math.random() * others.length);
-      const loop = window.setInterval(() => {
-        i = (i + 1 + k) % others.length;
-        setReel(tile, others[i]!, 'blur');
-      }, REEL_STEP_MS);
-      timers.push(loop);
-      later(REEL_FIRST_STOP_MS + k * step, () => {
-        window.clearInterval(loop);
-        setReel(tile, category, 'landed');
-        play('flip');
+    let i = Math.floor(Math.random() * others.length);
+    let t = 0;
+    // Pas de plus en plus longs (ralentissement en douceur) jusqu'à l'arrêt.
+    while (true) {
+      const step = REEL_FAST_MS + (REEL_SLOW_MS - REEL_FAST_MS) * (t / stopAt) ** 2;
+      if (t + step > stopAt) break;
+      t += step;
+      const c = others[(i = (i + 1) % others.length)]!;
+      later(t, () => {
+        setReel(c, 'blur');
+        play('tick', 1.6);
       });
-      return loop;
-    });
-    const matchAt = REEL_FIRST_STOP_MS + (n - 1) * step + 120;
-    later(matchAt, () => {
-      for (const l of loops) window.clearInterval(l);
-      for (const t of tiles) t.classList.add('matched');
+    }
+    later(stopAt, () => {
+      setReel(category, 'landed');
+      reel.classList.add('matched');
       spinning = false;
       status.textContent = `${CATEGORIES[category].icon} ${CATEGORIES[category].label} en ${letter} !`;
       if (!me()?.out) {
-        stamp('MATCH !', 'duel');
+        stamp('GO !', 'duel');
         play('duel');
         haptic('duel');
       }
@@ -640,10 +606,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         }
         for (const [id, n] of Object.entries(e.paid)) flyCoins(purseOf(id), potCoins, n);
         if (Object.values(e.paid).some((n) => n > 0)) play('coin');
-        for (const t of liveTiles()) {
-          t.classList.remove('matched');
-          setReel(t, null);
-        }
+        reel.classList.remove('matched');
+        setReel(null);
         break;
       }
       case 'letter':

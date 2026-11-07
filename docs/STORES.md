@@ -139,8 +139,8 @@ pnpm build:app          # compile le jeu et le copie dans les projets Android et
 
 > Le petit bac, version casino ! 🪙
 >
-> Chacun pose une pièce d'or au milieu de la table. Les catégories défilent…
-> et s'arrêtent toutes sur la même : MATCH ! Trouve le premier un prénom, un
+> Chacun pose une pièce d'or au milieu de la table. Une lettre tombe, le rouleau
+> des catégories tourne… GO ! Trouve le premier un prénom, un
 > pays, un animal, une marque, un métier… qui commence par la lettre tirée, et
 > rafle tout le tas. Personne ne trouve ? La cagnotte grossit ! La mise monte au
 > fil de la partie : le dernier qui a encore de l'or gagne !

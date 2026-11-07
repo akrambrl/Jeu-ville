@@ -672,11 +672,10 @@ button.round {
   /* Places autour de la table : en face en haut, sur les côtés, soi en bas. */
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto;
   grid-template-areas:
     'top top top'
-    'left pot right'
-    'bottom bottom bottom';
+    'left center right';
   align-content: space-evenly;
   align-items: center;
   gap: 12px;
@@ -1487,86 +1486,13 @@ button.danger {
   display: none;
 }
 
-.reel-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
 .reel {
-  padding: 4px;
+  padding: 8px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.15));
   border: 3px solid var(--ink);
   box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.45);
   overflow: hidden;
-}
-
-.reel-tile.mine .reel {
-  border-color: var(--gold);
-}
-
-.reel-tile.matched .reel {
-  box-shadow:
-    0 0 0 4px var(--duel),
-    0 0 26px var(--duel);
-  animation: beat 0.9s 2;
-}
-
-.reel-tag {
-  /* Nom et bourse chevauchent le bas du rouleau : la place va aux tuiles. */
-  position: relative;
-  z-index: 1;
-  margin-top: -12px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  max-width: calc(var(--tile-w) + 24px);
-}
-
-.reel-tile > .purse {
-  /* Bourse de l'adversaire : pastille sur le coin du rouleau. */
-  position: absolute;
-  top: -8px;
-  right: -10px;
-  z-index: 2;
-  font-size: 14px;
-  padding: 1px 7px 1px 3px;
-  gap: 4px;
-  border-width: 2px;
-}
-
-.reel-tile > .purse .coin {
-  --c: 16px;
-}
-
-.reel-tile.out {
-  opacity: 0.5;
-  filter: grayscale(0.8);
-}
-
-.reel-tile.left .reel-name {
-  opacity: 0.7;
-}
-
-.reel-name {
-  min-width: 0;
-  font-family: var(--font-display);
-  font-size: 13px;
-  padding: 1px 10px;
-  border-radius: 999px;
-  border: 2px solid var(--ink);
-  color: #fff;
-  text-shadow: 0 1px 0 var(--ink);
-  max-width: 110px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.reel-tile.mine .reel-name {
-  outline: 3px solid var(--gold);
 }
 
 /* ---------- Tas de pièces au milieu ---------- */
@@ -1614,8 +1540,6 @@ button.danger {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.6);
 }
-
-
 
 /* ---------- Tutoriel : pièces ---------- */
 
@@ -1669,25 +1593,93 @@ button.danger {
 
 .side-left {
   grid-area: left;
-  justify-self: end;
+  justify-self: start;
 }
 
 .side-right {
   grid-area: right;
-  justify-self: start;
+  justify-self: end;
 }
 
-.side-bottom {
-  grid-area: bottom;
+.center {
+  grid-area: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
-.tapis > .pot {
-  grid-area: pot;
+/* Le rouleau de catégories, au milieu de la table. */
+.reel.matched {
+  box-shadow:
+    0 0 0 4px var(--duel),
+    0 0 30px var(--duel);
+  animation: beat 0.9s 2;
 }
 
-/* Petites tuiles : seulement le médaillon. */
-.tapis.tiny .cat-tile .label {
-  display: none;
+/* Un adversaire autour du tapis : avatar, nom, bourse. */
+.table-seat {
+  position: relative;
+  width: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.seat-avatar {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  box-shadow: 0 0 0 3px #fff, 0 4px 0 3px var(--ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: #fff;
+  text-shadow: 0 1px 0 var(--ink);
+}
+
+.seat-name {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: 14px;
+  text-shadow: 0 2px 0 var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-seat .purse {
+  font-size: 15px;
+  padding: 1px 8px 1px 4px;
+}
+
+.table-seat .purse .coin {
+  --c: 18px;
+}
+
+.table-seat .purse.out {
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 11px;
+  color: #fff;
+}
+
+.table-seat.out .seat-avatar {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.table-seat.left .seat-name {
+  opacity: 0.7;
+}
+
+.table-seat .badge {
+  top: -6px;
+  left: auto;
+  right: 4px;
 }
 
 /* ---------- Tirage de la lettre : roue au milieu de l'écran ---------- */

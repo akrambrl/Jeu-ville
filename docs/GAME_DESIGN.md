@@ -18,9 +18,9 @@ gagne** ; les autres sont classés dans l'ordre inverse de leur élimination.
    les parties ne traînent pas. Un joueur qui n'a plus assez pose ce qui lui reste.
 2. **Tirage de la lettre** : une grande roue tourne au milieu de la table, s'arrête
    sur la lettre, qui file ensuite dans son badge en haut de l'écran.
-3. **Les catégories défilent** devant chaque joueur (un rouleau chacun) et
-   s'arrêtent l'une après l'autre… **toutes sur la même : MATCH !** Il y a donc
-   une réponse à chaque manche, sans attendre.
+3. **Les catégories défilent** sur un grand rouleau au milieu de la table, de
+   plus en plus lentement, et s'arrêtent sur **la catégorie de la manche**, la
+   même pour tout le monde : il y a donc une réponse à chaque manche, sans attendre.
    - Chaque lettre sort une fois avant qu'une lettre ne revienne ; les lettres
      trop dures (K, Q, U, W, X, Y, Z) sont exclues.
    - Chaque catégorie sort une fois avant de revenir, jamais deux fois de suite,
@@ -50,19 +50,20 @@ La table occupe **tout l'écran, sans défilement**. Comme autour d'une vraie
 table, **on est toujours en bas** et les adversaires sont placés autour du tapis,
 dans l'ordre de la table : à 2 joueurs, l'adversaire **en face** (en haut) ; à 3,
 un **à gauche** et un **à droite** ; à 4, **un de chaque côté** (gauche, face,
-droite) ; à 5 et 6, gauche, deux ou trois en face, droite. Chacun a son **rouleau
-de catégories**, son nom dessous et sa **bourse** en pastille sur le coin ; le
-**tas de pièces** est au milieu. Sa propre bourse est en bas de l'écran, la
-lettre en badge dans la barre du haut. La taille des rouleaux est calculée pour
-remplir la place libre ; un joueur éliminé garde sa place, grisé (💀).
+droite) ; à 5 et 6, gauche, deux ou trois en face, droite. Chaque adversaire a
+son **avatar**, son nom et sa **bourse**. Au milieu : **un seul rouleau de
+catégories** (la catégorie est la même pour tous) et, dessous, le **tas de
+pièces**. Sa propre bourse est en bas de l'écran, la lettre en badge dans la
+barre du haut. La taille du rouleau est calculée pour remplir la place libre ;
+un joueur éliminé garde sa place, grisé (💀).
 
 Cinématiques :
 - **mise** : une pièce vole de la bourse de chacun vers le tas ;
 - **tirage de la lettre** : grande roue à rayons au milieu de l'écran, puis la
   lettre file dans son badge ;
-- **défilement** : les rouleaux font défiler des catégories au hasard, s'arrêtent
-  l'un après l'autre sur la même (soi en dernier), tampon « MATCH ! », puis le
-  panneau de réponse ;
+- **défilement** : le rouleau du milieu fait défiler les catégories vite, puis
+  ralentit (petits « tic ») jusqu'à la catégorie de la manche, tampon « GO ! »,
+  puis le panneau de réponse ;
 - **fin de manche** : les pièces du tas glissent une à une vers la bourse du
   gagnant, qui sautille et compte chaque pièce à son arrivée (« RAFLÉ ! »,
   confettis, tintement de chaque pièce qui arrive puis « ka-ching ! »), ou tampon « CAGNOTTE ! » ; « MISE ×2 » quand la mise monte.
@@ -73,8 +74,8 @@ Ambiance **jeu télé / stickers** : fond nuit violet éclairé de projecteurs,
 accents néon (rose `#ff3d7f`, or `#ffc93c`, cyan `#2ee6d6`), contours épais
 encre (`#1b1340`) et ombres dures façon cartoon. Typo **Lilita One** (titres,
 boutons, lettre) et **Nunito** (texte). Tuiles de catégorie aux couleurs de leur
-catégorie, avec médaillon ; pièces d'or dessinées en CSS. Animations : rouleaux,
-pièces qui volent, tampons « MATCH ! » / « RAFLÉ ! », barre de temps, confettis
+catégorie, avec médaillon ; pièces d'or dessinées en CSS. Animations : rouleau,
+pièces qui volent, tampons « GO ! » / « RAFLÉ ! », barre de temps, confettis
 quand on gagne. Petits sons synthétisés (coupables avec 🔊).
 Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
 `apps/client/src/ui/fx.ts` (sons, confettis).
@@ -103,7 +104,7 @@ Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
   en trop, en moins, remplacée, ou deux lettres inversées) : « mamouth » compte
   pour « mammouth ». La première lettre doit rester la bonne.
 - Mauvaise réponse : petit temps d'attente avant de réessayer.
-- **Vibrations** (téléphones Android) : un coup au « MATCH ! », deux petits
+- **Vibrations** (téléphones Android) : un coup au « GO ! », deux petits
   coups rapides pour une bonne réponse gagnante, un long « bzzz » pour une
   mauvaise réponse. Les iPhone ne permettent pas aux pages web de vibrer.
 
