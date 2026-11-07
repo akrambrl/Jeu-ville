@@ -22,12 +22,18 @@ export function normalizeWord(text: string): string {
     .trim();
 }
 
-/** Variantes acceptées d'un mot : tel quel, sans article, au singulier. */
-function variants(normalized: string): string[] {
+/**
+ * Noms propres : pas de « pluriel » à retirer (« Alix » n'est pas le pluriel
+ * d'« Ali », ni « Paris » celui de « Pari »).
+ */
+const PROPER_NOUNS: ReadonlySet<CategoryId> = new Set(['firstName', 'celebrity', 'place', 'brand']);
+
+/** Variantes acceptées d'un mot : tel quel, sans article, et au singulier (noms communs). */
+function variants(normalized: string, category: CategoryId): string[] {
   const out = new Set<string>([normalized]);
   const bare = normalized.replace(ARTICLES, '');
   out.add(bare);
-  for (const w of [...out]) if (/[sx]$/.test(w) && w.length > 3) out.add(w.slice(0, -1));
+  if (!PROPER_NOUNS.has(category)) for (const w of [...out]) if (/[sx]$/.test(w) && w.length > 3) out.add(w.slice(0, -1));
   return [...out].filter(Boolean);
 }
 
@@ -65,8 +71,8 @@ export function feminineForms(normalized: string): string[] {
 /** Célébrités : on accepte aussi le nom seul (« Mbappé » pour « Kylian Mbappé »). */
 function entryForms(category: CategoryId, word: string): string[] {
   const n = normalizeWord(word);
-  const forms = variants(n);
-  if (category === 'job') for (const f of feminineForms(n)) forms.push(...variants(f));
+  const forms = variants(n, category);
+  if (category === 'job') for (const f of feminineForms(n)) forms.push(...variants(f, category));
   if (category === 'celebrity') {
     const parts = n.split(' ');
     if (parts.length > 1) forms.push(parts.slice(1).join(' '));
@@ -82,6 +88,11 @@ function wordIndex(): Map<CategoryId, Map<string, string>> {
   index = new Map();
   for (const [category, words] of Object.entries(WORDS) as [CategoryId, readonly string[]][]) {
     const m = new Map<string, string>();
+    // D'abord les mots tels quels : « Ali » reste Ali, même si une forme dérivée d'un autre mot s'écrit pareil.
+    for (const w of words) {
+      const exact = normalizeWord(w);
+      if (!m.has(exact)) m.set(exact, w);
+    }
     for (const w of words) for (const f of entryForms(category, w)) if (!m.has(f)) m.set(f, w);
     index.set(category, m);
   }
@@ -97,7 +108,7 @@ export function checkAnswer(category: CategoryId, letter: string, text: string):
   const l = letter.toLowerCase();
   const known = wordIndex().get(category)!;
   let wrongLetter = false;
-  for (const v of variants(n)) {
+  for (const v of variants(n, category)) {
     const word = known.get(v);
     if (!word) continue;
     // Célébrité : la lettre peut être celle du prénom ou du nom.
@@ -106,7 +117,7 @@ export function checkAnswer(category: CategoryId, letter: string, text: string):
     wrongLetter = true;
   }
   if (wrongLetter) return { ok: false, reason: `Ça ne commence pas par ${letter.toUpperCase()} !` };
-  if (!variants(n).some((v) => (category === 'celebrity' ? v.split(' ').some((p) => p.startsWith(l)) : v.startsWith(l)))) {
+  if (!variants(n, category).some((v) => (category === 'celebrity' ? v.split(' ').some((p) => p.startsWith(l)) : v.startsWith(l)))) {
     return { ok: false, reason: `Ça ne commence pas par ${letter.toUpperCase()} !` };
   }
   return { ok: false, reason: 'Ce mot n’est pas dans la liste du jeu.' };

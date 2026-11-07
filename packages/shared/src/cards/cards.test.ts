@@ -68,6 +68,15 @@ describe('réponses', () => {
     }
   });
 
+  it('un prénom reste lui-même : Ali n’est pas Alix', () => {
+    expect(checkAnswer('firstName', 'A', 'Ali')).toEqual({ ok: true, word: 'Ali' });
+    expect(checkAnswer('firstName', 'A', 'Alix')).toEqual({ ok: true, word: 'Alix' });
+    expect(checkAnswer('firstName', 'L', 'Lucas')).toEqual({ ok: true, word: 'Lucas' });
+    expect(checkAnswer('place', 'P', 'Paris')).toEqual({ ok: true, word: 'Paris' });
+    // Le pluriel reste toléré pour les noms communs.
+    expect(checkAnswer('fruitVeg', 'B', 'bananes')).toEqual({ ok: true, word: 'banane' });
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
