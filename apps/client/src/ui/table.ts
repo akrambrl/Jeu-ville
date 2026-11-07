@@ -34,7 +34,12 @@ const COIN_FLY_MS = 650;
 const COIN_STEP_MS = 70;
 /** Au plus tant de pièces animées par vol (au-delà, on ne voit pas la différence). */
 const COIN_FLY_MAX = 8;
-/** Pièces récupérées : au moins tant de tintements, joués un peu avant la fin du vol. */
+/** Fin de manche : les pièces du tas glissent vers le gagnant, une à une (ms). */
+const COIN_SLIDE_MS = 850;
+const COIN_SLIDE_STEP_MS = 110;
+/** Elles rétrécissent en arrivant dans la bourse. */
+const COIN_SLIDE_END_SCALE = 0.55;
+/** Pièces récupérées : au moins tant de tintements, joués un peu avant l'arrivée. */
 const COIN_CLINKS_MIN = 3;
 const COIN_CLINK_EARLY_MS = 120;
 /** Pièces dessinées dans le tas du milieu (au-delà, seul le nombre change). */
@@ -78,6 +83,11 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   let spinning = false;
   /** Tirage de la lettre en cours : on ne touche pas au badge. */
   let rolling = false;
+  /** Pièces raflées encore en route vers la bourse du gagnant : pas encore comptées à l'écran. */
+  const inFlight = new Map<string, number>();
+  const shownCoins = (p: PlayerView) => Math.max(0, p.coins - (inFlight.get(p.id) ?? 0));
+  /** Manche finie (gagnée ou cagnotte) : le panneau de réponse reste fermé, même avant la nouvelle table. */
+  let roundOver = false;
   const timers: number[] = [];
   /** Résultat de la dernière manche, par joueur (badge sur son rouleau). */
   let badges = new Map<string, string>();
@@ -140,7 +150,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         el('div', { class: 'name', text: p.id === link.myId ? `${p.name} (toi)` : p.name }),
         ...(big ? [el('div', { class: 'seat-info', text: p.out ? 'Éliminé : plus de pièce' : 'Ta bourse' })] : []),
       ]),
-      p.out ? el('div', { class: 'purse out', text: '💀' }) : el('div', { class: 'purse' }, [coin(), el('span', { text: String(p.coins) })]),
+      p.out ? el('div', { class: 'purse out', text: '💀' }) : el('div', { class: 'purse' }, [coin(), el('span', { text: String(shownCoins(p)) })]),
     );
     return node;
   };
@@ -166,7 +176,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     label.style.background = colorOf(p.id);
     const purse = node.querySelector<HTMLElement>('.purse');
     if (purse) {
-      const text = p.out ? '💀' : String(p.coins);
+      const text = p.out ? '💀' : String(shownCoins(p));
       if (purse.textContent !== text) purse.replaceChildren(...(p.out ? [] : [coin()]), el('span', { text }));
       purse.classList.toggle('out', p.out);
     }
@@ -257,7 +267,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   const renderDuelPanel = () => {
     const mine = me();
-    const open = view?.phase === 'duel' && !!mine && !mine.out && !!view.category && !spinning;
+    const open = view?.phase === 'duel' && !!mine && !mine.out && !!view.category && !spinning && !roundOver;
     screen.classList.toggle('with-duel', open);
     if (!open || !view?.category) {
       duelPanel.hidden = true;
@@ -555,10 +565,54 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
    * Bruit des pièces récupérées : un tintement à l'arrivée de chaque pièce dans
    * la bourse (un peu plus aigu à chaque fois), puis « ka-ching ! ».
    */
-  const coinsIntoPurse = (pot: number) => {
-    const n = Math.max(COIN_CLINKS_MIN, Math.min(pot, COIN_FLY_MAX));
-    for (let k = 0; k < n; k++) later(COIN_FLY_MS - COIN_CLINK_EARLY_MS + k * COIN_STEP_MS, () => play('clink', 0.92 + k * 0.04 + Math.random() * 0.06));
-    later(COIN_FLY_MS + n * COIN_STEP_MS, () => play('cash'));
+  const coinsIntoPurse = (slid: number) => {
+    const n = Math.max(COIN_CLINKS_MIN, slid);
+    for (let k = 0; k < n; k++) later(COIN_SLIDE_MS - COIN_CLINK_EARLY_MS + k * COIN_SLIDE_STEP_MS, () => play('clink', 0.92 + k * 0.04 + Math.random() * 0.06));
+    later(COIN_SLIDE_MS + n * COIN_SLIDE_STEP_MS, () => play('cash'));
+  };
+
+  /**
+   * Le tas glisse vers le gagnant : chaque pièce du tas part de sa place, celle
+   * du dessus d'abord, et file jusqu'à sa bourse. Renvoie le nombre de pièces animées.
+   */
+  const slidePotTo = (id: string, pot: number): number => {
+    // Le panneau de réponse se ferme : le tas réapparaît au milieu.
+    screen.classList.remove('with-duel');
+    duelPanel.hidden = true;
+    const target = purseOf(id)?.getBoundingClientRect();
+    const pile = [...potCoins.querySelectorAll<HTMLElement>('.coin')].reverse();
+    if (!target || pile.length === 0) return 0;
+    // La bourse ne compte les pièces qu'à leur arrivée (le tas dessiné peut en montrer moins).
+    let left = pot;
+    inFlight.set(id, left);
+    const shares = pile.map((_, k) => Math.ceil((pot - k) / pile.length));
+    pile.forEach((c, k) => {
+      const r = c.getBoundingClientRect();
+      if (r.width === 0) return;
+      const ghost = coin('flying slide');
+      ghost.style.setProperty('--c', `${r.width}px`);
+      ghost.style.setProperty('--slide-ms', `${COIN_SLIDE_MS}ms`);
+      ghost.style.left = `${r.left + r.width / 2}px`;
+      ghost.style.top = `${r.top + r.height / 2}px`;
+      document.body.append(ghost);
+      c.style.visibility = 'hidden';
+      later(k * COIN_SLIDE_STEP_MS + 20, () => {
+        ghost.style.transform = `translate(calc(-50% + ${target.left + target.width / 2 - r.left - r.width / 2}px), calc(-50% + ${target.top + target.height / 2 - r.top - r.height / 2}px)) scale(${COIN_SLIDE_END_SCALE})`;
+      });
+      later(k * COIN_SLIDE_STEP_MS + COIN_SLIDE_MS + 40, () => {
+        ghost.remove();
+        left = Math.max(0, left - shares[k]!);
+        if (left > 0) inFlight.set(id, left);
+        else inFlight.delete(id);
+        render();
+        // La bourse sautille à chaque pièce reçue (après le rendu, qui la redessine).
+        const purse = purseOf(id);
+        purse?.classList.remove('bump');
+        void (purse as HTMLElement | null)?.offsetWidth;
+        purse?.classList.add('bump');
+      });
+    });
+    return pile.length;
   };
 
   const purseOf = (id: string) => screen.querySelector(`[data-player="${id}"] .purse`);
@@ -576,6 +630,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     switch (e.kind) {
       case 'ante': {
         badges = new Map();
+        inFlight.clear();
+        roundOver = false;
         const raised = view && view.round > 0 && e.ante > view.ante;
         status.textContent = `Chacun pose ${plural(e.ante, 'pièce')} au milieu…`;
         if (raised) {
@@ -602,7 +658,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         status.textContent = me()?.out ? '👀 Tu es éliminé : regarde qui sera le plus rapide !' : view?.category ? `${CATEGORIES[view.category].icon} ${CATEGORIES[view.category].label} en ${view.letter} : vite, un mot !` : 'Vite, un mot !';
         break;
       case 'won': {
-        flyCoins(potCoins, purseOf(e.winnerId), e.pot);
+        roundOver = true;
+        const slid = slidePotTo(e.winnerId, e.pot);
         const winner = nameOf(e.winnerId);
         status.textContent = `🏆 ${winner} rafle ${plural(e.pot, 'pièce')} avec « ${e.word} » !`;
         badges.set(e.winnerId, `+${e.pot}`);
@@ -610,7 +667,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
           stamp('RAFLÉ !', 'win');
           showToast(screen, `« ${e.word} » ✅ Tu rafles ${plural(e.pot, 'pièce')} !`, 'win', 2800);
           play('right');
-          coinsIntoPurse(e.pot);
+          coinsIntoPurse(slid);
           haptic('right');
           const r = purseOf(link.myId)?.getBoundingClientRect();
           confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
@@ -621,6 +678,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         break;
       }
       case 'timeout':
+        roundOver = true;
         status.textContent = `⏱️ Personne n’a trouvé : les ${plural(e.pot, 'pièce')} restent au milieu. Cagnotte !`;
         stamp('CAGNOTTE !', 'lose');
         break;

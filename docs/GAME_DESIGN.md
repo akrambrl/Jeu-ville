@@ -63,7 +63,8 @@ Cinématiques :
 - **défilement** : les rouleaux font défiler des catégories au hasard, s'arrêtent
   l'un après l'autre sur la même (soi en dernier), tampon « MATCH ! », puis le
   panneau de réponse ;
-- **fin de manche** : les pièces du tas volent vers le gagnant (« RAFLÉ ! »,
+- **fin de manche** : les pièces du tas glissent une à une vers la bourse du
+  gagnant, qui sautille et compte chaque pièce à son arrivée (« RAFLÉ ! »,
   confettis, tintement de chaque pièce qui arrive puis « ka-ching ! »), ou tampon « CAGNOTTE ! » ; « MISE ×2 » quand la mise monte.
 
 ## Direction artistique

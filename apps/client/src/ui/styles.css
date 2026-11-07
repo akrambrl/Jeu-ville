@@ -1363,6 +1363,15 @@ button.danger {
   transition: transform 0.65s cubic-bezier(0.3, 0.7, 0.3, 1);
 }
 
+/* Fin de manche : les pièces du tas glissent vers le gagnant. */
+.coin.flying.slide {
+  transition: transform var(--slide-ms, 0.85s) cubic-bezier(0.45, 0, 0.2, 1);
+}
+
+.purse.bump {
+  animation: popin 0.25s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
 /* Bourse d'un joueur : une pièce et son nombre. */
 .purse {
   display: flex;
