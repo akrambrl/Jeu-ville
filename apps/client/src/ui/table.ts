@@ -34,8 +34,8 @@ function vibrate(pattern: readonly number[]): void {
   }
 }
 
-/** Cinématique « VS » d'un duel (ms, voir .cine-vs dans styles.css). */
-const VS_MS = 1_700;
+/** Cinématique « VS » d'un duel (ms, voir .cine-vs dans styles.css) : hors temps de réponse. */
+const VS_MS = CARD_GAME.timing.duelIntroMs;
 /** La lettre tirée vole vers son badge (ms). */
 const LETTER_FLY_MS = 450;
 /** Tapis : taille des cartes (largeur, px) entre ces bornes, et écarts. */
@@ -229,7 +229,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const duelTimer = () => {
     const bar = el('i');
     const left = Math.max(0, deadline - Date.now());
-    bar.style.width = `${Math.min(100, (left / CARD_GAME.timing.duelMs) * 100)}%`;
+    bar.style.width = `${Math.min(100, (left / (CARD_GAME.timing.duelIntroMs + CARD_GAME.timing.duelMs)) * 100)}%`;
     requestAnimationFrame(() => {
       bar.style.transition = `width ${left}ms linear`;
       bar.style.width = '0%';

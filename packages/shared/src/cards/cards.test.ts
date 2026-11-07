@@ -147,10 +147,26 @@ describe('partie', () => {
     expect(game.answer('a', other, 'x', now + 5000).error).toMatch(/catégorie commune/);
   });
 
+  it('les bots laissent le temps de répondre : pas avant la fin de la cinématique + le délai minimum', () => {
+    const game = new CardGame(seeded(11));
+    game.addPlayer('me', 'Moi', false);
+    game.addPlayer('bot', 'Bot', true);
+    game.start(0);
+    run(game, 0, letterMs);
+    const [me, bot] = game.players;
+    bot!.pile.at(-1)!.categories = [...me!.pile.at(-1)!.categories];
+    const t = letterMs + revealMs;
+    run(game, letterMs, t);
+    expect(game.phase).toBe('duel');
+    const earliest = t + CARD_GAME.timing.duelIntroMs + CARD_GAME.bots.answerDelayMs[0];
+    expect(run(game, t, earliest - 100).some((e) => e.kind === 'duelWon')).toBe(false);
+    expect(game.endsAt).toBe(t + CARD_GAME.timing.duelIntroMs + duelMs);
+  });
+
   it('sans réponse, le duel s’arrête et les piles restent', () => {
     const { game, a, b, t } = twoPlayersAtReveal();
     const now = forceDuel(game, a, b, t);
-    const events = run(game, now, now + duelMs);
+    const events = run(game, now, now + CARD_GAME.timing.duelIntroMs + duelMs);
     expect(events.some((e) => e.kind === 'duelTimeout')).toBe(true);
     expect(a.pile).toHaveLength(1);
     expect(b.pile).toHaveLength(1);

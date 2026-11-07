@@ -30,7 +30,9 @@ export const CARD_GAME = {
     letterMs: 2_500,
     /** Cartes retournées sur la table, le temps de voir les couleurs. */
     revealMs: 1_500,
-    /** Temps pour répondre pendant un duel. */
+    /** Cinématique « VS » au début d'un duel : ne compte pas dans le temps de réponse. */
+    duelIntroMs: 1_700,
+    /** Temps pour répondre pendant un duel (après la cinématique). */
     duelMs: 15_000,
     /** Après une manche : on montre qui a gagné quoi. */
     resultMs: 3_500,
@@ -47,10 +49,13 @@ export const CARD_GAME = {
   },
 
   bots: {
-    /** Délai de réponse d'un bot pendant un duel (tirage uniforme). */
-    answerDelayMs: [3_500, 10_000],
+    /**
+     * Délai de réponse d'un bot pendant un duel, compté après la cinématique
+     * (tirage uniforme) : il faut laisser le temps de taper un mot sur téléphone.
+     */
+    answerDelayMs: [6_000, 13_000],
     /** Chance qu'un bot trouve un mot (sinon il sèche). */
-    successRate: 0.75,
+    successRate: 0.7,
     names: ['Yanis', 'Inès', 'Moussa', 'Chloé', 'Rayan', 'Sofia', 'Kenza', 'Lucas'],
   },
 

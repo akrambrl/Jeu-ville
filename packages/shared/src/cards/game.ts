@@ -298,11 +298,11 @@ export class CardGame {
       for (const id of d.playerIds) {
         const p = this.players.find((x) => x.id === id)!;
         p.lockedUntil = 0;
-        p.botAnswerAt = p.bot ? now + min + this.rand() * (max - min) : null;
+        p.botAnswerAt = p.bot ? now + CARD_GAME.timing.duelIntroMs + min + this.rand() * (max - min) : null;
       }
     }
     this.phase = 'duel';
-    this.endsAt = now + CARD_GAME.timing.duelMs;
+    this.endsAt = now + CARD_GAME.timing.duelIntroMs + CARD_GAME.timing.duelMs;
     return [{ kind: 'duels', duels: this.duels }];
   }
 

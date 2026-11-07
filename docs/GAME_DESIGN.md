@@ -93,8 +93,9 @@ Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
   deuxième joueur (tout de suite à 6). Un joueur qui part en cours de partie
   est remplacé par un bot. Après le classement, la table repart pour une
   nouvelle partie.
-- **Solo** : contre 1 à 5 bots, sans serveur. Les bots répondent après un délai
-  aléatoire et sèchent parfois.
+- **Solo** : contre 1 à 5 bots, sans serveur. Les bots répondent entre 6 et
+  13 s après la cinématique « VS » (qui ne compte pas dans les 15 s de réponse),
+  et sèchent environ une fois sur trois.
 
 ## Chiffres
 
