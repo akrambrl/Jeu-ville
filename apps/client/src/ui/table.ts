@@ -9,6 +9,7 @@ import { SERVER_URL } from '../net/api.js';
 import type { TableLink } from '../net/tableLink.js';
 import { cardBack, cardFace, cardSlot, tintCategory } from './cardView.js';
 import { el, showToast } from './dom.js';
+import { haptic } from '../native.js';
 import { confetti, muteButton, play } from './fx.js';
 import { showRules } from './rules.js';
 
@@ -16,25 +17,6 @@ import { showRules } from './rules.js';
 const ROLL_STEP_MS = 70;
 /** La lettre s'arrête un peu avant la fin du tirage. */
 const ROLL_STOP_BEFORE_MS = 700;
-/**
- * Vibrations (ms : vibre, pause, vibre…). Bonne réponse : deux petits coups
- * joyeux ; mauvaise réponse : un long « bzzz » ; début de duel : un coup.
- * Sans effet là où le navigateur ne sait pas vibrer (iPhone, ordinateur).
- */
-const VIBRATION = {
-  duel: [200],
-  right: [60, 60, 60],
-  wrong: [400],
-} as const;
-
-function vibrate(pattern: readonly number[]): void {
-  try {
-    navigator.vibrate?.([...pattern]);
-  } catch {
-    /* vibration indisponible */
-  }
-}
-
 /** Cinématique « VS » d'un duel (ms, voir .cine-vs dans styles.css) : hors temps de réponse. */
 const VS_MS = CARD_GAME.timing.duelIntroMs;
 /** La lettre tirée vole vers son badge (ms). */
@@ -477,7 +459,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         if (mine) {
           showVersus(e.duels.find((d) => d.playerIds.includes(link.myId))!);
           play('duel');
-          vibrate(VIBRATION.duel);
+          haptic('duel');
         }
         break;
       }
@@ -525,7 +507,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       stamp('BIEN JOUÉ !', 'win');
       showToast(screen, `« ${d.word} » ✅ Tu te débarrasses de tes cartes : ${d.losers.map((l) => nameOf(l.id)).join(', ')} ramasse ${total} carte${total > 1 ? 's' : ''} !`, 'win', 3200);
       play('right');
-      vibrate(VIBRATION.right);
+      haptic('right');
       const r = pileEl(link.myId)?.getBoundingClientRect();
       confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
     } else if (d.playerIds.includes(link.myId)) {
@@ -560,7 +542,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     const feedback = duelPanel.querySelector('.feedback');
     if (feedback && !duelPanel.hidden && n.level === 'error') {
       feedback.textContent = `❌ ${n.text}`;
-      vibrate(VIBRATION.wrong);
+      haptic('wrong');
       play('wrong');
       duelPanel.classList.remove('shake');
       void duelPanel.offsetWidth;

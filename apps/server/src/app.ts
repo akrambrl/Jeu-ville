@@ -14,7 +14,10 @@ import { CardRoom } from './rooms/CardRoom.js';
  */
 export async function buildServer(db: Db, options: { clientOrigin: string; logger?: boolean; staticDir?: string | null }) {
   const app = Fastify({ logger: options.logger ?? true });
-  await app.register(cors, { origin: options.clientOrigin });
+  // Le jeu web (CLIENT_ORIGIN, plusieurs adresses séparées par des virgules) et l'appli
+  // native (Capacitor : capacitor://localhost sur iPhone, https://localhost sur Android).
+  const origins = [...options.clientOrigin.split(',').map((o) => o.trim()).filter(Boolean), ...NATIVE_APP_ORIGINS];
+  await app.register(cors, { origin: origins });
   registerRoutes(app, db);
   if (options.staticDir) await app.register(fastifyStatic, { root: options.staticDir, prefix: '/' });
   await app.ready();
@@ -28,3 +31,6 @@ export async function buildServer(db: Db, options: { clientOrigin: string; logge
 
   return { app, gameServer };
 }
+
+/** Origines des pages de l'appli native (Capacitor). */
+const NATIVE_APP_ORIGINS = ['capacitor://localhost', 'https://localhost', 'http://localhost'];

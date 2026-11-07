@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bac Bataille</string>
+    <string name="title_activity_main">Bac Bataille</string>
+    <string name="package_name">fr.bacbataille.app</string>
+    <string name="custom_url_scheme">fr.bacbataille.app</string>
+</resources>
