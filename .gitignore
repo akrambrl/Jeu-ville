@@ -4,3 +4,8 @@ dist-demo/
 .env
 *.log
 .DS_Store
+# Clés de signature des applis (Android/iOS) : à garder précieusement, HORS du dépôt
+*.jks
+*.keystore
+*.p12
+*.mobileprovision

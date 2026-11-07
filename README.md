@@ -38,3 +38,17 @@ chargement prend alors environ une minute) et la base gratuite expire au bout de
 
 `pnpm --filter @jeu-ville/client build:demo` produit une seule page HTML
 (`apps/client/dist-demo/bac-bataille.html`) jouable sans serveur, contre des bots.
+
+## Applis mobiles (Android et iOS)
+
+Le jeu est aussi emballé en appli native avec Capacitor (`apps/client/android`,
+`apps/client/ios`). Tout ce qu'il faut pour publier sur Google Play et l'App
+Store — compilation, comptes, textes des fiches, réponses aux questionnaires,
+captures d'écran — est dans [`docs/STORES.md`](docs/STORES.md).
+
+```bash
+cd apps/client
+VITE_SERVER_URL=https://<ton-serveur> pnpm build:app   # compile le jeu et le copie dans les projets natifs
+npx cap open android                                   # ou : npx cap open ios (sur Mac)
+```
+

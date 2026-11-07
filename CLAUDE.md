@@ -38,13 +38,20 @@ demande à l'utilisateur plutôt que d'inventer.
 4. **Tous les chiffres d'équilibrage** dans `packages/shared/src/config/cards.ts`
    — aucun nombre magique dans la logique.
 5. Accepter un mot = l'ajouter à `packages/shared/src/cards/words.ts`.
-6. Secrets (base…) uniquement en variables d'environnement, jamais commités.
+6. Stores : garder la suppression de compte dans l'appli, les textes légaux à
+   jour (`apps/client/src/legal/texts.ts`) et ne rien charger depuis Internet en
+   mode solo (polices embarquées). Après un changement web : `pnpm build:app`.
+7. Secrets (base, clé de signature des applis…) uniquement en variables d'environnement
+   ou hors du dépôt, jamais commités.
 
 ## Structure
 
 ```
-apps/client/src      app.ts (navigation) · ui/ (accueil, table, cartes, règles)
+apps/client/src      app.ts (navigation) · ui/ (accueil, table, cartes, règles, réglages, tuto)
                      net/ (API REST, lien table en ligne / solo) · demo/ (page solo)
+                     native.ts (Capacitor : vibrations, barre d'état, bouton retour)
+                     legal/ (confidentialité, mentions, CGU : appli + page legal.html)
+apps/client/android, apps/client/ios   projets natifs Capacitor (publication : docs/STORES.md)
 apps/server/src      api/ (routes REST) · domain/ (sessions) · rooms/ (CardRoom)
                      db/ (schéma Drizzle, migrations) · drizzle/ (SQL généré)
 packages/shared/src  config/ (ÉQUILIBRAGE) · cards/ (catégories, mots, réponses, partie)

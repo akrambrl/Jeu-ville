@@ -108,11 +108,15 @@ Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
 
 ## Modes
 
-- **En ligne** : on choisit un pseudo, on rejoint une table qui attend des
-  joueurs. La partie démarre seule quelques secondes après l'arrivée du
-  deuxième joueur (tout de suite à 6). Un joueur qui part en cours de partie
-  est remplacé par un bot. Après le classement, la table repart pour une
-  nouvelle partie.
+- **En ligne** : on choisit un pseudo, puis
+  - **Partie rapide** : on rejoint une table publique qui attend des joueurs ;
+  - **Table entre amis** : on crée une table privée et on partage son **code**
+    (5 caractères) ou un lien d'invitation (`?table=CODE`) ; les amis tapent le
+    code dans « Tu as un code ? ».
+  La partie démarre seule 10 s après l'arrivée du deuxième joueur (tout de suite
+  à 6). Un joueur qui perd le réseau **garde sa place 30 s** le temps que l'appli
+  se reconnecte ; s'il ne revient pas (ou quitte), un bot le remplace. Après le
+  classement, la table repart pour une nouvelle partie.
 - **Solo** : contre 1 à 5 bots, sans serveur. Les bots répondent entre 6 et
   13 s après la cinématique « VS » (qui ne compte pas dans les 15 s de réponse),
   et sèchent environ une fois sur trois.
@@ -127,3 +131,10 @@ Tous les réglages (cartes par joueur, durées, lettres, bots) sont dans
 - Saisie vocale des réponses, vote des joueurs pour les mots absents de la liste.
 - Tables privées entre amis (code à partager), classement général, niveaux de bots.
 - Cartes spéciales (joker, inversion…), thèmes de catégories.
+
+## Applis mobiles et stores
+
+Le jeu sort aussi en appli Android et iOS (Capacitor). Réglages ⚙️ : son, tuto,
+textes légaux, **suppression du compte en ligne** et des données de l'appareil.
+Pseudos filtrés (insultes, haine). Publication : voir `docs/STORES.md`.
+
