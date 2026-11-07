@@ -76,11 +76,16 @@ const SOUNDS = {
   tick: [[1500, 0, 0.03, 'square', 0.05]],
   /** Pièces d'or qui tintent. */
   coin: [[1568, 0, 0.07, 'triangle', 0.14], [2093, 0.06, 0.16, 'triangle', 0.12]],
+  /** Une pièce qui tombe dans la bourse : tintement métallique (partiels non harmoniques). */
+  clink: [[2480, 0, 0.07, 'square', 0.035], [3720, 0, 0.16, 'triangle', 0.11], [5350, 0.004, 0.1, 'sine', 0.05]],
+  /** Tiroir-caisse : « ka-ching ! » quand toutes les pièces sont rangées. */
+  cash: [[1318, 0, 0.07, 'square', 0.07], [1760, 0.08, 0.32, 'triangle', 0.15], [2637, 0.08, 0.32, 'sine', 0.08], [3520, 0.1, 0.25, 'sine', 0.04]],
 } satisfies Record<string, Note[]>;
 
 export type SoundName = keyof typeof SOUNDS;
 
-export function play(name: SoundName): void {
+/** Joue un son ; `pitch` le rend plus aigu (> 1) ou plus grave (< 1). */
+export function play(name: SoundName, pitch = 1): void {
   const c = audio();
   if (!c) return;
   const t0 = c.currentTime + 0.01;
@@ -88,8 +93,8 @@ export function play(name: SoundName): void {
     const osc = c.createOscillator();
     const gain = c.createGain();
     osc.type = wave;
-    osc.frequency.setValueAtTime(freq, t0 + at);
-    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + at + dur);
+    osc.frequency.setValueAtTime(freq * pitch, t0 + at);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo * pitch, t0 + at + dur);
     gain.gain.setValueAtTime(0.0001, t0 + at);
     gain.gain.exponentialRampToValueAtTime(vol, t0 + at + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);

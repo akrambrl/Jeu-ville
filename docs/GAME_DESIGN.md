@@ -60,7 +60,7 @@ Cinématiques :
   l'un après l'autre sur la même, tampon « MATCH ! » ; la lettre tourne dans son
   badge et s'arrête en même temps ; puis le panneau de réponse ;
 - **fin de manche** : les pièces du tas volent vers le gagnant (« RAFLÉ ! »,
-  confettis), ou tampon « CAGNOTTE ! » ; « MISE ×2 » quand la mise monte.
+  confettis, tintement de chaque pièce qui arrive puis « ka-ching ! »), ou tampon « CAGNOTTE ! » ; « MISE ×2 » quand la mise monte.
 
 ## Direction artistique
 

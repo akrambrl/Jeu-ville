@@ -29,6 +29,9 @@ const COIN_FLY_MS = 650;
 const COIN_STEP_MS = 70;
 /** Au plus tant de pièces animées par vol (au-delà, on ne voit pas la différence). */
 const COIN_FLY_MAX = 8;
+/** Pièces récupérées : au moins tant de tintements, joués un peu avant la fin du vol. */
+const COIN_CLINKS_MIN = 3;
+const COIN_CLINK_EARLY_MS = 120;
 /** Pièces dessinées dans le tas du milieu (au-delà, seul le nombre change). */
 const POT_DRAWN_MAX = 14;
 /** Rouleaux : largeur des tuiles entre ces bornes (px), écart entre eux… */
@@ -515,6 +518,16 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     }
   };
 
+  /**
+   * Bruit des pièces récupérées : un tintement à l'arrivée de chaque pièce dans
+   * la bourse (un peu plus aigu à chaque fois), puis « ka-ching ! ».
+   */
+  const coinsIntoPurse = (pot: number) => {
+    const n = Math.max(COIN_CLINKS_MIN, Math.min(pot, COIN_FLY_MAX));
+    for (let k = 0; k < n; k++) later(COIN_FLY_MS - COIN_CLINK_EARLY_MS + k * COIN_STEP_MS, () => play('clink', 0.92 + k * 0.04 + Math.random() * 0.06));
+    later(COIN_FLY_MS + n * COIN_STEP_MS, () => play('cash'));
+  };
+
   const purseOf = (id: string) => screen.querySelector(`[data-player="${id}"] .purse`);
 
   // ---------- Partie ----------
@@ -560,7 +573,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
           stamp('RAFLÉ !', 'win');
           showToast(screen, `« ${e.word} » ✅ Tu rafles ${plural(e.pot, 'pièce')} !`, 'win', 2800);
           play('right');
-          later(250, () => play('coin'));
+          coinsIntoPurse(e.pot);
           haptic('right');
           const r = purseOf(link.myId)?.getBoundingClientRect();
           confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
