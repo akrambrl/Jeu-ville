@@ -5,6 +5,7 @@
  */
 import type { CategoryId } from './categories.js';
 import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE } from './celebrities.js';
+import { MORE_FIRST_NAMES } from './firstNames.js';
 import { FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES } from './places.js';
 
 const list = (...parts: string[]) => [
@@ -41,7 +42,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     Valentin, Valérie, Vanessa, Victor, Victoria, Vincent, Virginie,
     Walid, Wassim, Wendy, William,
     Xavier, Yacine, Yanis, Yasmine, Youssef, Yves, Zakaria, Zoé
-  `),
+  `, MORE_FIRST_NAMES),
   fruitVeg: list(`
     abricot, ail, airelle, amande, ananas, artichaut, asperge, aubergine, avocat,
     banane, betterave, blette, brocoli, brugnon,

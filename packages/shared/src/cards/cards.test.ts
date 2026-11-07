@@ -56,6 +56,12 @@ describe('réponses', () => {
     }
   });
 
+  it('prénoms : variantes d’orthographe acceptées', () => {
+    for (const [letter, name] of [['H', 'Henry'], ['H', 'Henri'], ['M', 'Mohammed'], ['Y', 'Yannis'], ['K', 'Killian']]) {
+      expect(checkAnswer('firstName', letter!, name!).ok, name).toBe(true);
+    }
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
