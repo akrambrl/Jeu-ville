@@ -7,6 +7,7 @@ import type { CategoryId } from './categories.js';
 import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE } from './celebrities.js';
 import { AFRICAN_FIRST_NAMES, ASIAN_FIRST_NAMES, ENGLISH_FIRST_NAMES, LATIN_FIRST_NAMES, MORE_FIRST_NAMES, TURKISH_FIRST_NAMES } from './firstNames.js';
 import { MORE_BRANDS } from './brands.js';
+import { MORE_BODY_PARTS, MORE_CLOTHING, MORE_DISHES, MORE_HOUSE_OBJECTS, MORE_SPORTS } from './moreWords.js';
 import { MORE_JOBS } from './jobs.js';
 import { FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES } from './places.js';
 
@@ -174,7 +175,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     rafting, randonnée, roller, rugby, ski, skateboard, snowboard, squash, sumo, surf,
     taekwondo, tennis, tennis de table, tir à l'arc, triathlon, trampoline,
     ultimate, vélo, voile, volley, volleyball, water-polo, yoga, zumba
-  `),
+  `, MORE_SPORTS),
   houseObject: list(`
     aspirateur, assiette, armoire,
     baignoire, balai, bol, bougie, bouilloire, bureau,
@@ -190,7 +191,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     saladier, savon, serviette, seau, sèche-cheveux, serpillière, store,
     table, tabouret, tapis, tasse, télécommande, téléphone, télévision, tiroir, toilettes, torchon,
     vase, verre, ventilateur, volet
-  `),
+  `, MORE_HOUSE_OBJECTS),
   dish: list(`
     attiéké, bœuf bourguignon, blanquette, bolognaise, bouillabaisse, brandade, brioche, brownie, burger,
     cassoulet, chakchouka, chili con carne, choucroute, clafoutis, couscous, crêpe, croissant, croque-monsieur, crumble,
@@ -205,7 +206,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     salade niçoise, sandwich, soupe, spaghetti, sushi,
     tacos, tajine, tarte, tartiflette, tiramisu, thiéboudiène,
     yassa
-  `),
+  `, MORE_DISHES),
   clothing: list(`
     anorak, baskets, bermuda, béret, blazer, blouson, body, bonnet, bottes, boubou, bretelles, burnous,
     caleçon, casquette, ceinture, chapeau, chaussettes, chaussons, chaussures, chemise, chemisier, collant, combinaison, costume, cravate,
@@ -217,7 +218,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     robe, sandales, sari, short, slip, soutien-gorge, survêtement, sweat,
     tailleur, talons, tablier, tee-shirt, t-shirt, tongs, tunique, turban,
     uniforme, veste, voile
-  `),
+  `, MORE_CLOTHING),
   bodyPart: list(`
     aisselle, articulation, avant-bras,
     bouche, bras, cerveau, cheveux, cheville, cil, cœur, coude, cou, cuisse,
@@ -228,5 +229,5 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     paupière, peau, pied, poignet, poitrine, poumon, pouce,
     rein, rotule, sang, sein, sourcil, squelette,
     talon, tempe, tête, thorax, tibia, ventre, veine, vertèbre
-  `),
+  `, MORE_BODY_PARTS),
 };

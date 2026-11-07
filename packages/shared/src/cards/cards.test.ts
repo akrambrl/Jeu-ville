@@ -83,6 +83,18 @@ describe('réponses', () => {
     }
   });
 
+  it('petites catégories enrichies : corps, vêtements, plats, sports, maison', () => {
+    const cases: [Parameters<typeof checkAnswer>[0], string, string][] = [
+      ['bodyPart', 'T', 'tendon'],
+      ['bodyPart', 'C', 'clavicule'],
+      ['clothing', 'K', 'kilt'],
+      ['dish', 'T', 'tarte tatin'],
+      ['sport', 'P', 'padel'],
+      ['houseObject', 'G', 'grille-pain'],
+    ];
+    for (const [category, letter, word] of cases) expect(checkAnswer(category, letter, word).ok, word).toBe(true);
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
