@@ -16,6 +16,8 @@ export function normalizeWord(text: string): string {
     .toLowerCase()
     .replace(/œ/g, 'oe')
     .replace(/æ/g, 'ae')
+    // i sans point (turc) : « Aslı » s'écrit aussi « Asli ».
+    .replace(/ı/g, 'i')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }

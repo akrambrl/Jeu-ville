@@ -57,7 +57,7 @@ describe('réponses', () => {
   });
 
   it('prénoms : variantes d’orthographe acceptées', () => {
-    for (const [letter, name] of [['H', 'Henry'], ['H', 'Henri'], ['M', 'Mohammed'], ['Y', 'Yannis'], ['K', 'Killian']]) {
+    for (const [letter, name] of [['H', 'Henry'], ['H', 'Henri'], ['M', 'Mohammed'], ['Y', 'Yannis'], ['K', 'Killian'], ['J', 'Jennifer'], ['M', 'Mehmet'], ['Y', 'Yuki'], ['K', 'Kwame'], ['A', 'Alejandro'], ['I', 'Ibrahim'], ['A', 'Asli'], ['B', 'Baris']]) {
       expect(checkAnswer('firstName', letter!, name!).ok, name).toBe(true);
     }
   });
