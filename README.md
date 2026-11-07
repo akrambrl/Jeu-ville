@@ -1,6 +1,6 @@
 # Bac Bataille (titre provisoire)
 
-Jeu de cartes multijoueur façon petit bac, jouable dans le navigateur sur mobile
+Jeu multijoueur façon petit bac, avec des pièces d'or à miser,, jouable dans le navigateur sur mobile
 et PC : en ligne contre de vrais joueurs, ou en solo contre des bots. Règles
 complètes : [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md).
 Règles du projet : [`CLAUDE.md`](CLAUDE.md).

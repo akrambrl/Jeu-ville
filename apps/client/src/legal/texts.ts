@@ -106,7 +106,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: 'Le service',
         paragraphs: [
-          'Bac Bataille est un jeu de cartes et de mots gratuit, jouable seul contre des bots ou en ligne contre d’autres joueurs, sans compte. Il est fourni « en l’état » ; nous faisons de notre mieux pour qu’il fonctionne, sans garantie de disponibilité permanente du jeu en ligne.',
+          'Bac Bataille est un jeu de mots gratuit, jouable seul contre des bots ou en ligne contre d’autres joueurs, sans compte. Il est fourni « en l’état » ; nous faisons de notre mieux pour qu’il fonctionne, sans garantie de disponibilité permanente du jeu en ligne.',
         ],
       },
       {

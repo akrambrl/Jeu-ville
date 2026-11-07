@@ -1,7 +1,7 @@
 {
   "name": "Bac Bataille",
   "short_name": "Bac Bataille",
-  "description": "Le petit bac en cartes : sois le plus rapide, vide ton paquet !",
+  "description": "Le petit bac avec des pièces d'or : sois le plus rapide, rafle tout !",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

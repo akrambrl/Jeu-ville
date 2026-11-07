@@ -5,7 +5,7 @@ import { CATEGORY_IDS } from './categories.js';
 import { CardGame, type GameEvent, type TablePlayer } from './game.js';
 import { WORDS } from './words.js';
 
-const { letterMs, revealMs, duelMs } = CARD_GAME.timing;
+const { anteMs, spinMs, duelMs, resultMs } = CARD_GAME.timing;
 
 function seeded(seed = 42): () => number {
   let s = seed;
@@ -19,23 +19,19 @@ function run(game: CardGame, from: number, until: number): GameEvent[] {
   return events;
 }
 
-/** Deux joueurs humains, partie lancée, cartes retournées. */
-function twoPlayersAtReveal() {
+/** Deux joueurs humains, partie lancée ; renvoie l'instant où l'on peut répondre. */
+function twoPlayersAtDuel() {
   const game = new CardGame(seeded());
   game.addPlayer('a', 'Alice', false);
   game.addPlayer('b', 'Bilel', false);
-  game.start(0);
-  return { game, a: game.players[0]!, b: game.players[1]!, t: letterMs };
+  const first = game.start(0);
+  const t = anteMs + spinMs;
+  const events = [...first, ...run(game, 0, t)];
+  return { game, a: game.players[0]!, b: game.players[1]!, t, events };
 }
 
-/** Donne aux cartes du dessus de deux joueurs une seule catégorie commune, puis passe au duel. */
-function forceDuel(game: CardGame, a: TablePlayer, b: TablePlayer, t: number) {
-  run(game, 0, t);
-  const [shared, other] = a.pile.at(-1)!.categories;
-  b.pile.at(-1)!.categories = [shared, CATEGORY_IDS.find((c) => c !== shared && c !== other)!];
-  run(game, t, t + revealMs);
-  return t + revealMs;
-}
+/** Un mot valide pour la manche en cours. */
+const goodWord = (game: CardGame) => wordsStartingWith(game.category!, game.letter)[0]!;
 
 describe('réponses', () => {
   it('ignore accents, majuscules, articles et pluriel', () => {
@@ -127,150 +123,131 @@ describe('réponses', () => {
 });
 
 describe('partie', () => {
-  it('distribue le même nombre de cartes à chacun et tire une lettre', () => {
-    const { game } = twoPlayersAtReveal();
-    expect(game.players.map((p) => p.deck.length)).toEqual([CARD_GAME.cardsPerPlayer, CARD_GAME.cardsPerPlayer]);
-    expect(game.phase).toBe('letter');
-    expect(CARD_GAME.letters).toContain(game.letter);
+  it('chacun reçoit ses pièces, pose la mise au milieu, puis les catégories s’arrêtent sur une seule', () => {
+    const { game, a, b, events } = twoPlayersAtDuel();
+    const start = CARD_GAME.coins.start;
+    expect(events[0]).toEqual({ kind: 'ante', round: 1, ante: 1, pot: 2, paid: { a: 1, b: 1 } });
+    expect([a.coins, b.coins, game.pot]).toEqual([start - 1, start - 1, 2]);
+    expect(events).toContainEqual({ kind: 'spin', category: game.category, letter: game.letter });
+    expect(events.at(-1)).toEqual({ kind: 'duel' });
+    expect(game.phase).toBe('duel');
+    // Toujours des mots possibles pour la catégorie et la lettre tirées.
+    expect(wordsStartingWith(game.category!, game.letter).length).toBeGreaterThanOrEqual(CARD_GAME.minWordsPerRound);
   });
 
-  it('moins de catégories en jeu quand il y a peu de joueurs (duels plus fréquents)', () => {
-    const { game } = twoPlayersAtReveal();
-    const used = new Set(game.players.flatMap((p) => p.deck.flatMap((c) => c.categories)));
-    expect(used.size).toBe(CARD_GAME.categoriesByPlayers[2]);
+  it('pas de réponse avant la fin du défilement', () => {
+    const game = new CardGame(seeded());
+    game.addPlayer('a', 'Alice', false);
+    game.addPlayer('b', 'Bilel', false);
+    game.start(0);
+    run(game, 0, anteMs + 100);
+    expect(game.phase).toBe('spin');
+    expect(game.answer('a', null, goodWord(game), anteMs + 200).error).toMatch(/catégories/);
   });
 
-  it('duel seulement sur une catégorie en commun, quelle que soit la couleur', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
+  it('le premier qui répond juste rafle tout le tas', () => {
+    const { game, a, b, t } = twoPlayersAtDuel();
+    const { error, events } = game.answer('b', null, goodWord(game), t + 500);
+    expect(error).toBeNull();
+    expect(events[0]).toMatchObject({ kind: 'won', winnerId: 'b', pot: 2 });
+    expect([a.coins, b.coins, game.pot]).toEqual([CARD_GAME.coins.start - 1, CARD_GAME.coins.start + 1, 0]);
+    expect(game.phase).toBe('result');
+    // Trop tard pour l'autre.
+    expect(game.answer('a', null, goodWord(game), t + 600).error).not.toBeNull();
+  });
+
+  it('une mauvaise réponse bloque un instant sans coûter de pièce', () => {
+    const { game, a, t } = twoPlayersAtDuel();
+    const coins = a.coins;
+    expect(game.answer('a', null, 'zzzzz', t + 100).error).not.toBeNull();
+    expect(game.answer('a', null, goodWord(game), t + 200).error).toMatch(/seconde/);
+    expect(game.answer('a', null, goodWord(game), t + 100 + CARD_GAME.answer.wrongLockMs).error).toBeNull();
+    expect(a.coins).toBe(coins + 2);
+  });
+
+  it('personne ne trouve : le tas reste au milieu (cagnotte) et grossit', () => {
+    const { game, t } = twoPlayersAtDuel();
+    const events = run(game, t, t + duelMs + resultMs);
+    expect(events).toContainEqual({ kind: 'timeout', pot: 2 });
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'ante', round: 2, pot: 4 }));
+    expect(game.pot).toBe(4);
+  });
+
+  it('la mise monte toutes les quelques manches', () => {
+    const step = CARD_GAME.coins.anteStepRounds;
+    expect(CardGame.anteFor(1)).toBe(CARD_GAME.coins.ante);
+    expect(CardGame.anteFor(step)).toBe(CARD_GAME.coins.ante);
+    expect(CardGame.anteFor(step + 1)).toBe(CARD_GAME.coins.ante + 1);
+    expect(CardGame.anteFor(2 * step + 1)).toBe(CARD_GAME.coins.ante + 2);
+  });
+
+  it('qui n’a plus de pièce est éliminé ; le dernier en lice gagne et prend la cagnotte', () => {
+    const game = new CardGame(seeded());
+    for (const id of ['a', 'b', 'c']) game.addPlayer(id, id.toUpperCase(), false);
+    game.start(0);
+    const [a, b, c] = game.players as [TablePlayer, TablePlayer, TablePlayer];
+    let t = anteMs + spinMs;
     run(game, 0, t);
-    a.pile.at(-1)!.categories = ['animal', 'sport'];
-    b.pile.at(-1)!.categories = ['job', 'brand'];
-    b.pile.at(-1)!.color = a.pile.at(-1)!.color;
-    expect(run(game, t, t + CARD_GAME.timing.revealMs)).toContainEqual({ kind: 'noDuel' });
+    // Manche 1 : a est à sec, c gagne.
+    a.coins = 0;
+    game.answer('c', null, goodWord(game), t + 100);
+    let events = run(game, t + 100, t + 100 + resultMs + anteMs + spinMs);
+    t += 100 + resultMs + anteMs + spinMs;
+    expect(events).toContainEqual({ kind: 'eliminated', ids: ['a'] });
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'ante', round: 2, paid: { b: 1, c: 1 } }));
+    expect(game.answer('a', null, goodWord(game), t + 100).error).toMatch(/éliminé/);
+    // Manche 2 : b n'a plus rien après sa mise, personne ne trouve (cagnotte), b est éliminé.
+    b.coins = 0;
+    const potBefore = game.pot;
+    const cBefore = c.coins;
+    events = run(game, t, t + duelMs + resultMs);
+    expect(events).toContainEqual({ kind: 'eliminated', ids: ['b'] });
+    const finished = events.find((e) => e.kind === 'finished');
+    expect(finished && finished.kind === 'finished' && finished.ranking.map((r) => [r.id, r.rank])).toEqual([['c', 1], ['b', 2], ['a', 3]]);
+    // Le dernier en lice récupère la cagnotte.
+    expect(game.pot).toBe(0);
+    expect(c.coins).toBe(cBefore + potBefore);
   });
 
-  it('en duel, il faut répondre dans la catégorie commune', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    run(game, 0, t);
-    a.pile.at(-1)!.categories = ['animal', 'sport'];
-    b.pile.at(-1)!.categories = ['animal', 'brand'];
-    run(game, t, t + CARD_GAME.timing.revealMs);
-    expect(game.duels[0]?.categories).toEqual(['animal']);
-    expect(game.answer('a', 'sport', 'basket', t + 2000).error).toMatch(/catégorie commune/);
+  it('tout le monde à sec : manche gratuite, personne n’est éliminé', () => {
+    const { game, a, b, t } = twoPlayersAtDuel();
+    a.coins = 0;
+    b.coins = 0;
+    const events = run(game, t, t + duelMs + resultMs);
+    expect(events.some((e) => e.kind === 'eliminated')).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'ante', round: 2, pot: 2, paid: { a: 0, b: 0 } }));
   });
 
-  it('la lettre reste la même tant qu’il n’y a pas de duel, et change après un duel', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    const first = game.letter;
-    run(game, 0, t);
-    // Aucune catégorie en commun : pas de duel.
-    a.pile.at(-1)!.categories = ['animal', 'sport'];
-    b.pile.at(-1)!.categories = ['job', 'brand'];
-    const events = run(game, t, t + revealMs + CARD_GAME.timing.noDuelMs);
-    expect(events).toContainEqual({ kind: 'letter', letter: first, round: 2, changed: false });
-    // Manche 2 : duel forcé, puis délai écoulé → nouvelle lettre à la manche 3.
-    const t2 = t + revealMs + CARD_GAME.timing.noDuelMs + CARD_GAME.timing.sameLetterMs;
-    run(game, t + revealMs + CARD_GAME.timing.noDuelMs, t2);
-    a.pile.at(-1)!.categories = ['animal', 'sport'];
-    b.pile.at(-1)!.categories = ['animal', 'brand'];
-    const end = t2 + revealMs + CARD_GAME.timing.duelIntroMs + duelMs + CARD_GAME.timing.resultMs;
-    const later = run(game, t2, end);
-    const next = later.find((e) => e.kind === 'letter');
-    expect(next).toMatchObject({ kind: 'letter', round: 3, changed: true });
-    expect(next && next.kind === 'letter' && next.letter).not.toBe(first);
+  it('une lettre ne revient qu’une fois toutes les autres sorties ; jamais deux fois la même catégorie de suite', () => {
+    const game = new CardGame(seeded(7));
+    for (let k = 0; k < 2; k++) game.addPlayer(`bot${k}`, `Bot ${k}`, true);
+    const events = game.start(0).concat(run(game, 0, 3_600_000));
+    const spins = events.filter((e): e is Extract<GameEvent, { kind: 'spin' }> => e.kind === 'spin');
+    const letters = spins.map((e) => e.letter);
+    const n = CARD_GAME.letters.length;
+    expect(letters.length).toBeGreaterThan(n);
+    for (let k = 0; k + n <= letters.length; k += n) expect(new Set(letters.slice(k, k + n)).size).toBe(n);
+    for (let k = 1; k < spins.length; k++) expect(spins[k]!.category).not.toBe(spins[k - 1]!.category);
+    expect(new Set(spins.map((e) => e.category)).size).toBeGreaterThan(CATEGORY_IDS.length / 2);
   });
 
   it('une partie sauvegardée se reprend sur un autre téléphone, avec une autre horloge', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    run(game, 0, t);
+    const { game, t } = twoPlayersAtDuel();
     const snap = JSON.parse(JSON.stringify(game.snapshot(t + 300)));
-    // Le nouvel hôte a une horloge décalée de 50 s.
     const copy = CardGame.restore(snap, 50_000);
     expect(copy.view(50_000)).toEqual(game.view(t + 300));
-    expect(copy.players.map((p) => p.deck)).toEqual([a.deck, b.deck]);
     expect(copy.endsAt - 50_000).toBe(game.endsAt - (t + 300));
+    expect(copy.answer('a', null, goodWord(copy), 50_100).error).toBeNull();
   });
 
-  it('tout le monde retourne sa carte en même temps', () => {
-    const { game, t } = twoPlayersAtReveal();
-    run(game, 0, t);
-    expect(game.phase).toBe('reveal');
-    expect(game.players.every((p) => p.pile.length === 1 && p.deck.length === CARD_GAME.cardsPerPlayer - 1)).toBe(true);
-  });
-
-  it('même couleur : duel ; le gagnant donne sa pile, le perdant prend les deux piles', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    const now = forceDuel(game, a, b, t);
-    expect(game.phase).toBe('duel');
-    const usedCategory = game.duels[0]!.categories[0]!;
-    game.letter = wordsStartingWith(usedCategory, 'A').length > 0 ? 'A' : 'B';
-    const word = wordsStartingWith(usedCategory, game.letter)[0]!;
-    const res = game.answer('a', usedCategory, word, now + 500);
-    expect(res.error).toBeNull();
-    expect(a.pile).toHaveLength(0);
-    expect(b.pile).toHaveLength(0);
-    expect(a.deck).toHaveLength(CARD_GAME.cardsPerPlayer - 1);
-    expect(b.deck).toHaveLength(CARD_GAME.cardsPerPlayer + 1);
-    expect(game.phase).toBe('result');
-  });
-
-  it('sans choisir de catégorie, le mot vaut dans n’importe quelle catégorie commune', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    run(game, 0, t);
-    a.pile.at(-1)!.categories = ['animal', 'sport'];
-    b.pile.at(-1)!.categories = ['sport', 'animal'];
-    run(game, t, t + CARD_GAME.timing.revealMs);
-    game.letter = 'T';
-    expect(game.answer('a', null, 'tennis', t + 3000).error).toBeNull();
-    expect(game.duels[0]).toMatchObject({ winnerId: 'a', category: 'sport' });
-  });
-
-  it('une mauvaise réponse bloque un instant, une catégorie hors carte est refusée', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    const now = forceDuel(game, a, b, t);
-    const c1 = game.duels[0]!.categories[0]!;
-    expect(game.answer('a', c1, 'zzzz', now).error).not.toBeNull();
-    expect(game.answer('a', c1, 'zzzz', now + 100).error).toMatch(/Attends/);
-    const other = CATEGORY_IDS.find((c) => !a.pile.at(-1)!.categories.includes(c))!;
-    expect(game.answer('a', other, 'x', now + 5000).error).toMatch(/catégorie commune/);
-  });
-
-  it('les bots laissent le temps de répondre : pas avant la fin de la cinématique + le délai minimum', () => {
+  it('les bots laissent le temps de répondre après le défilement', () => {
     const game = new CardGame(seeded(11));
     game.addPlayer('me', 'Moi', false);
     game.addPlayer('bot', 'Bot', true);
     game.start(0);
-    run(game, 0, letterMs);
-    const [me, bot] = game.players;
-    bot!.pile.at(-1)!.categories = [...me!.pile.at(-1)!.categories];
-    const t = letterMs + revealMs;
-    run(game, letterMs, t);
-    expect(game.phase).toBe('duel');
-    const earliest = t + CARD_GAME.timing.duelIntroMs + CARD_GAME.bots.answerDelayMs[0];
-    expect(run(game, t, earliest - 100).some((e) => e.kind === 'duelWon')).toBe(false);
-    expect(game.endsAt).toBe(t + CARD_GAME.timing.duelIntroMs + duelMs);
-  });
-
-  it('sans réponse, le duel s’arrête et les piles restent', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    const now = forceDuel(game, a, b, t);
-    const events = run(game, now, now + CARD_GAME.timing.duelIntroMs + duelMs);
-    expect(events.some((e) => e.kind === 'duelTimeout')).toBe(true);
-    expect(a.pile).toHaveLength(1);
-    expect(b.pile).toHaveLength(1);
-  });
-
-  it('se débarrasser de toutes ses cartes fait gagner la partie', () => {
-    const { game, a, b, t } = twoPlayersAtReveal();
-    const now = forceDuel(game, a, b, t);
-    a.deck = [];
-    const c = game.duels[0]!.categories[0]!;
-    game.letter = wordsStartingWith(c, 'A').length > 0 ? 'A' : 'B';
-    game.answer('a', c, wordsStartingWith(c, game.letter)[0]!, now);
-    const events = run(game, now, now + CARD_GAME.timing.resultMs);
-    const end = events.find((e) => e.kind === 'finished');
-    expect(end).toBeDefined();
-    expect(game.ranking[0]).toMatchObject({ id: 'a', rank: 1, cards: 0 });
+    const t = anteMs + spinMs;
+    const early = run(game, 0, t + CARD_GAME.bots.answerDelayMs[0] - 100);
+    expect(early.some((e) => e.kind === 'won')).toBe(false);
   });
 
   it('une partie entre bots va jusqu’au bout', () => {
@@ -278,20 +255,11 @@ describe('partie', () => {
     for (let k = 0; k < 4; k++) game.addPlayer(`bot${k}`, `Bot ${k}`, true);
     game.start(0);
     const events = run(game, 0, 3_600_000);
-    expect(events.some((e) => e.kind === 'duelWon')).toBe(true);
-    expect(events.some((e) => e.kind === 'finished')).toBe(true);
-  });
-
-  it('une lettre ne revient qu’une fois toutes les autres sorties', () => {
-    const game = new CardGame(seeded(7));
-    for (let k = 0; k < 4; k++) game.addPlayer(`bot${k}`, `Bot ${k}`, true);
-    const letters = game.start(0).concat(run(game, 0, 3_600_000))
-      .filter((e) => e.kind === 'letter' && e.changed)
-      .map((e) => (e.kind === 'letter' ? e.letter : ''));
-    const n = CARD_GAME.letters.length;
-    expect(letters.length).toBeGreaterThan(n);
-    // Dans chaque tour complet de l'alphabet, aucune lettre en double.
-    for (let k = 0; k + n <= letters.length; k += n) expect(new Set(letters.slice(k, k + n)).size).toBe(n);
+    expect(events.some((e) => e.kind === 'won')).toBe(true);
+    const finished = events.find((e) => e.kind === 'finished');
+    expect(finished).toBeDefined();
+    // Les pièces ne se perdent pas : le total reste celui du départ.
+    expect(finished && finished.kind === 'finished' && finished.ranking.reduce((n, r) => n + r.coins, 0)).toBe(4 * CARD_GAME.coins.start);
   });
 
   it('en ligne : départ automatique quand on est assez, un joueur parti est remplacé par un bot', () => {
@@ -302,7 +270,7 @@ describe('partie', () => {
     game.addPlayer('b', 'Bilel', false);
     game.scheduleStart(0);
     run(game, 0, CARD_GAME.timing.lobbyMs);
-    expect(game.phase).toBe('letter');
+    expect(game.phase).toBe('ante');
     expect(game.addPlayer('c', 'Chloé', false)).toMatch(/commencé/);
     game.removePlayer('b');
     expect(game.players[1]).toMatchObject({ bot: true, left: true });

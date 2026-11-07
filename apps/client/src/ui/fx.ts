@@ -74,6 +74,8 @@ const SOUNDS = {
     [1046, 0.36, 0.4, 'square', 0.14],
   ],
   tick: [[1500, 0, 0.03, 'square', 0.05]],
+  /** Pièces d'or qui tintent. */
+  coin: [[1568, 0, 0.07, 'triangle', 0.14], [2093, 0.06, 0.16, 'triangle', 0.12]],
 } satisfies Record<string, Note[]>;
 
 export type SoundName = keyof typeof SOUNDS;

@@ -131,7 +131,7 @@ export class OnlineTable {
   leave(): void {
     if (this.closed) return;
     if (this.game && this.channel) {
-      this.game.removePlayer(this.me.id);
+      this.game.removePlayer(this.me.id, this.sched.now());
       this.sendSync();
       this.channel.send('hostLeft', { epoch: this.epoch });
     }
@@ -242,7 +242,7 @@ export class OnlineTable {
       const since = this.absentSince.get(p.id) ?? now;
       this.absentSince.set(p.id, since);
       if (now - since >= grace) {
-        game.removePlayer(p.id);
+        game.removePlayer(p.id, now);
         this.absentSince.delete(p.id);
       }
     }

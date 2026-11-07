@@ -2,8 +2,8 @@
  * Tutoriel illustré en 4 étapes : montré automatiquement avant la toute
  * première partie, et revu à volonté depuis les règles.
  */
-import { CARD_GAME, type Card } from '@jeu-ville/shared';
-import { cardBack, cardFace } from './cardView.js';
+import { CARD_GAME } from '@jeu-ville/shared';
+import { categoryTile, coin } from './tiles.js';
 import { el } from './dom.js';
 import { play } from './fx.js';
 
@@ -25,35 +25,35 @@ function markSeen(): void {
   }
 }
 
-const MINE: Card = { id: -1, color: 'red', categories: ['sport', 'firstName'] };
-const THEIRS: Card = { id: -2, color: 'blue', categories: ['animal', 'sport'] };
-
 interface Step {
   title: string;
   text: string;
   visual: () => HTMLElement;
 }
 
+/** Petite pile de pièces avec son nombre. */
+const purse = (n: number) => el('div', { class: 'tuto-purse' }, [coin(), el('span', { text: String(n) })]);
+
 const STEPS: Step[] = [
   {
-    title: 'Vide ton paquet !',
-    text: `Chacun reçoit ${CARD_GAME.cardsPerPlayer} cartes face cachée. Le premier qui n'a plus aucune carte gagne la partie.`,
-    visual: () => el('div', { class: 'tuto-visual' }, [el('div', { class: 'tuto-deck' }, [cardBack(), el('span', { class: 'count', text: String(CARD_GAME.cardsPerPlayer) })]), el('span', { class: 'tuto-arrow', text: '➜' }), el('span', { class: 'tuto-big', text: '0 🏆' })]),
+    title: 'Ruine les autres !',
+    text: `Chacun reçoit ${CARD_GAME.coins.start} pièces d’or. Le dernier qui a encore des pièces gagne la partie.`,
+    visual: () => el('div', { class: 'tuto-visual' }, [purse(CARD_GAME.coins.start), el('span', { class: 'tuto-arrow', text: '➜' }), el('span', { class: 'tuto-big', text: '🏆' })]),
   },
   {
-    title: 'Une lettre, et on pose',
-    text: "Une lettre est tirée au hasard. Puis tout le monde retourne en même temps la carte du dessus de son paquet. Chaque carte a 2 catégories, chacune avec sa couleur.",
-    visual: () => el('div', { class: 'tuto-visual' }, [el('div', { class: 'letter-badge tuto-letter' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter', text: 'T' })]), cardFace(MINE), cardFace(THEIRS)]),
+    title: 'Chacun mise',
+    text: 'À chaque manche, tout le monde pose une pièce au milieu (puis 2, puis 3… la mise monte au fil de la partie). Ça fait un tas !',
+    visual: () => el('div', { class: 'tuto-visual' }, [purse(9), el('span', { class: 'tuto-arrow', text: '➜' }), el('div', { class: 'tuto-pot' }, [coin(), coin(), coin()]), el('span', { class: 'tuto-arrow back', text: '⬅' }), purse(9)]),
   },
   {
-    title: 'Même catégorie = DUEL !',
-    text: 'Si ta carte a une catégorie en commun avec celle d’un autre joueur (même couleur), c’est le duel ! Ici : ⚽ Sport.',
-    visual: () => el('div', { class: 'tuto-visual' }, [cardFace(MINE, 'small', false, ['sport']), el('span', { class: 'tuto-vs', text: 'VS' }), cardFace(THEIRS, 'small', false, ['sport'])]),
+    title: 'Ça tourne… MATCH !',
+    text: 'Les catégories défilent devant chaque joueur et s’arrêtent sur la même. Une lettre est tirée en même temps.',
+    visual: () => el('div', { class: 'tuto-visual' }, [categoryTile('sport', 'landed'), el('div', { class: 'letter-badge tuto-letter' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter', text: 'T' })]), categoryTile('sport', 'landed')]),
   },
   {
-    title: 'Le plus rapide gagne',
-    text: 'Écris vite un mot qui commence par la lettre, dans la catégorie commune. Le gagnant se débarrasse de son tas : c’est le perdant qui ramasse toutes les cartes du duel !',
-    visual: () => el('div', { class: 'tuto-visual column' }, [el('div', { class: 'tuto-input' }, [el('span', { text: 'T' }), el('span', { class: 'typed', text: 'ennis' }), el('span', { class: 'go', text: 'GO !' })]), el('div', { class: 'tuto-big', text: '✅ Tennis !' })]),
+    title: 'Le plus rapide rafle tout',
+    text: 'Écris vite un mot qui commence par la lettre, dans la catégorie : tu gagnes tout le tas ! Si personne ne trouve, les pièces restent au milieu (cagnotte).',
+    visual: () => el('div', { class: 'tuto-visual column' }, [el('div', { class: 'tuto-input' }, [el('span', { text: 'T' }), el('span', { class: 'typed', text: 'ennis' }), el('span', { class: 'go', text: 'GO !' })]), el('div', { class: 'tuto-big', text: '✅ +2 🪙' })]),
   },
 ];
 

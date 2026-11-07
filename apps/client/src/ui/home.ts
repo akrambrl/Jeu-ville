@@ -1,7 +1,7 @@
 /** Écran d'accueil : pseudo, jouer en ligne ou contre des bots. */
-import { CARD_GAME, ONLINE, PSEUDO_RULES, containsBannedWord, type Card } from '@jeu-ville/shared';
+import { CARD_GAME, ONLINE, PSEUDO_RULES, containsBannedWord } from '@jeu-ville/shared';
 import { showSettings } from './settings.js';
-import { cardFace } from './cardView.js';
+import { categoryTile, coin } from './tiles.js';
 import { muteButton, play } from './fx.js';
 import { el } from './dom.js';
 import { showRules } from './rules.js';
@@ -74,9 +74,9 @@ export function showHome(root: HTMLElement, options: HomeOptions, start: (choice
     floatingLetters(),
     el('div', { class: 'home-tools' }, [muteButton('icon-button'), settingsButton]),
     el('div', { class: 'logo' }, [
-      el('div', { class: 'logo-cards' }, LOGO_CARDS.map((c) => cardFace(c))),
+      el('div', { class: 'logo-reels' }, [categoryTile('animal', 'landed'), el('div', { class: 'logo-coins' }, [coin(), coin(), coin()]), categoryTile('animal', 'landed')]),
       el('h1', {}, [el('span', { class: 'word-bac', text: 'Bac' }), el('span', { class: 'word-bataille', text: 'Bataille' })]),
-      el('p', { class: 'tagline', text: 'Le petit bac en cartes. Sois le plus rapide, vide ton paquet !' }),
+      el('p', { class: 'tagline', text: 'Le petit bac version casino. Sois le plus rapide, rafle tout l’or !' }),
     ]),
     el('div', { class: 'panel home-panel' }, [
       el('label', { text: 'Ton pseudo', for: 'pseudo' }),
@@ -131,13 +131,6 @@ export function showHome(root: HTMLElement, options: HomeOptions, start: (choice
   soloButton.addEventListener('click', () => void go('solo'));
   rulesButton.addEventListener('click', () => showRules(root));
 }
-
-/** Cartes en éventail du logo. */
-const LOGO_CARDS: Card[] = [
-  { id: -1, color: 'red', categories: ['firstName', 'place'] },
-  { id: -2, color: 'blue', categories: ['animal', 'sport'] },
-  { id: -3, color: 'yellow', categories: ['fruitVeg', 'celebrity'] },
-];
 
 /** Lettres qui flottent en fond d'écran. */
 function floatingLetters(): HTMLElement {

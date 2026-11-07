@@ -1,5 +1,5 @@
 /**
- * Équilibrage du jeu de cartes : tous les chiffres vivent ici (aucun nombre
+ * Équilibrage du jeu (pièces d'or) : tous les chiffres vivent ici (aucun nombre
  * magique dans la logique). Durées en millisecondes réelles.
  */
 
@@ -8,38 +8,33 @@ export const CARD_GAME = {
   players: { min: 2, max: 6 },
   /** Mode solo : nombre de bots adversaires. */
   soloBots: { min: 1, max: 5, default: 3 },
+
   /**
-   * Nombre de catégories en jeu selon le nombre de joueurs (tirées au hasard à
-   * chaque partie) : à peu de joueurs, moins de catégories, sinon les duels
-   * (catégorie en commun) se font attendre. Au-delà : toutes.
+   * Pièces d'or : chacun en reçoit `start` ; à chaque manche, chacun pose la
+   * mise au milieu (ou ce qui lui reste). La mise monte de 1 toutes les
+   * `anteStepRounds` manches (1, puis 2, puis 3…) : les parties ne traînent pas.
    */
-  categoriesByPlayers: { 2: 7, 3: 9, 4: 10 } as Readonly<Record<number, number>>,
-  /** Cartes distribuées à chacun au début de la partie. */
-  cardsPerPlayer: 12,
+  coins: { start: 10, ante: 1, anteStepRounds: 5 },
 
   /**
    * Lettres que le tirage peut sortir. Les lettres trop dures pour la plupart des
    * catégories (K, Q, U, W, X, Y, Z) sont exclues.
    */
   letters: 'ABCDEFGHIJLMNOPRSTV',
+  /** Une catégorie n'est tirée avec une lettre que si la liste du jeu a au moins tant de mots possibles. */
+  minWordsPerRound: 5,
 
   timing: {
     /** En ligne : attente avant le début, dès qu'il y a assez de joueurs. */
     lobbyMs: 10_000,
-    /** Tirage d'une nouvelle lettre (animation) avant que les cartes soient posées. */
-    letterMs: 2_500,
-    /** Même lettre qu'à la manche d'avant (pas de duel) : petite pause avant de poser. */
-    sameLetterMs: 900,
-    /** Cartes retournées sur la table, le temps de voir les couleurs. */
-    revealMs: 1_500,
-    /** Cinématique « VS » au début d'un duel : ne compte pas dans le temps de réponse. */
-    duelIntroMs: 1_700,
-    /** Temps pour répondre pendant un duel (après la cinématique). */
+    /** Chacun pose sa mise au milieu (les pièces volent vers le tas). */
+    anteMs: 1_400,
+    /** Les catégories défilent devant chacun, puis s'arrêtent sur la même : ne compte pas dans le temps de réponse. */
+    spinMs: 3_200,
+    /** Temps pour répondre (après le défilement). */
     duelMs: 15_000,
-    /** Après une manche : on montre qui a gagné quoi. */
-    resultMs: 3_500,
-    /** Manche sans duel : on enchaîne plus vite. */
-    noDuelMs: 1_200,
+    /** Après une manche : on montre qui a raflé le tas. */
+    resultMs: 3_200,
     /** Fin de partie : classement affiché avant de revenir au salon (en ligne). */
     finishedMs: 20_000,
   },
@@ -58,7 +53,7 @@ export const CARD_GAME = {
 
   bots: {
     /**
-     * Délai de réponse d'un bot pendant un duel, compté après la cinématique
+     * Délai de réponse d'un bot, compté après le défilement des catégories
      * (tirage uniforme) : il faut laisser le temps de taper un mot sur téléphone.
      */
     answerDelayMs: [6_000, 13_000],
@@ -67,7 +62,7 @@ export const CARD_GAME = {
     names: ['Yanis', 'Inès', 'Moussa', 'Chloé', 'Rayan', 'Sofia', 'Kenza', 'Lucas'],
   },
 
-  /** Sécurité : au-delà de tant de manches, la partie s'arrête (classement au nombre de cartes). */
+  /** Sécurité : au-delà de tant de manches, la partie s'arrête (classement au nombre de pièces). */
   maxRounds: 250,
 } as const;
 
@@ -92,14 +87,3 @@ export const ONLINE = {
   codeLength: 5,
   codeAlphabet: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
 } as const;
-
-/** Couleurs des cartes (décoratives : seules les catégories comptent pour les duels). */
-export const CARD_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
-export type CardColor = (typeof CARD_COLORS)[number];
-
-export const CARD_COLOR_LABELS: Record<CardColor, { name: string; hex: string }> = {
-  red: { name: 'Rouge', hex: '#ff4d6d' },
-  blue: { name: 'Bleu', hex: '#3a86ff' },
-  green: { name: 'Vert', hex: '#21c07a' },
-  yellow: { name: 'Jaune', hex: '#ffb703' },
-};

@@ -1,73 +1,77 @@
 /**
- * La table de jeu, sur tout l'écran : adversaires en bandeau en haut, lettre en
- * badge dans la barre, le tapis avec les tas de chacun (cartes aussi grandes que
- * la place le permet), son paquet en bas, et le panneau de duel. Cinématiques :
- * tirage de la lettre en plein écran, cartes qui volent, face-à-face « VS ».
+ * La table de jeu, sur tout l'écran : adversaires en bandeau en haut (avec leur
+ * bourse), lettre en badge dans la barre, le tapis avec le rouleau de catégories
+ * de chaque joueur et le tas de pièces d'or au milieu, sa bourse en bas, et le
+ * panneau de réponse. Cinématiques : pièces qui volent vers le tas puis vers le
+ * gagnant, rouleaux qui défilent et s'arrêtent sur la même catégorie (« MATCH ! »).
  */
-import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
-import { isNative } from '../native.js';
+import { CARD_GAME, CATEGORIES, CATEGORY_IDS, type CategoryId, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
+import { haptic, isNative } from '../native.js';
 import type { TableLink } from '../net/tableLink.js';
-import { cardBack, cardFace, cardSlot, tintCategory } from './cardView.js';
 import { el, showToast } from './dom.js';
-import { haptic } from '../native.js';
 import { confetti, muteButton, play } from './fx.js';
 import { showRules } from './rules.js';
+import { categoryFace, coin, tintCategory } from './tiles.js';
 
-/** Défilement des lettres pendant le tirage (ms entre deux lettres). */
-const ROLL_STEP_MS = 70;
-/** La lettre s'arrête un peu avant la fin du tirage. */
-const ROLL_STOP_BEFORE_MS = 700;
-/** Cinématique « VS » d'un duel (ms, voir .cine-vs dans styles.css) : hors temps de réponse. */
-const VS_MS = CARD_GAME.timing.duelIntroMs;
-/** La lettre tirée vole vers son badge (ms). */
-const LETTER_FLY_MS = 450;
-/** Tapis : taille des cartes (largeur, px) entre ces bornes, et écarts. */
-const PILE_MIN_W = 56;
-const PILE_MAX_W = 210;
-const PILE_GAP = 14;
-/** Marge par tas (badges qui dépassent, cartes du dessous décalées). */
-const PILE_SLACK = 10;
-/** On préfère les tas côte à côte s'ils ne sont pas plus de 25 % plus petits. */
-const SIDE_BY_SIDE_BONUS = 1.25;
-/** Hauteur réservée sous chaque tas (nom du joueur). */
-const PILE_LABEL_H = 30;
-/** En dessous de cette largeur, les cartes du tapis n'affichent que les icônes. */
-const PILE_TINY_W = 84;
-/** Durée du tampon « DUEL ! » (ms, voir .stamp dans styles.css). */
+/** Rouleaux : vitesse de défilement (ms entre deux catégories)… */
+const REEL_STEP_MS = 90;
+/** … le premier rouleau s'arrête à ce moment du défilement, les suivants l'un après l'autre… */
+const REEL_FIRST_STOP_MS = 1_400;
+const REEL_STOP_STEP_MS = 380;
+/** … et tous sont arrêtés au plus tard tant de ms avant la fin du défilement. */
+const REEL_DONE_BEFORE_MS = 450;
+/** Durée du tampon (« MATCH ! », « RAFLÉ ! », voir .stamp dans styles.css). */
 const STAMP_MS = 1_100;
-/** Fin de duel : minuteur en alerte et « tic » chaque seconde. */
+/** Fin de manche : minuteur en alerte et « tic » chaque seconde. */
 const URGENT_MS = 4_000;
-/** Tas : nombre max de cartes dessinées sous celle du dessus. */
-const PILE_LAYERS = 3;
-/** Cartes qui volent (ms) : durée du vol (voir .flying dans styles.css), écart entre deux cartes… */
-const FLY_DURATION_MS = 600;
-const FLY_STEP_MS = 90;
-const FLY_STAGGER_MS = 150;
-/** … et le tas du gagnant part juste après celui du perdant. */
-const FLY_WINNER_DELAY_MS = 250;
-/** Au plus tant de cartes animées par tas (au-delà, on ne voit pas la différence). */
-const FLY_MAX_CARDS = 6;
+/** Pièces qui volent (ms) : durée du vol (voir .coin.flying), écart entre deux pièces. */
+const COIN_FLY_MS = 650;
+const COIN_STEP_MS = 70;
+/** Au plus tant de pièces animées par vol (au-delà, on ne voit pas la différence). */
+const COIN_FLY_MAX = 8;
+/** Pièces dessinées dans le tas du milieu (au-delà, seul le nombre change). */
+const POT_DRAWN_MAX = 14;
+/** Rouleaux : largeur des tuiles entre ces bornes (px), écart entre eux… */
+const TILE_MIN_W = 36;
+const TILE_MAX_W = 150;
+const REEL_GAP = 12;
+/** … place prise autour d'une tuile (cadre du rouleau, bordures comprises ; nom en dessous). */
+const REEL_FRAME = 14;
+const REEL_LABEL_H = 12;
+/** Place gardée en bas du tapis pour « Catégorie en Lettre » (posé par-dessus, voir .round-ask). */
+const ASK_H = 26;
+/** Rapport hauteur / largeur d'une tuile (voir .cat-tile). */
+const TILE_RATIO = 1.05;
+/** En dessous de cette largeur, les tuiles n'affichent que le médaillon. */
+const TILE_TINY_W = 66;
+/** Au-delà de tant d'adversaires, leurs sièges n'affichent que l'avatar et la bourse. */
+const CROWD_OPPONENTS = 3;
 
 const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb8500'];
 
 export function showTable(root: HTMLElement, link: TableLink, onExit: () => void): void {
   let view: GameView | null = null;
   let deadline = 0;
-  let rolling = 0;
-  /** Résultat de la dernière manche, par joueur (badge sur son siège). */
+  /** Défilement en cours : on ne touche pas aux rouleaux ni à la lettre. */
+  let spinning = false;
+  const timers: number[] = [];
+  /** Résultat de la dernière manche, par joueur (badge sur son rouleau). */
   let badges = new Map<string, string>();
-  let duelPanelFor = 0;
-  /** Dernière carte affichée sur chaque pile (pour n'animer que les nouvelles). */
-  const shownTop = new Map<string, number>();
+  let panelRound = 0;
 
   const quit = el('button', { class: 'icon-button', text: '✕', title: 'Quitter la table' });
   const help = el('button', { class: 'icon-button', text: '?', title: 'Règles' });
   const roundLabel = el('div', { class: 'round-label' });
   const timer = el('div', { class: 'timer' });
   const opponents = el('div', { class: 'opponents' });
-  /** Le tapis, au milieu : le tas de chaque joueur, comme à la bataille. */
-  const tapis = el('div', { class: 'tapis' });
-  /** La lettre de la manche, en badge dans la barre du haut. */
+  /** Rouleaux de catégories, un par joueur en lice. */
+  const reels = el('div', { class: 'reels' });
+  /** Le tas de pièces au milieu. */
+  const potCoins = el('div', { class: 'pot-coins' });
+  const potCount = el('div', { class: 'pot-count' });
+  const pot = el('div', { class: 'pot' }, [potCoins, potCount]);
+  const ask = el('div', { class: 'round-ask' });
+  const tapis = el('div', { class: 'tapis' }, [reels, pot, ask]);
   const letterBadge = el('div', { class: 'letter-badge' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]);
   const status = el('div', { class: 'status' });
   const stage = el('div', { class: 'stage' }, [tapis, status]);
@@ -86,10 +90,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   const letterEl = letterBadge.querySelector('.letter')!;
   const me = () => view?.players.find((p) => p.id === link.myId);
-  const myDuel = () => view?.duels.find((d) => d.winnerId === null && d.playerIds.includes(link.myId));
   const nameOf = (id: string) => (id === link.myId ? 'Toi' : (view?.players.find((p) => p.id === id)?.name ?? '?'));
+  const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
   quit.addEventListener('click', () => {
+    for (const t of timers) window.clearTimeout(t);
     link.leave();
     screen.remove();
     onExit();
@@ -98,79 +104,113 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   // ---------- Rendu ----------
 
-  /** Siège d'un joueur : son nom et son paquet (face cachée). */
+  /** Siège d'un joueur : avatar, nom et bourse (pièces d'or). */
   const seat = (p: PlayerView, big: boolean): HTMLElement => {
-    const node = el('div', { class: `seat${big ? ' mine' : ''}${p.left ? ' left' : ''}${p.rank === 1 ? ' winner' : ''}` });
+    const node = el('div', { class: `seat${big ? ' mine' : ''}${p.left ? ' left' : ''}${p.out ? ' out' : ''}${p.rank === 1 ? ' winner' : ''}` });
     node.dataset.player = p.id;
-    const avatar = avatarOf(p);
-    const size = 'small';
     node.append(
       el('div', { class: 'who' }, [
-        avatar,
+        avatarOf(p),
         el('div', { class: 'name', text: p.id === link.myId ? `${p.name} (toi)` : p.name }),
-        ...(big ? [el('div', { class: 'seat-info', text: `${p.deckCount} carte${p.deckCount > 1 ? 's' : ''} en main · ${p.pileCount} sur ton tas` })] : []),
+        ...(big ? [el('div', { class: 'seat-info', text: p.out ? 'Éliminé : plus de pièce' : 'Ta bourse' })] : []),
       ]),
-      el('div', { class: 'deck' }, [p.deckCount > 0 ? cardBack(size) : cardSlot(size), el('span', { class: 'count', text: String(p.deckCount) })]),
+      p.out ? el('div', { class: 'purse out', text: '💀' }) : el('div', { class: 'purse' }, [coin(), el('span', { text: String(p.coins) })]),
     );
     return node;
   };
 
-  /** Tas d'un joueur sur le tapis : les cartes posées, celle du dessus visible. */
-  const pileTile = (p: PlayerView): HTMLElement => {
-    const duel = view?.duels.find((d) => d.playerIds.includes(p.id));
-    const inDuel = !!duel && duel.winnerId === null;
-    const node = el('div', { class: `pile-tile${inDuel ? ' in-duel' : ''}${p.id === link.myId ? ' mine' : ''}` });
-    node.dataset.player = p.id;
-    const fresh = !!p.top && shownTop.get(p.id) !== p.top.id;
-    shownTop.set(p.id, p.top?.id ?? 0);
-    // Épaisseur du tas : quelques cartes décalées sous celle du dessus.
-    const under = Math.min(Math.max(0, p.pileCount - 1), PILE_LAYERS);
-    const stack = el('div', { class: 'heap' }, [
-      ...Array.from({ length: under }, (_, k) => {
-        const layer = el('div', { class: 'card back small layer' });
-        layer.style.transform = `translate(${(k + 1) * 2}px, ${(k + 1) * 2}px) rotate(${((hash(p.id) + k * 7) % 9) - 4}deg)`;
-        return layer;
-      }),
-      p.top ? cardFace(p.top, 'small', fresh, inDuel ? duel!.categories : []) : cardSlot('small'),
-    ]);
-    if (p.pileCount > 0) stack.append(el('span', { class: 'count', text: String(p.pileCount) }));
-    const label = el('div', { class: 'pile-name', text: p.id === link.myId ? 'Toi' : p.name });
+  /** Rouleau d'un joueur sur le tapis (créé une fois : le défilement continue entre deux rendus). */
+  const reelTile = (p: PlayerView): HTMLElement => {
+    let node = reels.querySelector<HTMLElement>(`.reel-tile[data-player="${p.id}"]`);
+    if (!node) {
+      node = el('div', { class: `reel-tile${p.id === link.myId ? ' mine' : ''}` }, [
+        el('div', { class: 'reel' }, [el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '?' })])]),
+        el('div', { class: 'reel-name' }),
+      ]);
+      node.dataset.player = p.id;
+    }
+    const label = node.querySelector<HTMLElement>('.reel-name')!;
+    label.textContent = p.id === link.myId ? 'Toi' : p.name;
     label.style.background = colorOf(p.id);
-    node.append(stack, label);
-    if (inDuel) node.append(el('div', { class: 'duel-tag', text: '⚔️' }));
+    node.querySelector('.badge')?.remove();
     const badge = badges.get(p.id);
     if (badge) node.append(el('div', { class: 'badge', text: badge }));
     return node;
   };
 
+  /** Affiche une catégorie (ou « ? ») dans un rouleau. */
+  const setReel = (tile: Element | null, c: CategoryId | null, extra = '') => {
+    const reel = tile?.querySelector('.reel');
+    if (!reel) return;
+    const face = c ? tintCategory(el('div', { class: `cat-tile ${extra}`.trim() }, categoryFace(c)), c) : el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '?' })]);
+    face.dataset.cat = c ?? '';
+    reel.replaceChildren(face);
+  };
+
   const render = () => {
     if (!view) return;
     roundLabel.textContent = view.round > 0 ? `Manche ${view.round}` : 'Bac Bataille';
-    opponents.replaceChildren(...view.players.filter((p) => p.id !== link.myId).map((p) => seat(p, false)));
+    const others = view.players.filter((p) => p.id !== link.myId);
+    opponents.replaceChildren(...others.map((p) => seat(p, false)));
+    opponents.classList.toggle('crowd', others.length > CROWD_OPPONENTS);
     const mine = me();
     mySeat.replaceChildren(...(mine ? [seat(mine, true)] : []));
-    tapis.replaceChildren(...view.players.filter((p) => p.rank === null || p.pileCount > 0).map(pileTile));
+    const playing = view.players.filter((p) => !p.out);
+    const tiles = playing.map(reelTile);
+    const wasHidden = tapis.hidden;
     tapis.hidden = view.phase === 'waiting' || view.phase === 'finished';
-    if (!rolling) letterEl.textContent = view.letter || '?';
-    letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || !!rolling);
-    fitTapis();
+    if (tiles.length !== reels.children.length || tiles.some((t, k) => reels.children[k] !== t) || wasHidden !== tapis.hidden) {
+      reels.replaceChildren(...tiles);
+      reels.classList.toggle('duo', playing.length === 2);
+      fitReels();
+    }
+    if (!spinning) {
+      const c = view.phase === 'spin' || view.phase === 'duel' || view.phase === 'result' ? view.category : null;
+      for (const t of tiles) {
+        const shown = t.querySelector<HTMLElement>('.reel .cat-tile');
+        if ((shown?.dataset.cat || null) !== c) setReel(t, c, 'landed');
+      }
+      letterEl.textContent = view.letter || '?';
+    }
+    renderPot(view.pot);
+    ask.textContent = !spinning && view.category && (view.phase === 'duel' || view.phase === 'result') ? `${CATEGORIES[view.category].icon} ${CATEGORIES[view.category].label} en ${view.letter}` : '';
+    letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || view.phase === 'ante' || (spinning && !letterBadge.classList.contains('rolling')));
     renderDuelPanel();
     renderOverlay();
   };
 
+  const renderPot = (n: number) => {
+    if (potCoins.childElementCount !== Math.min(n, POT_DRAWN_MAX)) {
+      potCoins.replaceChildren(
+        ...Array.from({ length: Math.min(n, POT_DRAWN_MAX) }, (_, k) => {
+          const c = coin();
+          // Tas un peu désordonné, toujours le même pour une même hauteur.
+          c.style.setProperty('--x', `${((k * 37) % 21) - 10}px`);
+          c.style.setProperty('--y', `${-k * 5}px`);
+          return c;
+        }),
+      );
+    }
+    potCount.replaceChildren(
+      el('span', { text: n > 0 ? `${n} 🪙` : 'Tas vide' }),
+      ...(view && view.ante > 0 ? [el('small', { text: `mise ${view.ante}` })] : []),
+    );
+    pot.classList.toggle('empty', n === 0);
+  };
+
   const renderDuelPanel = () => {
-    const duel = myDuel();
-    const top = me()?.top;
-    screen.classList.toggle('with-duel', !!duel && !!top && view?.phase === 'duel');
-    if (!duel || !top || view?.phase !== 'duel') {
+    const mine = me();
+    const open = view?.phase === 'duel' && !!mine && !mine.out && !!view.category && !spinning;
+    screen.classList.toggle('with-duel', open);
+    if (!open || !view?.category) {
       duelPanel.hidden = true;
-      duelPanelFor = 0;
+      panelRound = 0;
       return;
     }
-    if (duelPanelFor === duel.id) return;
-    duelPanelFor = duel.id;
-    const rivals = duel.playerIds.filter((id) => id !== link.myId).map(nameOf).join(', ');
+    if (panelRound === view.round) return;
+    panelRound = view.round;
     const letter = view.letter;
+    const c = view.category;
     // Le champ commence par la lettre : on tape la suite du mot directement.
     const input = el('input', {
       type: 'text',
@@ -185,10 +225,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     input.value = letter;
     const send = el('button', { class: 'primary send', text: 'GO !' });
     const feedback = el('div', { class: 'feedback' });
-    // Catégories du duel (pour info : le mot vaut dans n'importe laquelle, pas besoin de choisir).
-    const cats = duel.categories.map((c) =>
-      tintCategory(el('div', { class: 'choice' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c),
-    );
     const submit = () => {
       const text = input.value.trim();
       if (text.length <= letter.length) return;
@@ -202,25 +238,27 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     });
     duelPanel.replaceChildren(
       el('div', { class: 'duel-title' }, [
-        el('div', {}, [el('div', { class: 'duel-word', text: 'Duel !' }), el('div', { class: 'duel-vs', text: `contre ${rivals}` })]),
+        el('div', {}, [el('div', { class: 'duel-word', text: `Rafle ${plural(view.pot, 'pièce')} !` }), el('div', { class: 'duel-vs', text: 'Le premier qui trouve gagne tout le tas' })]),
         el('span', { class: 'duel-letter', text: letter }),
       ]),
       duelTimer(),
-      el('div', { class: 'duel-ask', text: duel.categories.length > 1 ? `Un mot en ${letter}, dans une de ces catégories :` : `Un mot en ${letter}, dans la catégorie :` }),
-      el('div', { class: 'choices' }, cats),
+      el('div', { class: 'duel-ask', text: `Un mot en ${letter}, dans la catégorie :` }),
+      el('div', { class: 'choices' }, [tintCategory(el('div', { class: 'choice' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c)]),
       el('div', { class: 'answer-row' }, [input, send]),
       feedback,
     );
     duelPanel.hidden = false;
+    // Le tapis s'arrête au-dessus du panneau, quelle que soit sa hauteur.
+    screen.style.setProperty('--panel-h', `${duelPanel.offsetHeight}px`);
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
   };
 
-  /** Barre de temps du duel : elle se vide jusqu'à la fin du duel. */
+  /** Barre de temps : elle se vide jusqu'à la fin de la manche. */
   const duelTimer = () => {
     const bar = el('i');
     const left = Math.max(0, deadline - Date.now());
-    bar.style.width = `${Math.min(100, (left / (CARD_GAME.timing.duelIntroMs + CARD_GAME.timing.duelMs)) * 100)}%`;
+    bar.style.width = `${Math.min(100, (left / CARD_GAME.timing.duelMs) * 100)}%`;
     requestAnimationFrame(() => {
       bar.style.transition = `width ${left}ms linear`;
       bar.style.width = '0%';
@@ -228,11 +266,11 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return el('div', { class: 'duel-timer' }, [bar]);
   };
 
-  /** Gros tampon au milieu de l'écran (« DUEL ! », « GAGNÉ ! »). */
+  /** Gros tampon au milieu de l'écran (« MATCH ! », « RAFLÉ ! »). */
   const stamp = (text: string, kind: 'duel' | 'win' | 'lose') => {
     const node = el('div', { class: `stamp ${kind}`, text });
     screen.append(node);
-    window.setTimeout(() => node.remove(), STAMP_MS);
+    later(STAMP_MS, () => node.remove());
   };
 
   const renderOverlay = () => {
@@ -268,7 +306,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       overlay.replaceChildren(
         el('div', { class: 'panel' }, [
           el('h2', { class: 'title', text: myRank === 1 ? 'Victoire !' : 'Partie terminée' }),
-          el('p', { class: 'subtitle', text: myRank === 1 ? 'Tu as vidé ton paquet le premier 🏆' : `Tu finis ${myRank ?? '?'}${myRank === 1 ? 'er' : 'e'}. Revanche ?` }),
+          el('p', { class: 'subtitle', text: myRank === 1 ? 'Tu as ruiné tout le monde 🏆' : `Tu finis ${myRank ?? '?'}${myRank === 1 ? 'er' : 'e'}. Revanche ?` }),
           el(
             'ol',
             { class: 'ranking' },
@@ -276,7 +314,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
               el('li', { class: `${r.id === link.myId ? 'me' : ''} rank-${r.rank}` }, [
                 el('span', { class: 'medal-rank', text: medals[r.rank - 1] ?? `${r.rank}` }),
                 el('span', { class: 'who-rank', text: nameOf(r.id) }),
-                el('span', { text: r.cards === 0 ? 'plus de cartes !' : `${r.cards} carte${r.cards > 1 ? 's' : ''}` }),
+                el('span', { text: r.coins > 0 ? `${r.coins} 🪙` : 'ruiné 💀' }),
               ]),
             ),
           ),
@@ -320,12 +358,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     timer.textContent = view && (duel || view.phase === 'waiting') && deadline > 0 ? `⏱️ ${Math.ceil(left / 1000)}` : '';
     timer.classList.toggle('urgent', duel && left < URGENT_MS);
     const second = Math.ceil(left / 1000);
-    if (duel && left < URGENT_MS && left > 0 && second !== lastTick && myDuel()) play('tick');
+    if (duel && left < URGENT_MS && left > 0 && second !== lastTick && !me()?.out) play('tick');
     lastTick = second;
     if (view && (view.phase === 'waiting' || view.phase === 'finished')) renderOverlay();
   };
   let lastTick = 0;
-  window.setInterval(tickTimer, 250);
+  timers.push(window.setInterval(tickTimer, 250));
 
   const avatarOf = (p: PlayerView) => {
     const a = el('div', { class: 'avatar', text: p.bot ? '🤖' : p.name.slice(0, 1).toUpperCase() });
@@ -333,91 +371,109 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return a;
   };
 
-  // ---------- Lettre tirée au sort ----------
-
-  /** Cinématique du tirage : grande roue au milieu de l'écran, puis la lettre file dans son badge. */
-  const rollLetter = (letter: string) => {
-    window.clearInterval(rolling);
-    screen.querySelector('.cine-letter')?.remove();
-    const big = el('span', { class: 'letter' });
-    const wheel = el('div', { class: 'wheel spinning' }, [el('div', { class: 'rays' }), el('div', { class: 'disc' }, [el('span', { class: 'letter-label', text: 'Lettre' }), big])]);
-    const cine = el('div', { class: 'cine-letter' }, [wheel]);
-    screen.append(cine);
-    const pool = CARD_GAME.letters;
-    rolling = window.setInterval(() => {
-      big.textContent = pool[Math.floor(Math.random() * pool.length)]!;
-      play('tick');
-    }, ROLL_STEP_MS * 2);
-    letterBadge.classList.add('dim');
-    window.setTimeout(() => {
-      window.clearInterval(rolling);
-      big.textContent = letter;
-      wheel.classList.remove('spinning');
-      wheel.classList.add('pop');
-      play('letter');
-      // La roue rétrécit et file vers le badge de la barre du haut.
-      window.setTimeout(() => {
-        const from = wheel.getBoundingClientRect();
-        const to = letterBadge.getBoundingClientRect();
-        wheel.style.transition = `transform ${LETTER_FLY_MS}ms cubic-bezier(0.5, 0, 0.3, 1), opacity ${LETTER_FLY_MS}ms`;
-        wheel.style.transform = `translate(${to.left + to.width / 2 - (from.left + from.width / 2)}px, ${to.top + to.height / 2 - (from.top + from.height / 2)}px) scale(${to.width / from.width})`;
-        cine.classList.add('leaving');
-        window.setTimeout(() => {
-          cine.remove();
-          rolling = 0;
-          letterEl.textContent = letter;
-          letterBadge.classList.remove('dim');
-          letterBadge.classList.remove('pop');
-          void letterBadge.offsetWidth;
-          letterBadge.classList.add('pop');
-        }, LETTER_FLY_MS);
-      }, ROLL_STOP_BEFORE_MS - LETTER_FLY_MS - 50);
-    }, CARD_GAME.timing.letterMs - ROLL_STOP_BEFORE_MS);
-  };
-
-  /** Cinématique « VS » : les cartes du duel en grand, face à face, et la catégorie commune en énorme. */
-  const showVersus = (d: Duel) => {
-    const players = d.playerIds.map((id) => view?.players.find((p) => p.id === id)).filter((p): p is PlayerView => !!p?.top);
-    if (players.length < 2) return;
-    const [mine, ...others] = [...players].sort((a, b) => (a.id === link.myId ? -1 : b.id === link.myId ? 1 : 0));
-    const side = (p: PlayerView, k: number) => {
-      const card = cardFace(p.top!, 'small', false, d.categories);
-      return el('div', { class: `vs-side side-${k}` }, [card, el('div', { class: 'vs-name', text: p.id === link.myId ? 'Toi' : p.name })]);
-    };
-    const cats = d.categories.map((c) => tintCategory(el('div', { class: 'vs-cat' }, [el('span', { class: 'vs-medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c));
-    const cine = el('div', { class: 'cine-vs' }, [
-      el('div', { class: 'vs-title', text: 'Même catégorie !' }),
-      el('div', { class: 'vs-cards' }, [side(mine!, 0), el('div', { class: 'vs-badge', text: 'VS' }), ...others.slice(0, 2).map((p, k) => side(p, k + 1))]),
-      el('div', { class: 'vs-cats' }, [el('div', { class: 'vs-hint', text: `Un mot en ${view?.letter ?? ''} !` }), ...cats]),
-    ]);
-    screen.append(cine);
-    window.setTimeout(() => cine.remove(), VS_MS);
-  };
-
-  /** Taille des cartes du tapis : la plus grande qui fasse tenir tous les tas dans la place libre. */
-  const fitTapis = () => {
-    const n = tapis.children.length;
+  /** Taille des rouleaux : la plus grande qui fasse tout tenir dans le tapis. */
+  const fitReels = () => {
+    const n = reels.children.length;
     if (n === 0 || tapis.hidden) return;
-    // Place intérieure réelle du tapis (sans bordure ni marges intérieures).
     const css = getComputedStyle(tapis);
     const W = tapis.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
     const H = tapis.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
-    let best = PILE_MIN_W;
-    let bestScore = 0;
-    for (let cols = 1; cols <= n; cols++) {
+    const gap = parseFloat(css.rowGap) || 0;
+    const duo = n === 2;
+    // À deux, le tas est entre les rouleaux ; sinon dessous.
+    // Panneau de réponse ouvert : le tas et la question se cachent (le panneau les montre).
+    const answering = screen.classList.contains('with-duel');
+    const below = answering ? 0 : (duo ? 0 : pot.offsetHeight + gap) + ASK_H;
+    const duoGap = parseFloat(getComputedStyle(reels).columnGap) || REEL_GAP;
+    let best = TILE_MIN_W;
+    for (let cols = duo ? 2 : 1; cols <= (duo ? 2 : n); cols++) {
       const rows = Math.ceil(n / cols);
-      // Marge par tas : badges qui dépassent et cartes du dessous décalées.
-      const byW = (W - (cols - 1) * PILE_GAP) / cols - PILE_SLACK;
-      const byH = (H - rows * PILE_LABEL_H - (rows - 1) * PILE_GAP) / rows / 1.4 - PILE_SLACK;
-      // Côte à côte plutôt qu'empilés, même un peu plus petits : on voit mieux qui affronte qui.
-      const score = Math.min(byW, byH) * (cols >= rows ? SIDE_BY_SIDE_BONUS : 1);
-      if (score > bestScore) [best, bestScore] = [Math.min(byW, byH), score];
+      const byW = (W - (cols - 1) * (duo ? duoGap : REEL_GAP)) / cols - REEL_FRAME;
+      const byH = ((H - below - (rows - 1) * REEL_GAP) / rows - REEL_FRAME - REEL_LABEL_H) / TILE_RATIO;
+      best = Math.max(best, Math.min(byW, byH));
     }
-    const w = Math.floor(Math.max(PILE_MIN_W, Math.min(PILE_MAX_W, best)));
-    tapis.style.setProperty('--pile-w', `${w}px`);
-    tapis.classList.toggle('tiny', w < PILE_TINY_W);
+    const w = Math.floor(Math.max(TILE_MIN_W, Math.min(TILE_MAX_W, best)));
+    reels.style.setProperty('--tile-w', `${w}px`);
+    reels.classList.toggle('tiny', w < TILE_TINY_W);
   };
-  new ResizeObserver(() => fitTapis()).observe(stage);
+  new ResizeObserver(() => fitReels()).observe(tapis);
+
+  // ---------- Cinématiques ----------
+
+  /**
+   * Les rouleaux de chacun font défiler des catégories au hasard, s'arrêtent
+   * l'un après l'autre… tous sur la même : MATCH ! La lettre tourne dans son
+   * badge et s'arrête en même temps.
+   */
+  const spinReels = (category: CategoryId, letter: string) => {
+    spinning = true;
+    const tiles = [...reels.querySelectorAll<HTMLElement>('.reel-tile')];
+    const n = Math.max(1, tiles.length);
+    const lastStop = CARD_GAME.timing.spinMs - REEL_DONE_BEFORE_MS;
+    const step = n > 1 ? Math.min(REEL_STOP_STEP_MS, (lastStop - REEL_FIRST_STOP_MS) / (n - 1)) : 0;
+    const others = CATEGORY_IDS.filter((c) => c !== category);
+    const loops = tiles.map((tile, k) => {
+      tile.classList.remove('matched');
+      let i = Math.floor(Math.random() * others.length);
+      const loop = window.setInterval(() => {
+        i = (i + 1 + k) % others.length;
+        setReel(tile, others[i]!, 'blur');
+      }, REEL_STEP_MS);
+      timers.push(loop);
+      later(REEL_FIRST_STOP_MS + k * step, () => {
+        window.clearInterval(loop);
+        setReel(tile, category, 'landed');
+        play('flip');
+      });
+      return loop;
+    });
+    // La lettre roule dans son badge.
+    letterBadge.classList.add('rolling');
+    letterBadge.classList.remove('dim');
+    const pool = CARD_GAME.letters;
+    const roll = window.setInterval(() => {
+      letterEl.textContent = pool[Math.floor(Math.random() * pool.length)]!;
+    }, REEL_STEP_MS * 1.5);
+    timers.push(roll);
+    const matchAt = REEL_FIRST_STOP_MS + (n - 1) * step + 120;
+    later(matchAt, () => {
+      for (const l of loops) window.clearInterval(l);
+      window.clearInterval(roll);
+      letterBadge.classList.remove('rolling');
+      letterEl.textContent = letter;
+      letterBadge.classList.remove('pop');
+      void letterBadge.offsetWidth;
+      letterBadge.classList.add('pop');
+      for (const t of tiles) t.classList.add('matched');
+      spinning = false;
+      status.textContent = `${CATEGORIES[category].icon} ${CATEGORIES[category].label} en ${letter} !`;
+      if (!me()?.out) {
+        stamp('MATCH !', 'duel');
+        play('duel');
+        haptic('duel');
+      }
+      render();
+    });
+  };
+
+  /** Fait voler `count` pièces de `from` vers `to`, l'une après l'autre. */
+  const flyCoins = (from: Element | null, to: Element | null, count: number, delayMs = 0) => {
+    if (!from || !to || count <= 0) return;
+    const a = from.getBoundingClientRect();
+    const b = to.getBoundingClientRect();
+    for (let k = 0; k < Math.min(count, COIN_FLY_MAX); k++) {
+      const ghost = coin('flying');
+      ghost.style.left = `${a.left + a.width / 2}px`;
+      ghost.style.top = `${a.top + a.height / 2}px`;
+      document.body.append(ghost);
+      later(delayMs + k * COIN_STEP_MS + 20, () => {
+        ghost.style.transform = `translate(calc(-50% + ${b.left + b.width / 2 - a.left - a.width / 2}px), calc(-50% + ${b.top + b.height / 2 - a.top - a.height / 2}px)) rotate(${(k % 2 ? 1 : -1) * 200}deg)`;
+      });
+      later(delayMs + k * COIN_STEP_MS + COIN_FLY_MS + 60, () => ghost.remove());
+    }
+  };
+
+  const purseOf = (id: string) => screen.querySelector(`.seat[data-player="${id}"] .purse`);
 
   // ---------- Partie ----------
 
@@ -430,52 +486,66 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   link.onEvent((e: GameEvent) => {
     switch (e.kind) {
-      case 'letter':
+      case 'ante': {
         badges = new Map();
-        if (e.changed) {
-          status.textContent = 'Tirage de la lettre…';
-          rollLetter(e.letter);
-        } else {
-          // Pas de duel à la manche d'avant : on garde la même lettre.
-          status.textContent = `Toujours la lettre ${e.letter} !`;
-          letterBadge.classList.remove('pop');
-          void letterBadge.offsetWidth;
-          letterBadge.classList.add('pop');
+        const raised = view && view.round > 0 && e.ante > view.ante;
+        status.textContent = `Chacun pose ${plural(e.ante, 'pièce')} au milieu…`;
+        if (raised) {
+          stamp(`MISE ×${e.ante}`, 'lose');
+          showToast(screen, `💰 La mise monte : ${plural(e.ante, 'pièce')} par manche !`, 'info', 2200);
         }
-        break;
-      case 'reveal':
-        status.textContent = 'Cartes posées !';
-        play('flip');
-        // Chacun pose la carte du dessus de son paquet sur son tas, au milieu.
-        for (const p of view?.players ?? []) {
-          if (p.deckCount > 0 && p.rank === null) flyCards(deckEl(p.id), pileEl(p.id), 1, 0);
-        }
-        break;
-      case 'noDuel':
-        status.textContent = 'Aucune catégorie en commun : pas de duel, on repose une carte !';
-        break;
-      case 'duels': {
-        const mine = e.duels.some((d) => d.playerIds.includes(link.myId));
-        status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' contre ')} en ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
-        if (!mine) showToast(screen, '👀 Duel entre les autres joueurs : regarde qui sera le plus rapide !', 'info', 2200);
-        if (mine) {
-          showVersus(e.duels.find((d) => d.playerIds.includes(link.myId))!);
-          play('duel');
-          haptic('duel');
+        for (const [id, n] of Object.entries(e.paid)) flyCoins(purseOf(id), potCoins, n);
+        if (Object.values(e.paid).some((n) => n > 0)) play('coin');
+        for (const t of reels.querySelectorAll('.reel-tile')) {
+          t.classList.remove('matched');
+          setReel(t, null);
         }
         break;
       }
-      case 'duelWon':
-        onDuelWon(e.duel);
+      case 'spin':
+        status.textContent = 'Les catégories tournent…';
+        spinReels(e.category, e.letter);
         break;
-      case 'duelTimeout':
-        status.textContent = `⏱️ Personne n’a trouvé (${e.duel.playerIds.map(nameOf).join(' vs ')}) : les cartes restent.`;
+      case 'duel':
+        status.textContent = me()?.out ? '👀 Tu es éliminé : regarde qui sera le plus rapide !' : 'Vite, un mot !';
         break;
+      case 'won': {
+        flyCoins(potCoins, purseOf(e.winnerId), e.pot);
+        const winner = nameOf(e.winnerId);
+        status.textContent = `🏆 ${winner} rafle ${plural(e.pot, 'pièce')} avec « ${e.word} » !`;
+        badges.set(e.winnerId, `+${e.pot}`);
+        if (e.winnerId === link.myId) {
+          stamp('RAFLÉ !', 'win');
+          showToast(screen, `« ${e.word} » ✅ Tu rafles ${plural(e.pot, 'pièce')} !`, 'win', 2800);
+          play('right');
+          later(250, () => play('coin'));
+          haptic('right');
+          const r = purseOf(link.myId)?.getBoundingClientRect();
+          confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
+        } else if (!me()?.out) {
+          showToast(screen, `😩 ${winner} a été plus rapide avec « ${e.word} ».`, 'error', 2800);
+          play('lose');
+        }
+        break;
+      }
+      case 'timeout':
+        status.textContent = `⏱️ Personne n’a trouvé : les ${plural(e.pot, 'pièce')} restent au milieu. Cagnotte !`;
+        stamp('CAGNOTTE !', 'lose');
+        break;
+      case 'eliminated': {
+        const mine = e.ids.includes(link.myId);
+        const others = e.ids.filter((id) => id !== link.myId).map(nameOf);
+        if (mine) {
+          showToast(screen, '💀 Plus de pièce : tu es éliminé ! Regarde la fin de la partie.', 'error', 3500);
+          play('lose');
+        } else if (others.length > 0) showToast(screen, `💀 ${others.join(', ')} ${others.length > 1 ? 'sont éliminés' : 'est éliminé'} : plus de pièce !`, 'info', 2500);
+        break;
+      }
       case 'finished':
         if (e.ranking[0]?.id === link.myId) {
           play('fanfare');
           confetti();
-          window.setTimeout(() => confetti(), 600);
+          later(600, () => confetti());
         } else play('lose');
         badges = new Map();
         status.textContent = '';
@@ -487,58 +557,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     }
     render();
   });
-
-  const onDuelWon = (d: Duel) => {
-    // Les tas du gagnant et des perdants partent dans le paquet du perdant.
-    const piles = (id: string) => view?.players.find((p) => p.id === id)?.pileCount ?? 0;
-    const winnerPile = piles(d.winnerId!);
-    d.losers.forEach((l, k) => {
-      const target = deckEl(l.id);
-      flyCards(pileEl(l.id), target, Math.min(piles(l.id), FLY_MAX_CARDS), k * FLY_STAGGER_MS);
-      const share = Math.ceil(winnerPile / d.losers.length);
-      flyCards(pileEl(d.winnerId!), target, Math.min(share, FLY_MAX_CARDS), FLY_WINNER_DELAY_MS + k * FLY_STAGGER_MS);
-    });
-    const winner = nameOf(d.winnerId!);
-    const cat = d.category ? CATEGORIES[d.category].label : '';
-    const losers = d.losers.map((l) => `${nameOf(l.id)} récupère ${l.cards} carte${l.cards > 1 ? 's' : ''}`).join(', ');
-    status.textContent = `🏆 ${winner} : « ${d.word} » (${cat}) · ${losers}`;
-    badges.set(d.winnerId!, '🏆');
-    for (const l of d.losers) badges.set(l.id, `+${l.cards}`);
-    const total = d.losers.reduce((sum, l) => sum + l.cards, 0);
-    if (d.winnerId === link.myId) {
-      stamp('BIEN JOUÉ !', 'win');
-      showToast(screen, `« ${d.word} » ✅ Tu te débarrasses de tes cartes : ${d.losers.map((l) => nameOf(l.id)).join(', ')} ramasse ${total} carte${total > 1 ? 's' : ''} !`, 'win', 3200);
-      play('right');
-      haptic('right');
-      const r = pileEl(link.myId)?.getBoundingClientRect();
-      confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
-    } else if (d.playerIds.includes(link.myId)) {
-      const mineTaken = d.losers.find((l) => l.id === link.myId)?.cards ?? 0;
-      showToast(screen, `😩 ${winner} a été plus rapide avec « ${d.word} ». Tu ramasses ${mineTaken} carte${mineTaken > 1 ? 's' : ''}…`, 'error', 3200);
-      play('lose');
-    }
-  };
-
-  const deckEl = (id: string) => screen.querySelector(`.seat[data-player="${id}"] .deck`);
-  const pileEl = (id: string) => screen.querySelector(`.pile-tile[data-player="${id}"] .heap`);
-
-  /** Fait voler `count` cartes (dos) de `from` vers `to`, l'une après l'autre. */
-  const flyCards = (from: Element | null, to: Element | null, count: number, delayMs: number) => {
-    if (!from || !to || count <= 0) return;
-    const a = from.getBoundingClientRect();
-    const b = to.getBoundingClientRect();
-    for (let k = 0; k < count; k++) {
-      const ghost = el('div', { class: 'card back small flying' });
-      ghost.style.setProperty('--w', `${Math.max(PILE_MIN_W, Math.round(Math.min(a.width, b.width, PILE_MAX_W)))}px`);
-      ghost.style.left = `${a.left + a.width / 2}px`;
-      ghost.style.top = `${a.top + a.height / 2}px`;
-      document.body.append(ghost);
-      window.setTimeout(() => {
-        ghost.style.transform = `translate(calc(-50% + ${b.left + b.width / 2 - a.left - a.width / 2}px), calc(-50% + ${b.top + b.height / 2 - a.top - a.height / 2}px)) rotate(${(k % 2 ? 1 : -1) * 12}deg)`;
-      }, delayMs + k * FLY_STEP_MS + 20);
-      window.setTimeout(() => ghost.remove(), delayMs + k * FLY_STEP_MS + FLY_DURATION_MS + 60);
-    }
-  };
 
   link.onNotice((n) => {
     const feedback = duelPanel.querySelector('.feedback');
@@ -562,7 +580,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   link.onDisconnected(() => {
     showToast(screen, 'Déconnecté du serveur.', 'error', 4000);
-    window.setTimeout(() => quit.click(), 2000);
+    later(2000, () => quit.click());
   });
 }
 

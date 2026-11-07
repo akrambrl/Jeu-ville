@@ -42,8 +42,8 @@ describe('table en ligne (sans serveur)', () => {
     expect(b.table.isHost).toBe(false);
     expect(b.last().players.map((p) => p.id)).toEqual(['aaa', 'bbb']);
     sched.advance(CARD_GAME.timing.lobbyMs + 200);
-    expect(b.last().phase).toBe('letter');
-    expect(b.events.some((e) => e.kind === 'letter')).toBe(true);
+    expect(b.last().phase).toBe('ante');
+    expect(b.events.some((e) => e.kind === 'ante')).toBe(true);
   });
 
   it('les réponses sont relayées à l’hôte, qui répond au seul joueur concerné', async () => {
@@ -51,7 +51,7 @@ describe('table en ligne (sans serveur)', () => {
     const sched = new ManualScheduler();
     const { a, b } = await openBoth(net, sched);
     b.table.answer(null, 'banane');
-    expect(b.notices.at(-1)?.text).toMatch(/Pas de duel/);
+    expect(b.notices.at(-1)?.text).toMatch(/catégories/);
     expect(a.notices).toHaveLength(0);
   });
 
@@ -69,15 +69,15 @@ describe('table en ligne (sans serveur)', () => {
     const net = new MemoryTransport();
     const sched = new ManualScheduler();
     const { a, b } = await openBoth(net, sched);
-    sched.advance(CARD_GAME.timing.lobbyMs + CARD_GAME.timing.letterMs + 500);
+    sched.advance(CARD_GAME.timing.lobbyMs + CARD_GAME.timing.anteMs + 500);
     const round = b.last().round;
-    const cards = b.last().players.map((p) => p.deckCount + p.pileCount);
+    const coins = b.last().players.map((p) => p.coins);
     a.transport.cut(true);
     sched.advance(ONLINE.hostTimeoutMs + ONLINE.syncMs);
     expect(b.table.isHost).toBe(true);
     expect(b.notices.at(-1)?.text).toMatch(/reprend la partie/);
     expect(b.last().round).toBeGreaterThanOrEqual(round);
-    expect(b.last().players.map((p) => p.deckCount + p.pileCount)).toEqual(cards);
+    expect(b.last().players.map((p) => p.coins)).toEqual(coins);
     // L'ancien hôte ne revient pas : un bot prend sa place.
     sched.advance(ONLINE.reconnectSeconds * 1000 + ONLINE.syncMs);
     expect(b.last().players.find((p) => p.id === 'aaa')).toMatchObject({ bot: true, left: true });

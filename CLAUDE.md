@@ -1,4 +1,4 @@
-# CLAUDE.md — Bac Bataille (jeu de cartes multijoueur façon petit bac)
+# CLAUDE.md — Bac Bataille (petit bac multijoueur avec pièces d'or à miser)
 
 Le cahier des charges est dans `docs/GAME_DESIGN.md`. Ce fichier n'en est que le
 résumé opérationnel : en cas de doute, le cahier des charges fait foi, et on
@@ -28,14 +28,14 @@ demande à l'utilisateur plutôt que d'inventer.
 ## Règles d'architecture
 
 1. **Le téléphone de l'hôte arbitre la table** (choix validé par l'utilisateur
-   pour l'hébergement gratuit) : il fait tourner `CardGame`, distribue, tire la
-   lettre, détecte les duels et valide les réponses. Les autres n'envoient que
+   pour l'hébergement gratuit) : il fait tourner `CardGame`, encaisse les mises, tire
+   la catégorie et la lettre, et valide les réponses. Les autres n'envoient que
    des **intentions** (`answer` : mot), vérifiées avec zod par l'hôte. Tout
    message reçu d'un autre téléphone est validé.
 2. **Si l'hôte part**, le joueur arrivé le plus tôt reprend la partie à partir
    de la dernière sauvegarde (`CardGame.snapshot/restore`, « époque » suivante).
-   Limite assumée : la sauvegarde diffusée contient les paquets, et un hôte
-   pourrait tricher en modifiant son appli.
+   Limite assumée : la sauvegarde diffusée contient toute la partie (prochaines
+   lettres comprises), et un hôte pourrait tricher en modifiant son appli.
 3. **Moteur pur** : `CardGame` (`packages/shared/src/cards/game.ts`), temps et
    hasard injectés, testé unitairement. L'hôte en ligne et le mode solo l'utilisent tel quel.
 4. **Tous les chiffres d'équilibrage** dans `packages/shared/src/config/cards.ts`
@@ -51,7 +51,7 @@ demande à l'utilisateur plutôt que d'inventer.
 ## Structure
 
 ```
-apps/client/src      app.ts (navigation) · ui/ (accueil, table, cartes, règles, réglages, tuto)
+apps/client/src      app.ts (navigation) · ui/ (accueil, table, tuiles et pièces, règles, réglages, tuto)
                      net/ (lien table en ligne / solo, transports) · demo/ (page solo)
                      native.ts (Capacitor : vibrations, barre d'état, bouton retour)
                      legal/ (confidentialité, mentions, CGU : appli + page legal.html)
