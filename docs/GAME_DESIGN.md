@@ -47,11 +47,19 @@ jeu : il doit gagner un duel pour s'en débarrasser et finir.
 
 ## À l'écran
 
-Comme à la bataille : les **tas de tous les joueurs sont au milieu**, sur le
-tapis, autour de la lettre tirée. Chacun garde son paquet devant lui (face
-cachée). À chaque manche, une carte vole de chaque paquet vers son tas ; à la
-fin d'un duel, les tas du gagnant et du perdant volent vers le **paquet du
-perdant**.
+La table occupe **tout l'écran, sans défilement**. Comme à la bataille, les
+**tas de tous les joueurs sont au milieu**, sur le tapis : la taille des cartes
+est calculée pour remplir la place libre (tas côte à côte de préférence), donc
+les catégories sont écrites en gros. La lettre de la manche est en badge dans la
+barre du haut ; les adversaires sont en bandeau, son paquet en bas.
+
+Cinématiques :
+- **tirage de la lettre** : grande roue en plein écran, puis la lettre file dans
+  son badge ;
+- **cartes posées** : une carte vole de chaque paquet vers son tas et se retourne ;
+- **duel** : face-à-face « VS », les deux cartes en grand et la catégorie
+  commune en énorme, puis le panneau de réponse ;
+- **fin de duel** : les tas volent vers le paquet du perdant, confettis si on gagne.
 
 ## Direction artistique
 

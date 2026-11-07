@@ -1,6 +1,8 @@
 /**
- * La table de jeu : adversaires en haut, lettre tirée au centre, sa propre pile
- * en bas, et le panneau de duel quand sa carte a la même couleur qu'une autre.
+ * La table de jeu, sur tout l'écran : adversaires en bandeau en haut, lettre en
+ * badge dans la barre, le tapis avec les tas de chacun (cartes aussi grandes que
+ * la place le permet), son paquet en bas, et le panneau de duel. Cinématiques :
+ * tirage de la lettre en plein écran, cartes qui volent, face-à-face « VS ».
  */
 import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
 import type { TableLink } from '../net/tableLink.js';
@@ -32,6 +34,22 @@ function vibrate(pattern: readonly number[]): void {
   }
 }
 
+/** Cinématique « VS » d'un duel (ms, voir .cine-vs dans styles.css). */
+const VS_MS = 1_700;
+/** La lettre tirée vole vers son badge (ms). */
+const LETTER_FLY_MS = 450;
+/** Tapis : taille des cartes (largeur, px) entre ces bornes, et écarts. */
+const PILE_MIN_W = 56;
+const PILE_MAX_W = 210;
+const PILE_GAP = 14;
+/** Marge par tas (badges qui dépassent, cartes du dessous décalées). */
+const PILE_SLACK = 10;
+/** On préfère les tas côte à côte s'ils ne sont pas plus de 25 % plus petits. */
+const SIDE_BY_SIDE_BONUS = 1.25;
+/** Hauteur réservée sous chaque tas (nom du joueur). */
+const PILE_LABEL_H = 30;
+/** En dessous de cette largeur, les cartes du tapis n'affichent que les icônes. */
+const PILE_TINY_W = 84;
 /** Durée du tampon « DUEL ! » (ms, voir .stamp dans styles.css). */
 const STAMP_MS = 1_100;
 /** Fin de duel : minuteur en alerte et « tic » chaque seconde. */
@@ -67,25 +85,24 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const opponents = el('div', { class: 'opponents' });
   /** Le tapis, au milieu : le tas de chaque joueur, comme à la bataille. */
   const tapis = el('div', { class: 'tapis' });
-  const letterBox = el('div', { class: 'letter-box' }, [
-    el('div', { class: 'rays' }),
-    el('div', { class: 'disc' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]),
-  ]);
+  /** La lettre de la manche, en badge dans la barre du haut. */
+  const letterBadge = el('div', { class: 'letter-badge' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]);
   const status = el('div', { class: 'status' });
+  const stage = el('div', { class: 'stage' }, [tapis, status]);
   const mySeat = el('div', { class: 'my-seat' });
   const duelPanel = el('div', { class: 'duel-panel', hidden: '' });
   const overlay = el('div', { class: 'overlay table-overlay', hidden: '' });
   const screen = el('div', { class: 'table-screen' }, [
-    el('div', { class: 'topbar' }, [quit, roundLabel, timer, muteButton('icon-button'), help]),
+    el('div', { class: 'topbar' }, [quit, roundLabel, letterBadge, timer, muteButton('icon-button'), help]),
     opponents,
-    el('div', { class: 'center' }, [letterBox, tapis, status]),
+    stage,
     mySeat,
     duelPanel,
     overlay,
   ]);
   root.append(screen);
 
-  const letterEl = letterBox.querySelector('.letter')!;
+  const letterEl = letterBadge.querySelector('.letter')!;
   const me = () => view?.players.find((p) => p.id === link.myId);
   const myDuel = () => view?.duels.find((d) => d.winnerId === null && d.playerIds.includes(link.myId));
   const nameOf = (id: string) => (id === link.myId ? 'Toi' : (view?.players.find((p) => p.id === id)?.name ?? '?'));
@@ -101,7 +118,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   /** Siège d'un joueur : son nom et son paquet (face cachée). */
   const seat = (p: PlayerView, big: boolean): HTMLElement => {
-    const node = el('div', { class: `seat${big ? ' mine' : ''}${p.left ? ' left' : ''}` });
+    const node = el('div', { class: `seat${big ? ' mine' : ''}${p.left ? ' left' : ''}${p.rank === 1 ? ' winner' : ''}` });
     node.dataset.player = p.id;
     const avatar = avatarOf(p);
     const size = 'small';
@@ -109,6 +126,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       el('div', { class: 'who' }, [
         avatar,
         el('div', { class: 'name', text: p.id === link.myId ? `${p.name} (toi)` : p.name }),
+        ...(big ? [el('div', { class: 'seat-info', text: `${p.deckCount} carte${p.deckCount > 1 ? 's' : ''} en main · ${p.pileCount} sur ton tas` })] : []),
       ]),
       el('div', { class: 'deck' }, [p.deckCount > 0 ? cardBack(size) : cardSlot(size), el('span', { class: 'count', text: String(p.deckCount) })]),
     );
@@ -152,7 +170,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     tapis.replaceChildren(...view.players.filter((p) => p.rank === null || p.pileCount > 0).map(pileTile));
     tapis.hidden = view.phase === 'waiting' || view.phase === 'finished';
     if (!rolling) letterEl.textContent = view.letter || '?';
-    letterBox.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished');
+    letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || !!rolling);
+    fitTapis();
     renderDuelPanel();
     renderOverlay();
   };
@@ -297,21 +316,88 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
 
   // ---------- Lettre tirée au sort ----------
 
+  /** Cinématique du tirage : grande roue au milieu de l'écran, puis la lettre file dans son badge. */
   const rollLetter = (letter: string) => {
     window.clearInterval(rolling);
+    screen.querySelector('.cine-letter')?.remove();
+    const big = el('span', { class: 'letter' });
+    const wheel = el('div', { class: 'wheel spinning' }, [el('div', { class: 'rays' }), el('div', { class: 'disc' }, [el('span', { class: 'letter-label', text: 'Lettre' }), big])]);
+    const cine = el('div', { class: 'cine-letter' }, [wheel]);
+    screen.append(cine);
     const pool = CARD_GAME.letters;
-    letterBox.classList.remove('pop');
-    letterBox.classList.add('spinning');
-    rolling = window.setInterval(() => (letterEl.textContent = pool[Math.floor(Math.random() * pool.length)]!), ROLL_STEP_MS);
+    rolling = window.setInterval(() => {
+      big.textContent = pool[Math.floor(Math.random() * pool.length)]!;
+      play('tick');
+    }, ROLL_STEP_MS * 2);
+    letterBadge.classList.add('dim');
     window.setTimeout(() => {
       window.clearInterval(rolling);
-      rolling = 0;
-      letterEl.textContent = letter;
-      letterBox.classList.remove('spinning');
-      letterBox.classList.add('pop');
+      big.textContent = letter;
+      wheel.classList.remove('spinning');
+      wheel.classList.add('pop');
       play('letter');
+      // La roue rétrécit et file vers le badge de la barre du haut.
+      window.setTimeout(() => {
+        const from = wheel.getBoundingClientRect();
+        const to = letterBadge.getBoundingClientRect();
+        wheel.style.transition = `transform ${LETTER_FLY_MS}ms cubic-bezier(0.5, 0, 0.3, 1), opacity ${LETTER_FLY_MS}ms`;
+        wheel.style.transform = `translate(${to.left + to.width / 2 - (from.left + from.width / 2)}px, ${to.top + to.height / 2 - (from.top + from.height / 2)}px) scale(${to.width / from.width})`;
+        cine.classList.add('leaving');
+        window.setTimeout(() => {
+          cine.remove();
+          rolling = 0;
+          letterEl.textContent = letter;
+          letterBadge.classList.remove('dim');
+          letterBadge.classList.remove('pop');
+          void letterBadge.offsetWidth;
+          letterBadge.classList.add('pop');
+        }, LETTER_FLY_MS);
+      }, ROLL_STOP_BEFORE_MS - LETTER_FLY_MS - 50);
     }, CARD_GAME.timing.letterMs - ROLL_STOP_BEFORE_MS);
   };
+
+  /** Cinématique « VS » : les cartes du duel en grand, face à face, et la catégorie commune en énorme. */
+  const showVersus = (d: Duel) => {
+    const players = d.playerIds.map((id) => view?.players.find((p) => p.id === id)).filter((p): p is PlayerView => !!p?.top);
+    if (players.length < 2) return;
+    const [mine, ...others] = [...players].sort((a, b) => (a.id === link.myId ? -1 : b.id === link.myId ? 1 : 0));
+    const side = (p: PlayerView, k: number) => {
+      const card = cardFace(p.top!, 'small');
+      return el('div', { class: `vs-side side-${k}` }, [card, el('div', { class: 'vs-name', text: p.id === link.myId ? 'Toi' : p.name })]);
+    };
+    const cats = d.categories.map((c) => el('div', { class: 'vs-cat' }, [el('span', { class: 'vs-medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]));
+    const cine = el('div', { class: 'cine-vs' }, [
+      el('div', { class: 'vs-cards' }, [side(mine!, 0), el('div', { class: 'vs-badge', text: 'VS' }), ...others.slice(0, 2).map((p, k) => side(p, k + 1))]),
+      el('div', { class: 'vs-cats' }, [el('div', { class: 'vs-hint', text: `Un mot en ${view?.letter ?? ''} !` }), ...cats]),
+    ]);
+    screen.append(cine);
+    window.setTimeout(() => cine.remove(), VS_MS);
+  };
+
+  /** Taille des cartes du tapis : la plus grande qui fasse tenir tous les tas dans la place libre. */
+  const fitTapis = () => {
+    const n = tapis.children.length;
+    if (n === 0 || tapis.hidden) return;
+    // Place intérieure réelle du tapis (sans bordure ni marges intérieures).
+    const css = getComputedStyle(tapis);
+    const W = tapis.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    const H = tapis.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
+    let best = PILE_MIN_W;
+    let bestScore = 0;
+    for (let cols = 1; cols <= n; cols++) {
+      const rows = Math.ceil(n / cols);
+      // Marge par tas : badges qui dépassent et cartes du dessous décalées.
+      const byW = (W - (cols - 1) * PILE_GAP) / cols - PILE_SLACK;
+      const byH = (H - rows * PILE_LABEL_H - (rows - 1) * PILE_GAP) / rows / 1.4 - PILE_SLACK;
+      // Côte à côte plutôt qu'empilés, même un peu plus petits : on voit mieux qui affronte qui.
+      const score = Math.min(byW, byH) * (cols >= rows ? SIDE_BY_SIDE_BONUS : 1);
+      if (score > bestScore) [best, bestScore] = [Math.min(byW, byH), score];
+    }
+    const w = Math.floor(Math.max(PILE_MIN_W, Math.min(PILE_MAX_W, best)));
+    tapis.style.setProperty('--pile-w', `${w}px`);
+    tapis.classList.toggle('tiny', w < PILE_TINY_W);
+  };
+  new ResizeObserver(() => fitTapis()).observe(stage);
 
   // ---------- Partie ----------
 
@@ -344,7 +430,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         const mine = e.duels.some((d) => d.playerIds.includes(link.myId));
         status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' vs ')} · ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
         if (mine) {
-          stamp('DUEL !', 'duel');
+          showVersus(e.duels.find((d) => d.playerIds.includes(link.myId))!);
           play('duel');
           vibrate(VIBRATION.duel);
         }
@@ -412,6 +498,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     const b = to.getBoundingClientRect();
     for (let k = 0; k < count; k++) {
       const ghost = el('div', { class: 'card back small flying' });
+      ghost.style.setProperty('--w', `${Math.max(PILE_MIN_W, Math.round(Math.min(a.width, b.width, PILE_MAX_W)))}px`);
       ghost.style.left = `${a.left + a.width / 2}px`;
       ghost.style.top = `${a.top + a.height / 2}px`;
       document.body.append(ghost);
