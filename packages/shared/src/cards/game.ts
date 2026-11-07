@@ -5,7 +5,8 @@
  * catégorie Y » ; tout le reste (cartes, lettre, duels) est décidé ici.
  *
  * Déroulement d'une manche :
- * 1. une lettre est tirée au hasard ;
+ * 1. une lettre est tirée au hasard ; elle reste la même tant qu'il n'y a pas de
+ *    duel, et une nouvelle est tirée après chaque manche avec duel ;
  * 2. chacun retourne la carte du dessus de son paquet sur sa pile (on ne choisit pas) ;
  * 3. les joueurs dont les cartes du dessus ont une catégorie en commun s'affrontent
  *    en duel (la couleur ne compte pas) : le premier qui donne un mot valide (lettre +
@@ -55,7 +56,8 @@ export interface Duel {
 }
 
 export type GameEvent =
-  | { kind: 'letter'; letter: string; round: number }
+  /** `changed` : nouvelle lettre tirée (sinon on garde celle d'avant, faute de duel). */
+  | { kind: 'letter'; letter: string; round: number; changed: boolean }
   | { kind: 'reveal' }
   | { kind: 'duels'; duels: Duel[] }
   | { kind: 'noDuel' }
@@ -157,6 +159,7 @@ export class CardGame {
     this.round = 0;
     this.ranking = [];
     this.duels = [];
+    this.letter = '';
     return this.nextRound(now);
   }
 
@@ -235,12 +238,16 @@ export class CardGame {
   private nextRound(now: number): GameEvent[] {
     if (this.round >= CARD_GAME.maxRounds) return this.finish(now);
     this.round += 1;
-    const pool = [...CARD_GAME.letters].filter((l) => l !== this.letter);
-    this.letter = pool[Math.floor(this.rand() * pool.length)]!;
+    // Nouvelle lettre au début de la partie et après chaque duel ; sinon on garde la même.
+    const changed = this.letter === '' || this.duels.length > 0;
+    if (changed) {
+      const pool = [...CARD_GAME.letters].filter((l) => l !== this.letter);
+      this.letter = pool[Math.floor(this.rand() * pool.length)]!;
+    }
     this.duels = [];
     this.phase = 'letter';
-    this.endsAt = now + CARD_GAME.timing.letterMs;
-    return [{ kind: 'letter', letter: this.letter, round: this.round }];
+    this.endsAt = now + (changed ? CARD_GAME.timing.letterMs : CARD_GAME.timing.sameLetterMs);
+    return [{ kind: 'letter', letter: this.letter, round: this.round, changed }];
   }
 
   /** Tout le monde retourne la carte du dessus de son paquet, en même temps. */

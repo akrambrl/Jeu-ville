@@ -114,6 +114,27 @@ describe('partie', () => {
     expect(game.answer('a', 'sport', 'basket', t + 2000).error).toMatch(/catégorie commune/);
   });
 
+  it('la lettre reste la même tant qu’il n’y a pas de duel, et change après un duel', () => {
+    const { game, a, b, t } = twoPlayersAtReveal();
+    const first = game.letter;
+    run(game, 0, t);
+    // Aucune catégorie en commun : pas de duel.
+    a.pile.at(-1)!.categories = ['animal', 'sport'];
+    b.pile.at(-1)!.categories = ['job', 'brand'];
+    const events = run(game, t, t + revealMs + CARD_GAME.timing.noDuelMs);
+    expect(events).toContainEqual({ kind: 'letter', letter: first, round: 2, changed: false });
+    // Manche 2 : duel forcé, puis délai écoulé → nouvelle lettre à la manche 3.
+    const t2 = t + revealMs + CARD_GAME.timing.noDuelMs + CARD_GAME.timing.sameLetterMs;
+    run(game, t + revealMs + CARD_GAME.timing.noDuelMs, t2);
+    a.pile.at(-1)!.categories = ['animal', 'sport'];
+    b.pile.at(-1)!.categories = ['animal', 'brand'];
+    const end = t2 + revealMs + CARD_GAME.timing.duelIntroMs + duelMs + CARD_GAME.timing.resultMs;
+    const later = run(game, t2, end);
+    const next = later.find((e) => e.kind === 'letter');
+    expect(next).toMatchObject({ kind: 'letter', round: 3, changed: true });
+    expect(next && next.kind === 'letter' && next.letter).not.toBe(first);
+  });
+
   it('tout le monde retourne sa carte en même temps', () => {
     const { game, t } = twoPlayersAtReveal();
     run(game, 0, t);

@@ -26,8 +26,10 @@ export const CARD_GAME = {
   timing: {
     /** En ligne : attente avant le début, dès qu'il y a assez de joueurs. */
     lobbyMs: 10_000,
-    /** Tirage de la lettre (animation) avant que les cartes soient posées. */
+    /** Tirage d'une nouvelle lettre (animation) avant que les cartes soient posées. */
     letterMs: 2_500,
+    /** Même lettre qu'à la manche d'avant (pas de duel) : petite pause avant de poser. */
+    sameLetterMs: 900,
     /** Cartes retournées sur la table, le temps de voir les couleurs. */
     revealMs: 1_500,
     /** Cinématique « VS » au début d'un duel : ne compte pas dans le temps de réponse. */

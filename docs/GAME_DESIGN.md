@@ -26,6 +26,8 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
 
 1. Une **lettre** est tirée au hasard (les lettres trop dures — K, Q, U, W, X,
    Y, Z — sont exclues).
+   Elle reste **la même tant qu'il n'y a pas de duel** ; une nouvelle lettre est
+   tirée après chaque manche avec duel (gagné ou non).
 2. Tout le monde **retourne en même temps** la carte du dessus de son paquet et
    la pose sur sa **pile**, face visible. On ne choisit pas sa carte.
 3. Si la carte du dessus de ma pile a **au moins une catégorie en commun** avec

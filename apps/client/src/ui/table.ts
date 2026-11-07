@@ -412,8 +412,16 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     switch (e.kind) {
       case 'letter':
         badges = new Map();
-        status.textContent = 'Tirage de la lettre…';
-        rollLetter(e.letter);
+        if (e.changed) {
+          status.textContent = 'Tirage de la lettre…';
+          rollLetter(e.letter);
+        } else {
+          // Pas de duel à la manche d'avant : on garde la même lettre.
+          status.textContent = `Toujours la lettre ${e.letter} !`;
+          letterBadge.classList.remove('pop');
+          void letterBadge.offsetWidth;
+          letterBadge.classList.add('pop');
+        }
         break;
       case 'reveal':
         status.textContent = 'Cartes posées !';
