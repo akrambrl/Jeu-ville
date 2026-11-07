@@ -1,20 +1,29 @@
-/** Dessin d'une carte (face visible ou dos), en DOM/CSS : style « sticker » à contour épais. */
-import { CARD_COLOR_LABELS, CATEGORIES, type Card, type CategoryId } from '@jeu-ville/shared';
+/**
+ * Dessin d'une carte (face visible ou dos), en DOM/CSS : style « sticker » à
+ * contour épais. Chaque moitié de la carte prend la couleur de sa catégorie.
+ */
+import { CATEGORIES, type Card, type CategoryId } from '@jeu-ville/shared';
 import { el } from './dom.js';
 
+/** Applique la couleur d'une catégorie (variable CSS --cat) à un élément. */
+export function tintCategory<T extends HTMLElement>(node: T, c: CategoryId): T {
+  node.style.setProperty('--cat', CATEGORIES[c].color);
+  return node;
+}
+
 const category = (c: CategoryId) =>
-  el('div', { class: 'cat' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { class: 'label', text: CATEGORIES[c].label })]);
+  tintCategory(el('div', { class: 'cat' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { class: 'label', text: CATEGORIES[c].label })]), c);
 
 /** `fresh` : la carte vient d'être posée (animation de retournement). */
 export function cardFace(card: Card, size: 'big' | 'small' = 'small', fresh = false): HTMLElement {
   const [a, b] = card.categories;
   const node = el('div', { class: `card face ${size}${fresh ? ' fresh' : ''}`, title: `${CATEGORIES[a].label} / ${CATEGORIES[b].label}` }, [
-    el('div', { class: 'band' }, [el('span', { class: 'mono', text: 'BB' })]),
     category(a),
     el('div', { class: 'or', text: 'ou' }),
     category(b),
   ]);
-  node.style.setProperty('--card', CARD_COLOR_LABELS[card.color].hex);
+  node.style.setProperty('--cat-a', CATEGORIES[a].color);
+  node.style.setProperty('--cat-b', CATEGORIES[b].color);
   return node;
 }
 

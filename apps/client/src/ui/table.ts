@@ -6,7 +6,7 @@
  */
 import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
 import type { TableLink } from '../net/tableLink.js';
-import { cardBack, cardFace, cardSlot } from './cardView.js';
+import { cardBack, cardFace, cardSlot, tintCategory } from './cardView.js';
 import { el, showToast } from './dom.js';
 import { confetti, muteButton, play } from './fx.js';
 import { showRules } from './rules.js';
@@ -193,7 +193,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     const send = el('button', { class: 'primary send', text: 'GO !' });
     const feedback = el('div', { class: 'feedback' });
     const choices = duel.categories.map((c) => {
-      const b = el('button', { class: `choice${c === selectedCategory ? ' selected' : ''}`, type: 'button' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]);
+      const b = tintCategory(el('button', { class: `choice${c === selectedCategory ? ' selected' : ''}`, type: 'button' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c);
       b.addEventListener('click', () => {
         selectedCategory = c;
         for (const x of choices) x.classList.toggle('selected', x === b);
@@ -365,7 +365,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       const card = cardFace(p.top!, 'small');
       return el('div', { class: `vs-side side-${k}` }, [card, el('div', { class: 'vs-name', text: p.id === link.myId ? 'Toi' : p.name })]);
     };
-    const cats = d.categories.map((c) => el('div', { class: 'vs-cat' }, [el('span', { class: 'vs-medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]));
+    const cats = d.categories.map((c) => tintCategory(el('div', { class: 'vs-cat' }, [el('span', { class: 'vs-medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c));
     const cine = el('div', { class: 'cine-vs' }, [
       el('div', { class: 'vs-cards' }, [side(mine!, 0), el('div', { class: 'vs-badge', text: 'VS' }), ...others.slice(0, 2).map((p, k) => side(p, k + 1))]),
       el('div', { class: 'vs-cats' }, [el('div', { class: 'vs-hint', text: `Un mot en ${view?.letter ?? ''} !` }), ...cats]),

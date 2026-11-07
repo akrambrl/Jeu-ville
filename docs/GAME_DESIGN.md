@@ -13,7 +13,12 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
 
 - Chaque joueur reçoit le même nombre de cartes, face cachée (son **paquet**).
 - Chaque carte porte **deux catégories**, par exemple « Prénom / Pays ou ville ».
-  Sa **couleur** (rouge, bleu, vert, jaune) est décorative : elle ne compte pas.
+- **Chaque catégorie a sa couleur** (Prénom rose, Fruit ou légume vert, Métier
+  orange, Pays ou ville bleu, Animal marron, Célébrité or, Marque violet, Sport
+  rouge, Objet de la maison turquoise, Plat ou dessert magenta, Vêtement bleu
+  ciel, Partie du corps pêche) : chaque moitié de carte prend la couleur de sa
+  catégorie. Deux cartes qui ont une couleur en commun ont donc une catégorie en
+  commun. Couleurs dans `packages/shared/src/cards/categories.ts`.
 - Le nombre de catégories en jeu dépend du nombre de joueurs (tirées au hasard à
   chaque partie), pour que les duels ne se fassent pas attendre : **7 à
   2 joueurs** (un duel environ une manche sur deux), **9 à 3**, **10 à 4**,
@@ -68,8 +73,8 @@ Cinématiques :
 Ambiance **jeu télé / stickers** : fond nuit violet éclairé de projecteurs,
 accents néon (rose `#ff3d7f`, or `#ffc93c`, cyan `#2ee6d6`), contours épais
 encre (`#1b1340`) et ombres dures façon cartoon. Typo **Lilita One** (titres,
-boutons, lettre) et **Nunito** (texte). Cartes en papier crème avec bandeau de
-couleur et médaillons de catégorie ; dos de carte nuit à monogramme doré « BB ».
+boutons, lettre) et **Nunito** (texte). Cartes en deux moitiés aux couleurs de leurs
+catégories, avec médaillons et pastille « ou » ; dos de carte nuit à monogramme doré « BB ».
 Animations : roue de la lettre à rayons, tampon « DUEL ! », barre de temps,
 confettis quand on gagne. Petits sons synthétisés (coupables avec 🔊).
 Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et

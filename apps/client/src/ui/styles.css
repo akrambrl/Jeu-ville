@@ -494,7 +494,7 @@ button.round {
 
 .chip {
   border: 2px solid var(--ink);
-  background: #fff;
+  background: color-mix(in srgb, var(--cat, #fff) 45%, #fff);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 0.85em;
@@ -505,7 +505,6 @@ button.round {
 
 .card {
   --w: 74px;
-  --card: var(--pink);
   position: relative;
   flex: none;
   width: var(--w);
@@ -520,23 +519,11 @@ button.round {
 .card.face {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0 calc(var(--w) * 0.06);
   background: var(--paper);
   border: var(--line);
   box-shadow: 0 4px 0 var(--ink);
   overflow: hidden;
   color: var(--ink);
-}
-
-.card .band {
-  align-self: stretch;
-  height: calc(var(--w) * 0.2);
-  display: grid;
-  place-items: center;
-  background: repeating-linear-gradient(-45deg, var(--card) 0 6px, color-mix(in srgb, var(--card) 82%, #fff) 6px 12px);
-  border-bottom: 2px solid var(--ink);
 }
 
 .card .mono {
@@ -547,23 +534,36 @@ button.round {
   paint-order: stroke fill;
 }
 
+/* Une moitié de carte par catégorie, à la couleur de la catégorie (--cat). */
 .card .cat {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  max-width: 100%;
+  justify-content: center;
+  gap: calc(var(--w) * 0.03);
+  padding: calc(var(--w) * 0.03) 3px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.45), transparent 65%),
+    color-mix(in srgb, var(--cat) 62%, #fff);
+}
+
+.card .cat:first-child {
+  border-bottom: 2px solid var(--ink);
 }
 
 .card .medal {
-  width: calc(var(--w) * 0.34);
-  height: calc(var(--w) * 0.34);
+  width: calc(var(--w) * 0.36);
+  height: calc(var(--w) * 0.36);
+  flex: none;
   display: grid;
   place-items: center;
-  font-size: calc(var(--w) * 0.2);
-  background: color-mix(in srgb, var(--card) 28%, #fff);
+  font-size: calc(var(--w) * 0.21);
+  background: #fff;
   border: 2px solid var(--ink);
   border-radius: 50%;
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .card .label {
@@ -575,10 +575,20 @@ button.round {
   overflow-wrap: anywhere;
 }
 
+/* Pastille « ou » à la jonction des deux moitiés. */
 .card .or {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  padding: 0 0.45em;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
   font-weight: 900;
-  font-size: calc(var(--w) * 0.1);
-  color: var(--muted);
+  font-size: calc(var(--w) * 0.085);
+  line-height: 1.5;
   text-transform: uppercase;
 }
 
@@ -831,15 +841,11 @@ button.round {
   display: none;
 }
 
-.tapis.tiny .card.face {
-  justify-content: flex-start;
-  gap: calc(var(--w) * 0.08);
-}
 
 .tapis.tiny .card .medal {
-  width: calc(var(--w) * 0.42);
-  height: calc(var(--w) * 0.42);
-  font-size: calc(var(--w) * 0.24);
+  width: calc(var(--w) * 0.46);
+  height: calc(var(--w) * 0.46);
+  font-size: calc(var(--w) * 0.26);
 }
 
 .pile-tile {
@@ -1190,10 +1196,12 @@ button.round {
   padding: 6px 22px 6px 8px;
   border: 4px solid var(--ink);
   border-radius: 999px;
-  background: var(--gold);
+  background: color-mix(in srgb, var(--cat, var(--gold)) 80%, #fff);
   box-shadow: 0 6px 0 var(--ink);
   font-family: var(--font-display);
-  font-size: clamp(28px, 9vw, 48px);
+  font-size: clamp(22px, 7.4vw, 46px);
+  white-space: nowrap;
+  max-width: 94vw;
   color: var(--ink);
 }
 
@@ -1317,8 +1325,14 @@ button.round {
   font-size: 22px;
 }
 
+.choice {
+  background: color-mix(in srgb, var(--cat, #fff) 25%, #fff);
+}
+
 .choice.selected {
-  background: var(--cyan);
+  background: color-mix(in srgb, var(--cat, var(--cyan)) 75%, #fff);
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
 }
 
 .answer-row {
