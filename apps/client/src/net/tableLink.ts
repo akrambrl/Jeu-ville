@@ -19,7 +19,8 @@ export interface TableLink {
   /** Identifiant de ce joueur à la table. */
   readonly myId: string;
   readonly mode: 'online' | 'solo';
-  answer(category: CategoryId, text: string): void;
+  /** `category` null : le mot vaut dans n'importe quelle catégorie commune du duel. */
+  answer(category: CategoryId | null, text: string): void;
   onView(cb: (view: GameView) => void): void;
   onEvent(cb: (event: GameEvent) => void): void;
   onNotice(cb: (notice: Notice) => void): void;
@@ -39,7 +40,7 @@ export class OnlineTableLink implements TableLink {
     return this.room.sessionId;
   }
 
-  answer(category: CategoryId, text: string): void {
+  answer(category: CategoryId | null, text: string): void {
     this.room.send(CardClientMessage.answer, { category, text } satisfies AnswerMessage);
   }
 
@@ -107,7 +108,7 @@ export class SoloTableLink implements TableLink {
     for (const cb of this.viewCbs) cb(view);
   }
 
-  answer(category: CategoryId, text: string): void {
+  answer(category: CategoryId | null, text: string): void {
     const { error, events } = this.game.answer(SOLO_ID, category, text, Date.now());
     if (error) for (const cb of this.noticeCbs) cb({ level: 'error', text: error });
     this.publish(events);

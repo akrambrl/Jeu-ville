@@ -164,6 +164,17 @@ describe('partie', () => {
     expect(game.phase).toBe('result');
   });
 
+  it('sans choisir de catégorie, le mot vaut dans n’importe quelle catégorie commune', () => {
+    const { game, a, b, t } = twoPlayersAtReveal();
+    run(game, 0, t);
+    a.pile.at(-1)!.categories = ['animal', 'sport'];
+    b.pile.at(-1)!.categories = ['sport', 'animal'];
+    run(game, t, t + CARD_GAME.timing.revealMs);
+    game.letter = 'T';
+    expect(game.answer('a', null, 'tennis', t + 3000).error).toBeNull();
+    expect(game.duels[0]).toMatchObject({ winnerId: 'a', category: 'sport' });
+  });
+
   it('une mauvaise réponse bloque un instant, une catégorie hors carte est refusée', () => {
     const { game, a, b, t } = twoPlayersAtReveal();
     const now = forceDuel(game, a, b, t);

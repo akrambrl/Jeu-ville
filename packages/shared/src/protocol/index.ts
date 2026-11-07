@@ -50,7 +50,8 @@ export const CardClientMessage = {
 } as const;
 
 export const answerSchema = z.object({
-  category: z.enum(CATEGORY_IDS as [CategoryId, ...CategoryId[]]),
+  /** Absente : le mot vaut dans n'importe quelle catégorie commune du duel. */
+  category: z.enum(CATEGORY_IDS as [CategoryId, ...CategoryId[]]).nullable().default(null),
   text: z.string().max(CARD_GAME.answer.maxLength),
 });
 export type AnswerMessage = z.infer<typeof answerSchema>;

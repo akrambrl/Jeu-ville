@@ -1,10 +1,12 @@
 /** Fenêtre des règles du jeu. */
 import { CARD_GAME, CATEGORIES, CATEGORY_IDS } from '@jeu-ville/shared';
 import { tintCategory } from './cardView.js';
+import { showTutorial } from './tutorial.js';
 import { el } from './dom.js';
 
 export function showRules(root: HTMLElement): void {
   const close = el('button', { class: 'primary', text: 'Compris !' });
+  const tuto = el('button', { text: '🎬 Voir le tuto' });
   const overlay = el('div', { class: 'overlay' }, [
     el('div', { class: 'panel rules' }, [
       el('h2', { text: 'Comment on joue ?' }),
@@ -18,9 +20,13 @@ export function showRules(root: HTMLElement): void {
       ]),
       el('p', { class: 'muted', text: 'Accents, majuscules, articles et pluriels ne comptent pas. Les mots sont vérifiés avec la liste du jeu.' }),
       el('div', { class: 'chips' }, CATEGORY_IDS.map((c) => tintCategory(el('span', { class: 'chip', text: `${CATEGORIES[c].icon} ${CATEGORIES[c].label}` }), c))),
-      el('div', { class: 'actions' }, [close]),
+      el('div', { class: 'actions' }, [tuto, close]),
     ]),
   ]);
   close.addEventListener('click', () => overlay.remove());
+  tuto.addEventListener('click', () => {
+    overlay.remove();
+    showTutorial(root);
+  });
   root.append(overlay);
 }

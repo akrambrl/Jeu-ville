@@ -5,6 +5,7 @@ import { ApiError, SERVER_URL, api, tokenStore } from './net/api.js';
 import { OnlineTableLink, SoloTableLink } from './net/tableLink.js';
 import { showHome, type HomeChoice } from './ui/home.js';
 import { showTable } from './ui/table.js';
+import { showTutorial, tutorialSeen } from './ui/tutorial.js';
 
 /** Session valide pour ce pseudo (on en crée une si besoin). */
 async function sessionFor(pseudo: string): Promise<string> {
@@ -25,6 +26,8 @@ async function sessionFor(pseudo: string): Promise<string> {
 export function startApp(ui: HTMLElement, options: { online: boolean }): void {
   const home = () => showHome(ui, options, play);
   const play = async (choice: HomeChoice) => {
+    // Toute première partie : le tutoriel d'abord.
+    if (!tutorialSeen()) await new Promise<void>((done) => showTutorial(ui, done));
     if (choice.mode === 'solo') return showTable(ui, new SoloTableLink(choice.pseudo, choice.bots), home);
     const token = await sessionFor(choice.pseudo);
     const room = await new Client(SERVER_URL).joinOrCreate(ROOM_CARDS, { token } satisfies CardsJoinOptions).catch((err: Error) => {

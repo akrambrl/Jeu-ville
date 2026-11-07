@@ -12,16 +12,24 @@ export function tintCategory<T extends HTMLElement>(node: T, c: CategoryId): T {
 }
 
 const category = (c: CategoryId) =>
-  tintCategory(el('div', { class: 'cat' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { class: 'label', text: CATEGORIES[c].label })]), c);
+  tintCategory(el('div', { class: 'cat', 'data-cat': c }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { class: 'label', text: CATEGORIES[c].label })]), c);
 
-/** `fresh` : la carte vient d'être posée (animation de retournement). */
-export function cardFace(card: Card, size: 'big' | 'small' = 'small', fresh = false): HTMLElement {
+/**
+ * `fresh` : la carte vient d'être posée (animation de retournement).
+ * `highlight` : catégories du duel en cours, mises en valeur (les autres s'estompent).
+ */
+export function cardFace(card: Card, size: 'big' | 'small' = 'small', fresh = false, highlight: readonly CategoryId[] = []): HTMLElement {
   const [a, b] = card.categories;
   const node = el('div', { class: `card face ${size}${fresh ? ' fresh' : ''}`, title: `${CATEGORIES[a].label} / ${CATEGORIES[b].label}` }, [
     category(a),
     el('div', { class: 'or', text: 'ou' }),
     category(b),
   ]);
+  if (highlight.length > 0) {
+    for (const half of node.querySelectorAll<HTMLElement>('.cat')) {
+      half.classList.add(highlight.includes(half.dataset.cat as CategoryId) ? 'match' : 'dim');
+    }
+  }
   node.style.setProperty('--cat-a', CATEGORIES[a].color);
   node.style.setProperty('--cat-b', CATEGORIES[b].color);
   return node;

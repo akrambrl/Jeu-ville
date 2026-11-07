@@ -74,7 +74,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   /** Résultat de la dernière manche, par joueur (badge sur son siège). */
   let badges = new Map<string, string>();
   let duelPanelFor = 0;
-  let selectedCategory: CategoryId | null = null;
   /** Dernière carte affichée sur chaque pile (pour n'animer que les nouvelles). */
   const shownTop = new Map<string, number>();
 
@@ -149,7 +148,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         layer.style.transform = `translate(${(k + 1) * 2}px, ${(k + 1) * 2}px) rotate(${((hash(p.id) + k * 7) % 9) - 4}deg)`;
         return layer;
       }),
-      p.top ? cardFace(p.top, 'small', fresh) : cardSlot('small'),
+      p.top ? cardFace(p.top, 'small', fresh, inDuel ? duel!.categories : []) : cardSlot('small'),
     ]);
     if (p.pileCount > 0) stack.append(el('span', { class: 'count', text: String(p.pileCount) }));
     const label = el('div', { class: 'pile-name', text: p.id === link.myId ? 'Toi' : p.name });
@@ -187,25 +186,32 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     }
     if (duelPanelFor === duel.id) return;
     duelPanelFor = duel.id;
-    selectedCategory = duel.categories[0] ?? null;
     const rivals = duel.playerIds.filter((id) => id !== link.myId).map(nameOf).join(', ');
-    const input = el('input', { type: 'text', maxlength: String(CARD_GAME.answer.maxLength), placeholder: `Un mot en ${view.letter}…`, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+    const letter = view.letter;
+    // Le champ commence par la lettre : on tape la suite du mot directement.
+    const input = el('input', {
+      type: 'text',
+      maxlength: String(CARD_GAME.answer.maxLength),
+      placeholder: `Un mot en ${letter}…`,
+      autocomplete: 'off',
+      autocapitalize: 'off',
+      autocorrect: 'off',
+      spellcheck: 'false',
+      enterkeyhint: 'go',
+    });
+    input.value = letter;
     const send = el('button', { class: 'primary send', text: 'GO !' });
     const feedback = el('div', { class: 'feedback' });
-    const choices = duel.categories.map((c) => {
-      const b = tintCategory(el('button', { class: `choice${c === selectedCategory ? ' selected' : ''}`, type: 'button' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c);
-      b.addEventListener('click', () => {
-        selectedCategory = c;
-        for (const x of choices) x.classList.toggle('selected', x === b);
-        input.focus();
-      });
-      return b;
-    });
+    // Catégories du duel (pour info : le mot vaut dans n'importe laquelle, pas besoin de choisir).
+    const cats = duel.categories.map((c) =>
+      tintCategory(el('div', { class: 'choice' }, [el('span', { class: 'medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c),
+    );
     const submit = () => {
       const text = input.value.trim();
-      if (!text || !selectedCategory) return;
-      link.answer(selectedCategory, text);
-      input.select();
+      if (text.length <= letter.length) return;
+      link.answer(null, text);
+      // Après une erreur, on garde la lettre et on resélectionne la suite pour retaper vite.
+      input.setSelectionRange(letter.length, input.value.length);
     };
     send.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => {
@@ -214,15 +220,17 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     duelPanel.replaceChildren(
       el('div', { class: 'duel-title' }, [
         el('div', {}, [el('div', { class: 'duel-word', text: 'Duel !' }), el('div', { class: 'duel-vs', text: `contre ${rivals}` })]),
-        el('span', { class: 'duel-letter', text: view.letter }),
+        el('span', { class: 'duel-letter', text: letter }),
       ]),
       duelTimer(),
-      el('div', { class: 'choices' }, choices),
+      el('div', { class: 'duel-ask', text: duel.categories.length > 1 ? `Un mot en ${letter}, dans une de ces catégories :` : `Un mot en ${letter}, dans la catégorie :` }),
+      el('div', { class: 'choices' }, cats),
       el('div', { class: 'answer-row' }, [input, send]),
       feedback,
     );
     duelPanel.hidden = false;
     input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
   };
 
   /** Barre de temps du duel : elle se vide jusqu'à la fin du duel. */
@@ -362,11 +370,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     if (players.length < 2) return;
     const [mine, ...others] = [...players].sort((a, b) => (a.id === link.myId ? -1 : b.id === link.myId ? 1 : 0));
     const side = (p: PlayerView, k: number) => {
-      const card = cardFace(p.top!, 'small');
+      const card = cardFace(p.top!, 'small', false, d.categories);
       return el('div', { class: `vs-side side-${k}` }, [card, el('div', { class: 'vs-name', text: p.id === link.myId ? 'Toi' : p.name })]);
     };
     const cats = d.categories.map((c) => tintCategory(el('div', { class: 'vs-cat' }, [el('span', { class: 'vs-medal', text: CATEGORIES[c].icon }), el('span', { text: CATEGORIES[c].label })]), c));
     const cine = el('div', { class: 'cine-vs' }, [
+      el('div', { class: 'vs-title', text: 'Même catégorie !' }),
       el('div', { class: 'vs-cards' }, [side(mine!, 0), el('div', { class: 'vs-badge', text: 'VS' }), ...others.slice(0, 2).map((p, k) => side(p, k + 1))]),
       el('div', { class: 'vs-cats' }, [el('div', { class: 'vs-hint', text: `Un mot en ${view?.letter ?? ''} !` }), ...cats]),
     ]);
@@ -432,11 +441,12 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         }
         break;
       case 'noDuel':
-        status.textContent = 'Aucune catégorie en commun… on continue !';
+        status.textContent = 'Aucune catégorie en commun : pas de duel, on repose une carte !';
         break;
       case 'duels': {
         const mine = e.duels.some((d) => d.playerIds.includes(link.myId));
-        status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' vs ')} · ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
+        status.textContent = e.duels.map((d) => `⚔️ ${d.playerIds.map(nameOf).join(' contre ')} en ${d.categories.map((c) => `${CATEGORIES[c].icon} ${CATEGORIES[c].label}`).join(' ou ')}`).join('\n');
+        if (!mine) showToast(screen, '👀 Duel entre les autres joueurs : regarde qui sera le plus rapide !', 'info', 2200);
         if (mine) {
           showVersus(e.duels.find((d) => d.playerIds.includes(link.myId))!);
           play('duel');
@@ -483,15 +493,17 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     status.textContent = `🏆 ${winner} : « ${d.word} » (${cat}) · ${losers}`;
     badges.set(d.winnerId!, '🏆');
     for (const l of d.losers) badges.set(l.id, `+${l.cards}`);
+    const total = d.losers.reduce((sum, l) => sum + l.cards, 0);
     if (d.winnerId === link.myId) {
       stamp('BIEN JOUÉ !', 'win');
-      showToast(screen, `« ${d.word} » ✅`, 'win');
+      showToast(screen, `« ${d.word} » ✅ Tu te débarrasses de tes cartes : ${d.losers.map((l) => nameOf(l.id)).join(', ')} ramasse ${total} carte${total > 1 ? 's' : ''} !`, 'win', 3200);
       play('right');
       vibrate(VIBRATION.right);
       const r = pileEl(link.myId)?.getBoundingClientRect();
       confetti(r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : undefined);
     } else if (d.playerIds.includes(link.myId)) {
-      showToast(screen, `😩 ${winner} a été plus rapide : « ${d.word} »`, 'error');
+      const mineTaken = d.losers.find((l) => l.id === link.myId)?.cards ?? 0;
+      showToast(screen, `😩 ${winner} a été plus rapide avec « ${d.word} ». Tu ramasses ${mineTaken} carte${mineTaken > 1 ? 's' : ''}…`, 'error', 3200);
       play('lose');
     }
   };

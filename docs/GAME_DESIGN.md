@@ -41,7 +41,9 @@ Se débarrasser de toutes ses cartes. Le premier qui n'a plus aucune carte
    d'abord le plus grand groupe autour d'une même catégorie.
 4. Pendant le duel, chacun écrit le plus vite possible un mot qui commence par
    la lettre, **dans la catégorie commune** (si les cartes ont leurs deux
-   catégories en commun, au choix).
+   catégories en commun, l'une ou l'autre). Pas besoin de choisir la catégorie :
+   le mot est accepté dans n'importe quelle catégorie commune. Le champ de
+   réponse commence déjà par la lettre.
 5. Le **premier qui donne un mot valide gagne** : il se débarrasse de sa pile, et
    le perdant **récupère les deux piles** sous son paquet. À plusieurs perdants,
    chacun reprend sa pile et la pile du gagnant est partagée entre eux.
@@ -79,6 +81,16 @@ Animations : roue de la lettre à rayons, tampon « DUEL ! », barre de temps,
 confettis quand on gagne. Petits sons synthétisés (coupables avec 🔊).
 Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
 `apps/client/src/ui/fx.ts` (sons, confettis).
+
+## Prise en main
+
+- **Tutoriel illustré en 4 étapes**, montré automatiquement avant la toute
+  première partie (but du jeu, lettre et cartes posées, duel sur une catégorie
+  commune, réponse la plus rapide) ; on peut le revoir depuis « Comment on joue ? ».
+- Pendant un duel, la **moitié de carte de la catégorie commune brille** sur le
+  tapis et dans le « VS » (l'autre moitié s'estompe) : on voit pourquoi il y a duel.
+- Messages explicites : « Tu te débarrasses de tes cartes : Chloé ramasse
+  4 cartes ! », « Tu ramasses 3 cartes… », duel entre les autres joueurs signalé.
 
 ## Réponses
 

@@ -165,23 +165,29 @@ export class CardGame {
 
   // ---------- Intention du joueur ----------
 
-  /** « Je réponds `text` dans la catégorie `category` » pendant un duel. */
-  answer(playerId: string, category: CategoryId, text: string, now: number): AnswerResult {
+  /**
+   * « Je réponds `text` » pendant un duel. Sans catégorie (`null`), le mot est
+   * accepté dans n'importe quelle catégorie commune du duel : pas besoin de choisir.
+   */
+  answer(playerId: string, category: CategoryId | null, text: string, now: number): AnswerResult {
     const none = (error: string | null): AnswerResult => ({ error, events: [] });
     if (this.phase !== 'duel') return none('Pas de duel en cours.');
     const p = this.players.find((x) => x.id === playerId);
     const duel = this.duels.find((d) => d.winnerId === null && d.playerIds.includes(playerId));
     if (!p || !duel) return none('Tu n’es pas dans un duel.');
     const top = p.pile.at(-1);
-    if (!top || !duel.categories.includes(category)) return none('Réponds dans la catégorie commune du duel.');
+    if (!top || (category !== null && !duel.categories.includes(category))) return none('Réponds dans la catégorie commune du duel.');
     if (now < p.lockedUntil) return none('Attends une seconde avant de réessayer.');
     if (text.length > CARD_GAME.answer.maxLength) return none('Réponse trop longue.');
-    const check = checkAnswer(category, this.letter, text);
-    if (!check.ok) {
+    const tried = (category === null ? duel.categories : [category]).map((c) => ({ c, check: checkAnswer(c, this.letter, text) }));
+    const found = tried.find((t) => t.check.ok);
+    if (!found || !found.check.ok) {
       p.lockedUntil = now + CARD_GAME.answer.wrongLockMs;
-      return none(check.reason);
+      // Le motif le plus utile : « mauvaise lettre » avant « pas dans la liste ».
+      const reasons = tried.map((t) => (t.check.ok ? '' : t.check.reason));
+      return none(reasons.find((r) => r.startsWith('Ça ne commence')) ?? reasons[0] ?? 'Réponse refusée.');
     }
-    const events: GameEvent[] = [{ kind: 'duelWon', duel: this.resolveDuel(duel, p, check.word, category) }];
+    const events: GameEvent[] = [{ kind: 'duelWon', duel: this.resolveDuel(duel, p, found.check.word, found.c) }];
     if (this.duels.every((d) => d.winnerId !== null)) events.push(...this.toResult(now, CARD_GAME.timing.resultMs));
     return { error: null, events };
   }
