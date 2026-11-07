@@ -37,15 +37,29 @@ const TILE_MAX_W = 150;
 const REEL_GAP = 12;
 /** … place prise autour d'une tuile (cadre du rouleau, bordures comprises ; nom en dessous). */
 const REEL_FRAME = 14;
-const REEL_LABEL_H = 12;
-/** Place gardée en bas du tapis pour « Catégorie en Lettre » (posé par-dessus, voir .round-ask). */
-const ASK_H = 26;
+const REEL_LABEL_H = 14;
+/** La bourse et le nom débordent un peu sur les côtés du rouleau (voir .reel-tile .purse). */
+const TAG_OVERFLOW = 12;
+/** Le tas du milieu : largeur et hauteur réservées (voir .pot). */
+const POT_W = 76;
+const POT_H = 100;
 /** Rapport hauteur / largeur d'une tuile (voir .cat-tile). */
 const TILE_RATIO = 1.05;
 /** En dessous de cette largeur, les tuiles n'affichent que le médaillon. */
 const TILE_TINY_W = 66;
-/** Au-delà de tant d'adversaires, leurs sièges n'affichent que l'avatar et la bourse. */
-const CROWD_OPPONENTS = 3;
+/**
+ * Place des adversaires autour de la table, selon leur nombre (on est toujours
+ * en bas) : 1 en face ; 2 à gauche et à droite ; 3 à gauche, en face, à droite…
+ * Les places suivent l'ordre de la table, dans le sens des aiguilles d'une montre.
+ */
+const SEATING: Record<number, Side[]> = {
+  1: ['top'],
+  2: ['left', 'right'],
+  3: ['left', 'top', 'right'],
+  4: ['left', 'top', 'top', 'right'],
+  5: ['left', 'top', 'top', 'top', 'right'],
+};
+type Side = 'top' | 'left' | 'right' | 'bottom';
 
 const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb8500'];
 
@@ -63,15 +77,18 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const help = el('button', { class: 'icon-button', text: '?', title: 'Règles' });
   const roundLabel = el('div', { class: 'round-label' });
   const timer = el('div', { class: 'timer' });
-  const opponents = el('div', { class: 'opponents' });
-  /** Rouleaux de catégories, un par joueur en lice. */
-  const reels = el('div', { class: 'reels' });
+  /** Places autour du tapis : rouleau, nom et bourse de chaque joueur (soi en bas). */
+  const sides: Record<Side, HTMLElement> = {
+    top: el('div', { class: 'side side-top' }),
+    left: el('div', { class: 'side side-left' }),
+    right: el('div', { class: 'side side-right' }),
+    bottom: el('div', { class: 'side side-bottom' }),
+  };
   /** Le tas de pièces au milieu. */
   const potCoins = el('div', { class: 'pot-coins' });
   const potCount = el('div', { class: 'pot-count' });
   const pot = el('div', { class: 'pot' }, [potCoins, potCount]);
-  const ask = el('div', { class: 'round-ask' });
-  const tapis = el('div', { class: 'tapis' }, [reels, pot, ask]);
+  const tapis = el('div', { class: 'tapis' }, [sides.top, sides.left, pot, sides.right, sides.bottom]);
   const letterBadge = el('div', { class: 'letter-badge' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter' })]);
   const status = el('div', { class: 'status' });
   const stage = el('div', { class: 'stage' }, [tapis, status]);
@@ -80,7 +97,6 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const overlay = el('div', { class: 'overlay table-overlay', hidden: '' });
   const screen = el('div', { class: 'table-screen' }, [
     el('div', { class: 'topbar' }, [quit, roundLabel, letterBadge, timer, muteButton('icon-button'), help]),
-    opponents,
     stage,
     mySeat,
     duelPanel,
@@ -119,23 +135,55 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return node;
   };
 
-  /** Rouleau d'un joueur sur le tapis (créé une fois : le défilement continue entre deux rendus). */
+  /** Rouleau d'un joueur sur le tapis, avec son nom et sa bourse (créé une fois : le défilement continue entre deux rendus). */
+  const tiles = new Map<string, HTMLElement>();
   const reelTile = (p: PlayerView): HTMLElement => {
-    let node = reels.querySelector<HTMLElement>(`.reel-tile[data-player="${p.id}"]`);
+    const mine = p.id === link.myId;
+    let node = tiles.get(p.id);
     if (!node) {
-      node = el('div', { class: `reel-tile${p.id === link.myId ? ' mine' : ''}` }, [
+      node = el('div', { class: `reel-tile${mine ? ' mine' : ''}` }, [
         el('div', { class: 'reel' }, [el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '?' })])]),
-        el('div', { class: 'reel-name' }),
+        el('div', { class: 'reel-tag' }, [el('div', { class: 'reel-name' })]),
+        ...(mine ? [] : [el('div', { class: 'purse' })]),
       ]);
       node.dataset.player = p.id;
+      tiles.set(p.id, node);
     }
+    node.classList.toggle('out', p.out);
+    node.classList.toggle('left', p.left);
     const label = node.querySelector<HTMLElement>('.reel-name')!;
-    label.textContent = p.id === link.myId ? 'Toi' : p.name;
+    label.textContent = mine ? 'Toi' : p.name;
     label.style.background = colorOf(p.id);
+    const purse = node.querySelector<HTMLElement>('.purse');
+    if (purse) {
+      const text = p.out ? '💀' : String(p.coins);
+      if (purse.textContent !== text) purse.replaceChildren(...(p.out ? [] : [coin()]), el('span', { text }));
+      purse.classList.toggle('out', p.out);
+    }
     node.querySelector('.badge')?.remove();
     const badge = badges.get(p.id);
     if (badge) node.append(el('div', { class: 'badge', text: badge }));
     return node;
+  };
+
+  /** Place chaque joueur autour du tapis : soi en bas, les autres dans l'ordre de la table. */
+  const placeSeats = (players: PlayerView[]): boolean => {
+    const k = Math.max(0, players.findIndex((p) => p.id === link.myId));
+    const others = [...players.slice(k + 1), ...players.slice(0, k)].filter((p) => p.id !== link.myId);
+    const layout = SEATING[others.length] ?? others.map(() => 'top' as Side);
+    const wanted: Record<Side, HTMLElement[]> = { top: [], left: [], right: [], bottom: [] };
+    others.forEach((p, i) => wanted[layout[i]!].push(reelTile(p)));
+    const mine = players.find((p) => p.id === link.myId);
+    if (mine) wanted.bottom.push(reelTile(mine));
+    let moved = false;
+    for (const side of Object.keys(sides) as Side[]) {
+      const box = sides[side];
+      if (wanted[side].length !== box.children.length || wanted[side].some((t, i) => box.children[i] !== t)) {
+        box.replaceChildren(...wanted[side]);
+        moved = true;
+      }
+    }
+    return moved;
   };
 
   /** Affiche une catégorie (ou « ? ») dans un rouleau. */
@@ -147,33 +195,32 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     reel.replaceChildren(face);
   };
 
+  /** Rouleaux des joueurs encore en lice. */
+  const liveTiles = () => [...tapis.querySelectorAll<HTMLElement>('.reel-tile:not(.out)')];
+
   const render = () => {
     if (!view) return;
     roundLabel.textContent = view.round > 0 ? `Manche ${view.round}` : 'Bac Bataille';
-    const others = view.players.filter((p) => p.id !== link.myId);
-    opponents.replaceChildren(...others.map((p) => seat(p, false)));
-    opponents.classList.toggle('crowd', others.length > CROWD_OPPONENTS);
     const mine = me();
     mySeat.replaceChildren(...(mine ? [seat(mine, true)] : []));
-    const playing = view.players.filter((p) => !p.out);
-    const tiles = playing.map(reelTile);
     const wasHidden = tapis.hidden;
     tapis.hidden = view.phase === 'waiting' || view.phase === 'finished';
-    if (tiles.length !== reels.children.length || tiles.some((t, k) => reels.children[k] !== t) || wasHidden !== tapis.hidden) {
-      reels.replaceChildren(...tiles);
-      reels.classList.toggle('duo', playing.length === 2);
-      fitReels();
-    }
+    if (placeSeats(view.players) || wasHidden !== tapis.hidden) fitReels();
     if (!spinning) {
       const c = view.phase === 'spin' || view.phase === 'duel' || view.phase === 'result' ? view.category : null;
-      for (const t of tiles) {
+      for (const t of tapis.querySelectorAll<HTMLElement>('.reel-tile')) {
         const shown = t.querySelector<HTMLElement>('.reel .cat-tile');
-        if ((shown?.dataset.cat || null) !== c) setReel(t, c, 'landed');
+        if (t.classList.contains('out')) {
+          if (shown?.dataset.cat !== 'out') {
+            const face = el('div', { class: 'cat-tile empty' }, [el('span', { class: 'medal', text: '💀' })]);
+            face.dataset.cat = 'out';
+            t.querySelector('.reel')!.replaceChildren(face);
+          }
+        } else if ((shown?.dataset.cat || null) !== c) setReel(t, c, 'landed');
       }
       letterEl.textContent = view.letter || '?';
     }
     renderPot(view.pot);
-    ask.textContent = !spinning && view.category && (view.phase === 'duel' || view.phase === 'result') ? `${CATEGORIES[view.category].icon} ${CATEGORIES[view.category].label} en ${view.letter}` : '';
     letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || view.phase === 'ante' || (spinning && !letterBadge.classList.contains('rolling')));
     renderDuelPanel();
     renderOverlay();
@@ -371,30 +418,24 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     return a;
   };
 
-  /** Taille des rouleaux : la plus grande qui fasse tout tenir dans le tapis. */
+  /** Taille des rouleaux : la plus grande qui fasse tenir toutes les places autour du tapis. */
   const fitReels = () => {
-    const n = reels.children.length;
-    if (n === 0 || tapis.hidden) return;
+    if (tapis.hidden) return;
     const css = getComputedStyle(tapis);
     const W = tapis.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
     const H = tapis.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
-    const gap = parseFloat(css.rowGap) || 0;
-    const duo = n === 2;
-    // À deux, le tas est entre les rouleaux ; sinon dessous.
-    // Panneau de réponse ouvert : le tas et la question se cachent (le panneau les montre).
-    const answering = screen.classList.contains('with-duel');
-    const below = answering ? 0 : (duo ? 0 : pot.offsetHeight + gap) + ASK_H;
-    const duoGap = parseFloat(getComputedStyle(reels).columnGap) || REEL_GAP;
-    let best = TILE_MIN_W;
-    for (let cols = duo ? 2 : 1; cols <= (duo ? 2 : n); cols++) {
-      const rows = Math.ceil(n / cols);
-      const byW = (W - (cols - 1) * (duo ? duoGap : REEL_GAP)) / cols - REEL_FRAME;
-      const byH = ((H - below - (rows - 1) * REEL_GAP) / rows - REEL_FRAME - REEL_LABEL_H) / TILE_RATIO;
-      best = Math.max(best, Math.min(byW, byH));
-    }
-    const w = Math.floor(Math.max(TILE_MIN_W, Math.min(TILE_MAX_W, best)));
-    reels.style.setProperty('--tile-w', `${w}px`);
-    reels.classList.toggle('tiny', w < TILE_TINY_W);
+    const top = sides.top.childElementCount;
+    const besides = sides.left.childElementCount + sides.right.childElementCount > 0;
+    // Panneau de réponse ouvert : le tas se cache (le panneau dit ce qu'il y a à rafler).
+    const potShown = !screen.classList.contains('with-duel');
+    const rows = (top > 0 ? 1 : 0) + (besides ? 1 : 0) + 1;
+    const potRow = !besides && potShown ? POT_H + REEL_GAP : 0;
+    const byH = ((H - potRow - (rows - 1) * REEL_GAP) / rows - REEL_FRAME - REEL_LABEL_H) / TILE_RATIO;
+    const byTop = top > 0 ? (W - (top - 1) * REEL_GAP) / top - REEL_FRAME - TAG_OVERFLOW : Infinity;
+    const bySides = besides ? (W - 2 * REEL_GAP - (potShown ? POT_W : 0)) / 2 - REEL_FRAME - TAG_OVERFLOW : Infinity;
+    const w = Math.floor(Math.max(TILE_MIN_W, Math.min(TILE_MAX_W, byH, byTop, bySides)));
+    tapis.style.setProperty('--tile-w', `${w}px`);
+    tapis.classList.toggle('tiny', w < TILE_TINY_W);
   };
   new ResizeObserver(() => fitReels()).observe(tapis);
 
@@ -407,7 +448,8 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
    */
   const spinReels = (category: CategoryId, letter: string) => {
     spinning = true;
-    const tiles = [...reels.querySelectorAll<HTMLElement>('.reel-tile')];
+    // Ordre d'arrêt : en face d'abord, soi en dernier (suspense).
+    const tiles = liveTiles().sort((a, b) => Number(a.classList.contains('mine')) - Number(b.classList.contains('mine')));
     const n = Math.max(1, tiles.length);
     const lastStop = CARD_GAME.timing.spinMs - REEL_DONE_BEFORE_MS;
     const step = n > 1 ? Math.min(REEL_STOP_STEP_MS, (lastStop - REEL_FIRST_STOP_MS) / (n - 1)) : 0;
@@ -473,7 +515,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
     }
   };
 
-  const purseOf = (id: string) => screen.querySelector(`.seat[data-player="${id}"] .purse`);
+  const purseOf = (id: string) => screen.querySelector(`[data-player="${id}"] .purse`);
 
   // ---------- Partie ----------
 
@@ -496,7 +538,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         }
         for (const [id, n] of Object.entries(e.paid)) flyCoins(purseOf(id), potCoins, n);
         if (Object.values(e.paid).some((n) => n > 0)) play('coin');
-        for (const t of reels.querySelectorAll('.reel-tile')) {
+        for (const t of liveTiles()) {
           t.classList.remove('matched');
           setReel(t, null);
         }
@@ -507,7 +549,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         spinReels(e.category, e.letter);
         break;
       case 'duel':
-        status.textContent = me()?.out ? '👀 Tu es éliminé : regarde qui sera le plus rapide !' : 'Vite, un mot !';
+        status.textContent = me()?.out ? '👀 Tu es éliminé : regarde qui sera le plus rapide !' : view?.category ? `${CATEGORIES[view.category].icon} ${CATEGORIES[view.category].label} en ${view.letter} : vite, un mot !` : 'Vite, un mot !';
         break;
       case 'won': {
         flyCoins(potCoins, purseOf(e.winnerId), e.pot);

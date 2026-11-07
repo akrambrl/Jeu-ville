@@ -44,11 +44,15 @@ pêche) : `packages/shared/src/cards/categories.ts`.
 
 ## À l'écran
 
-La table occupe **tout l'écran, sans défilement** : adversaires et leur bourse en
-bandeau en haut, la lettre en badge dans la barre, le **tapis** au milieu avec le
-**rouleau de catégories de chaque joueur** et le **tas de pièces** (entre les deux
-rouleaux à 2 joueurs, dessous au-delà), sa bourse en bas. La taille des rouleaux
-est calculée pour remplir la place libre.
+La table occupe **tout l'écran, sans défilement**. Comme autour d'une vraie
+table, **on est toujours en bas** et les adversaires sont placés autour du tapis,
+dans l'ordre de la table : à 2 joueurs, l'adversaire **en face** (en haut) ; à 3,
+un **à gauche** et un **à droite** ; à 4, **un de chaque côté** (gauche, face,
+droite) ; à 5 et 6, gauche, deux ou trois en face, droite. Chacun a son **rouleau
+de catégories**, son nom dessous et sa **bourse** en pastille sur le coin ; le
+**tas de pièces** est au milieu. Sa propre bourse est en bas de l'écran, la
+lettre en badge dans la barre du haut. La taille des rouleaux est calculée pour
+remplir la place libre ; un joueur éliminé garde sa place, grisé (💀).
 
 Cinématiques :
 - **mise** : une pièce vole de la bourse de chacun vers le tas ;
