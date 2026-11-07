@@ -7,7 +7,7 @@ import type { CategoryId } from './categories.js';
 import { FAMOUS_CHARACTERS, FAMOUS_PEOPLE, FAMOUS_POLITICIANS } from './celebrities.js';
 import { AFRICAN_FIRST_NAMES, ASIAN_FIRST_NAMES, ENGLISH_FIRST_NAMES, LATIN_FIRST_NAMES, MORE_FIRST_NAMES, TURKISH_FIRST_NAMES } from './firstNames.js';
 import { MORE_BRANDS } from './brands.js';
-import { MORE_BODY_PARTS, MORE_CLOTHING, MORE_DISHES, MORE_HOUSE_OBJECTS, MORE_SPORTS } from './moreWords.js';
+import { MORE_BODY_PARTS, MORE_CLOTHING, MORE_DISHES, MORE_ANIMALS, MORE_HOUSE_OBJECTS, MORE_SPORTS } from './moreWords.js';
 import { MORE_JOBS } from './jobs.js';
 import { FRENCH_CITIES, ILE_DE_FRANCE_CITIES, OVERSEAS_CITIES, WORLD_CITIES } from './places.js';
 
@@ -119,7 +119,7 @@ export const WORDS: Record<CategoryId, readonly string[]> = {
     rat, raton laveur, renard, renne, requin, rhinocéros, rossignol, rouge-gorge,
     sanglier, sardine, saumon, sauterelle, scarabée, scorpion, serpent, singe, souris,
     taupe, taureau, tigre, tortue, toucan, truite, vache, vautour, ver de terre, vipère, zèbre
-  `),
+  `, MORE_ANIMALS),
   celebrity: list(`
     Aya Nakamura, Angèle, Adele, Albert Einstein, Ariana Grande,
     Beyoncé, Bob Marley, Booba, Brad Pitt, Bruno Mars,

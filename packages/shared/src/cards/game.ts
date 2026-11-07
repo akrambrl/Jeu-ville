@@ -106,6 +106,8 @@ export interface GameSnapshot {
   endsInMs: number;
   round: number;
   letter: string;
+  /** Lettres pas encore sorties depuis le dernier tour complet de l'alphabet. */
+  letterBag?: string[];
   duels: Duel[];
   ranking: RankingLine[];
   nextCardId: number;
@@ -125,6 +127,8 @@ export class CardGame {
   endsAt = 0;
   round = 0;
   letter = '';
+  /** Lettres pas encore sorties : une lettre ne revient qu'une fois toutes les autres tirées. */
+  private letterBag: string[] = [];
   duels: Duel[] = [];
   ranking: RankingLine[] = [];
   readonly players: TablePlayer[] = [];
@@ -142,6 +146,7 @@ export class CardGame {
       endsInMs: this.endsAt > 0 ? left(this.endsAt) : 0,
       round: this.round,
       letter: this.letter,
+      letterBag: this.letterBag,
       duels: this.duels,
       ranking: this.ranking,
       nextCardId: this.nextCardId,
@@ -162,6 +167,7 @@ export class CardGame {
     game.endsAt = s.phase === 'waiting' && s.endsInMs === 0 ? 0 : now + s.endsInMs;
     game.round = s.round;
     game.letter = s.letter;
+    game.letterBag = s.letterBag ?? [];
     game.duels = s.duels;
     game.ranking = s.ranking;
     game.nextCardId = s.nextCardId;
@@ -224,6 +230,7 @@ export class CardGame {
     this.ranking = [];
     this.duels = [];
     this.letter = '';
+    this.letterBag = [];
     return this.nextRound(now);
   }
 
@@ -311,8 +318,10 @@ export class CardGame {
     // Nouvelle lettre au début de la partie et après chaque duel ; sinon on garde la même.
     const changed = this.letter === '' || this.duels.length > 0;
     if (changed) {
-      const pool = [...CARD_GAME.letters].filter((l) => l !== this.letter);
-      this.letter = pool[Math.floor(this.rand() * pool.length)]!;
+      // Sac de lettres : chacune sort une fois avant qu'une lettre ne revienne.
+      if (this.letterBag.length === 0) this.letterBag = [...CARD_GAME.letters].filter((l) => l !== this.letter);
+      const k = Math.floor(this.rand() * this.letterBag.length);
+      this.letter = this.letterBag.splice(k, 1)[0]!;
     }
     this.duels = [];
     this.phase = 'letter';
@@ -389,16 +398,21 @@ export class CardGame {
     const given = winner.pile;
     winner.pile = [];
     const counts = new Map(losers.map((l) => [l.id, l.pile.length]));
-    for (const l of losers) {
-      l.deck.push(...l.pile);
-      l.pile = [];
-    }
     // À plusieurs perdants, la pile du gagnant est partagée entre eux.
+    const picked = new Map(losers.map((l) => [l.id, l.pile]));
     given.forEach((card, k) => {
       const l = losers[k % losers.length]!;
-      l.deck.push(card);
+      picked.get(l.id)!.push(card);
       counts.set(l.id, (counts.get(l.id) ?? 0) + 1);
     });
+    // Cartes ramassées mélangées avant d'aller sous le paquet : sinon les mêmes
+    // cartes se retrouvent face à face et les mêmes catégories reviennent.
+    for (const l of losers) {
+      const cards = picked.get(l.id)!;
+      this.shuffle(cards);
+      l.deck.push(...cards);
+      l.pile = [];
+    }
     Object.assign(duel, { winnerId: winner.id, word, category, losers: losers.map((l) => ({ id: l.id, cards: counts.get(l.id) ?? 0 })) });
     for (const p of [winner, ...losers]) p.botAnswerAt = null;
     return duel;

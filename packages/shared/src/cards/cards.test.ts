@@ -270,6 +270,18 @@ describe('partie', () => {
     expect(events.some((e) => e.kind === 'finished')).toBe(true);
   });
 
+  it('une lettre ne revient qu’une fois toutes les autres sorties', () => {
+    const game = new CardGame(seeded(7));
+    for (let k = 0; k < 4; k++) game.addPlayer(`bot${k}`, `Bot ${k}`, true);
+    const letters = game.start(0).concat(run(game, 0, 3_600_000))
+      .filter((e) => e.kind === 'letter' && e.changed)
+      .map((e) => (e.kind === 'letter' ? e.letter : ''));
+    const n = CARD_GAME.letters.length;
+    expect(letters.length).toBeGreaterThan(n);
+    // Dans chaque tour complet de l'alphabet, aucune lettre en double.
+    for (let k = 0; k + n <= letters.length; k += n) expect(new Set(letters.slice(k, k + n)).size).toBe(n);
+  });
+
   it('en ligne : départ automatique quand on est assez, un joueur parti est remplacé par un bot', () => {
     const game = new CardGame(seeded());
     game.addPlayer('a', 'Alice', false);

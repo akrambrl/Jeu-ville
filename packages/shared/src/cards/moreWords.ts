@@ -90,3 +90,23 @@ export const MORE_HOUSE_OBJECTS = `
   table basse, table de nuit, tablette, taie d'oreiller, tasse à café, théière, thermomètre, tire-bouchon, toaster, tondeuse, tournevis, trousseau, tupperware,
   ustensile, vaisselier, vaisselle, veilleuse, verre à pied, vide-poche, wok
 `;
+
+export const MORE_ANIMALS = `
+  addax, albatros, alouette, anaconda, ânesse, anchois, ara, autour, axolotl,
+  babouin, barracuda, bar, bécasse, belette, béluga, bernard-l'ermite, bichon, blatte, boa, bonobo, bouledogue, bouquetin, bousier, brebis, brochet, bulldog, buffle d'Afrique,
+  cabri, cacatoès, cafard, calamar, caméléon, canari, capucin, capybara, caracal, caribou, carcajou, casoar, chaton, chenille, chevreau, chiot, chihuahua, cobra, cochon d'Inde, colvert, condor, coquillage, corneille, couguar, coucou, couleuvre, crapaud-buffle, criquet, crotale,
+  daim, daurade, dingo, doberman, dodo, dorade, dragon de Komodo, dugong,
+  éléphant de mer, émeu, éperlan, épagneul, épervier, escargot de Bourgogne, esturgeon, étalon,
+  faon, fauvette, fennec, fouine, frelon,
+  gardon, gavial, geai, gerbille, gibbon, gnou, goéland, golden retriever, gorgone, grizzli, grue, guenon, guppy,
+  hareng, harfang, hermine, héron, hippocampe, husky, hydre,
+  ibis, jument, kiwi, krill,
+  labrador, lamantin, lamproie, langouste, langoustine, lapereau, lémurien, léopard, limace, lionceau, loir, lombric, loriot, louveteau, luciole,
+  macaque, mainate, mammouth, manchot, mante religieuse, marcassin, martin-pêcheur, martre, merlu, mille-pattes, mite, moule, mouflon, mulot, musaraigne,
+  narval, nasique, okapi, opossum, orang-outang, ornithorynque, oryx, otarie, ouistiti, ourson,
+  pangolin, panda roux, papillon de nuit, pélican, perdrix, perche, phacochère, pic-vert, pinson, pitbull, poisson rouge, poisson-clown, poney shetland, pou, poulain, poulet, pygargue, python,
+  quetzal, rainette, raie, rascasse, ratel, raton, renardeau, rhinocéros blanc, rorqual, roussette, rottweiler,
+  sajou, salamandre, sardine, scolopendre, serin, silure, sole, suricate, sole, sphinx,
+  tamanoir, tamarin, tanche, tapir, tarentule, termite, tétras, thon, tique, tigre blanc, triton, tyrannosaure,
+  vache laitière, varan, veau, vers à soie, vigogne, vipère aspic, vison, wapiti, wombat, yack, yak, zébu
+`;
