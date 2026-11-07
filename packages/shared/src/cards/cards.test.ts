@@ -77,6 +77,12 @@ describe('réponses', () => {
     expect(checkAnswer('fruitVeg', 'B', 'bananes')).toEqual({ ok: true, word: 'banane' });
   });
 
+  it('marques : mode, luxe, beauté, tech…', () => {
+    for (const [letter, brand] of [['F', 'Furla'], ['L', 'Longchamp'], ['S', 'Sephora'], ['X', 'Xiaomi'], ['D', 'Dolce Gabbana']]) {
+      expect(checkAnswer('brand', letter!, brand!).ok, brand).toBe(true);
+    }
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });
