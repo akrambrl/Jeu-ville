@@ -62,6 +62,12 @@ describe('réponses', () => {
     }
   });
 
+  it('métiers : bricoleur, et les formes au féminin', () => {
+    for (const [letter, job] of [['B', 'bricoleur'], ['B', 'boulangère'], ['C', 'coiffeuse'], ['A', 'actrice'], ['I', 'infirmière'], ['A', 'avocate'], ['P', 'pharmacienne'], ['A', 'agente de sécurité'], ['C', 'caissières']]) {
+      expect(checkAnswer('job', letter!, job!).ok, job).toBe(true);
+    }
+  });
+
   it('refuse un mot qui ne commence pas par la lettre', () => {
     expect(checkAnswer('fruitVeg', 'P', 'banane')).toEqual({ ok: false, reason: 'Ça ne commence pas par P !' });
   });

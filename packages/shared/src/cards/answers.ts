@@ -31,10 +31,42 @@ function variants(normalized: string): string[] {
   return [...out].filter(Boolean);
 }
 
+/** Terminaisons masculin → féminin des noms de métier (sur la forme sans accents). */
+const FEMININE_ENDINGS: [string, string][] = [
+  ['teur', 'trice'],
+  ['eur', 'euse'],
+  ['eur', 'eure'],
+  ['ier', 'iere'],
+  ['ien', 'ienne'],
+  ['er', 'ere'],
+  ['on', 'onne'],
+  ['if', 'ive'],
+  ['el', 'elle'],
+  ['et', 'ette'],
+  ['an', 'anne'],
+];
+
+/**
+ * Formes au féminin d'un métier (boulanger → boulangère, coiffeur → coiffeuse,
+ * acteur → actrice, avocat → avocate) : on transforme le premier mot
+ * (« agent de sécurité » → « agente de sécurité »). Quelques formes inventées
+ * passent aussi (« docteuse ») : on préfère accepter large que refuser un vrai mot.
+ */
+export function feminineForms(normalized: string): string[] {
+  const [first = '', ...rest] = normalized.split(' ');
+  const tail = rest.length > 0 ? ` ${rest.join(' ')}` : '';
+  const out = new Set<string>();
+  for (const [masc, fem] of FEMININE_ENDINGS) if (first.endsWith(masc)) out.add(first.slice(0, -masc.length) + fem);
+  // Terminaison en consonne : on ajoute un « e » (avocat → avocate, marchand → marchande).
+  if (/[^aeiouy]$/.test(first)) out.add(`${first}e`);
+  return [...out].map((f) => f + tail);
+}
+
 /** Célébrités : on accepte aussi le nom seul (« Mbappé » pour « Kylian Mbappé »). */
 function entryForms(category: CategoryId, word: string): string[] {
   const n = normalizeWord(word);
   const forms = variants(n);
+  if (category === 'job') for (const f of feminineForms(n)) forms.push(...variants(f));
   if (category === 'celebrity') {
     const parts = n.split(' ');
     if (parts.length > 1) forms.push(parts.slice(1).join(' '));
