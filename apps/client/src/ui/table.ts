@@ -20,6 +20,11 @@ const REEL_FIRST_STOP_MS = 1_400;
 const REEL_STOP_STEP_MS = 380;
 /** … et tous sont arrêtés au plus tard tant de ms avant la fin du défilement. */
 const REEL_DONE_BEFORE_MS = 450;
+/** Tirage de la lettre : une lettre au hasard tous les tant de ms… */
+const ROLL_STEP_MS = 140;
+/** … la roue s'arrête un peu avant la fin du tirage, puis file vers son badge (ms). */
+const ROLL_STOP_BEFORE_MS = 700;
+const LETTER_FLY_MS = 450;
 /** Durée du tampon (« MATCH ! », « RAFLÉ ! », voir .stamp dans styles.css). */
 const STAMP_MS = 1_100;
 /** Fin de manche : minuteur en alerte et « tic » chaque seconde. */
@@ -69,8 +74,10 @@ const AVATAR_COLORS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#
 export function showTable(root: HTMLElement, link: TableLink, onExit: () => void): void {
   let view: GameView | null = null;
   let deadline = 0;
-  /** Défilement en cours : on ne touche pas aux rouleaux ni à la lettre. */
+  /** Défilement en cours : on ne touche pas aux rouleaux. */
   let spinning = false;
+  /** Tirage de la lettre en cours : on ne touche pas au badge. */
+  let rolling = false;
   const timers: number[] = [];
   /** Résultat de la dernière manche, par joueur (badge sur son rouleau). */
   let badges = new Map<string, string>();
@@ -221,10 +228,10 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
           }
         } else if ((shown?.dataset.cat || null) !== c) setReel(t, c, 'landed');
       }
-      letterEl.textContent = view.letter || '?';
     }
+    if (!rolling) letterEl.textContent = view.phase === 'ante' ? '?' : view.letter || '?';
     renderPot(view.pot);
-    letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || view.phase === 'ante' || (spinning && !letterBadge.classList.contains('rolling')));
+    letterBadge.classList.toggle('dim', view.phase === 'waiting' || view.phase === 'finished' || view.phase === 'ante' || rolling);
     renderDuelPanel();
     renderOverlay();
   };
@@ -447,7 +454,7 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   /**
    * Les rouleaux de chacun font défiler des catégories au hasard, s'arrêtent
    * l'un après l'autre… tous sur la même : MATCH ! La lettre tourne dans son
-   * badge et s'arrête en même temps.
+   * badge (tirée juste avant, voir rollLetter).
    */
   const spinReels = (category: CategoryId, letter: string) => {
     spinning = true;
@@ -472,23 +479,9 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       });
       return loop;
     });
-    // La lettre roule dans son badge.
-    letterBadge.classList.add('rolling');
-    letterBadge.classList.remove('dim');
-    const pool = CARD_GAME.letters;
-    const roll = window.setInterval(() => {
-      letterEl.textContent = pool[Math.floor(Math.random() * pool.length)]!;
-    }, REEL_STEP_MS * 1.5);
-    timers.push(roll);
     const matchAt = REEL_FIRST_STOP_MS + (n - 1) * step + 120;
     later(matchAt, () => {
       for (const l of loops) window.clearInterval(l);
-      window.clearInterval(roll);
-      letterBadge.classList.remove('rolling');
-      letterEl.textContent = letter;
-      letterBadge.classList.remove('pop');
-      void letterBadge.offsetWidth;
-      letterBadge.classList.add('pop');
       for (const t of tiles) t.classList.add('matched');
       spinning = false;
       status.textContent = `${CATEGORIES[category].icon} ${CATEGORIES[category].label} en ${letter} !`;
@@ -498,6 +491,46 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         haptic('duel');
       }
       render();
+    });
+  };
+
+  /** Cinématique du tirage : grande roue au milieu de l'écran, puis la lettre file dans son badge. */
+  const rollLetter = (letter: string) => {
+    screen.querySelector('.cine-letter')?.remove();
+    rolling = true;
+    const big = el('span', { class: 'letter' });
+    const wheel = el('div', { class: 'wheel spinning' }, [el('div', { class: 'rays' }), el('div', { class: 'disc' }, [el('span', { class: 'letter-label', text: 'Lettre' }), big])]);
+    const cine = el('div', { class: 'cine-letter' }, [wheel]);
+    screen.append(cine);
+    letterBadge.classList.add('dim');
+    const pool = CARD_GAME.letters;
+    const roll = window.setInterval(() => {
+      big.textContent = pool[Math.floor(Math.random() * pool.length)]!;
+      play('tick');
+    }, ROLL_STEP_MS);
+    timers.push(roll);
+    later(CARD_GAME.timing.letterMs - ROLL_STOP_BEFORE_MS, () => {
+      window.clearInterval(roll);
+      big.textContent = letter;
+      wheel.classList.remove('spinning');
+      wheel.classList.add('pop');
+      play('letter');
+      // La roue rétrécit et file vers le badge de la barre du haut.
+      later(ROLL_STOP_BEFORE_MS - LETTER_FLY_MS - 50, () => {
+        const from = wheel.getBoundingClientRect();
+        const to = letterBadge.getBoundingClientRect();
+        wheel.style.transition = `transform ${LETTER_FLY_MS}ms cubic-bezier(0.5, 0, 0.3, 1), opacity ${LETTER_FLY_MS}ms`;
+        wheel.style.transform = `translate(${to.left + to.width / 2 - (from.left + from.width / 2)}px, ${to.top + to.height / 2 - (from.top + from.height / 2)}px) scale(${to.width / from.width})`;
+        cine.classList.add('leaving');
+        later(LETTER_FLY_MS, () => {
+          cine.remove();
+          rolling = false;
+          letterEl.textContent = letter;
+          letterBadge.classList.remove('dim', 'pop');
+          void letterBadge.offsetWidth;
+          letterBadge.classList.add('pop');
+        });
+      });
     });
   };
 
@@ -557,6 +590,10 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
         }
         break;
       }
+      case 'letter':
+        status.textContent = 'Tirage de la lettre…';
+        rollLetter(e.letter);
+        break;
       case 'spin':
         status.textContent = 'Les catégories tournent…';
         spinReels(e.category, e.letter);

@@ -16,18 +16,20 @@ gagne** ; les autres sont classés dans l'ordre inverse de leur élimination.
 1. **Mise** : chacun pose sa mise au milieu de la table, ça fait un **tas**. La
    mise est de **1 pièce, puis monte de 1 toutes les 5 manches** (2, 3…) pour que
    les parties ne traînent pas. Un joueur qui n'a plus assez pose ce qui lui reste.
-2. **Les catégories défilent** devant chaque joueur (un rouleau chacun) et
-   s'arrêtent l'une après l'autre… **toutes sur la même : MATCH !** Une **lettre**
-   est tirée en même temps. Il y a donc une réponse à chaque manche, sans attendre.
+2. **Tirage de la lettre** : une grande roue tourne au milieu de la table, s'arrête
+   sur la lettre, qui file ensuite dans son badge en haut de l'écran.
+3. **Les catégories défilent** devant chaque joueur (un rouleau chacun) et
+   s'arrêtent l'une après l'autre… **toutes sur la même : MATCH !** Il y a donc
+   une réponse à chaque manche, sans attendre.
    - Chaque lettre sort une fois avant qu'une lettre ne revienne ; les lettres
      trop dures (K, Q, U, W, X, Y, Z) sont exclues.
    - Chaque catégorie sort une fois avant de revenir, jamais deux fois de suite,
      et seulement avec une lettre pour laquelle la liste du jeu a au moins 5 mots.
-3. **Le premier qui écrit un mot valide** (bonne lettre, bonne catégorie) **rafle
+4. **Le premier qui écrit un mot valide** (bonne lettre, bonne catégorie) **rafle
    tout le tas**. Le champ de réponse commence déjà par la lettre.
-4. **Personne ne trouve** dans le temps (15 s) : le tas **reste au milieu** et
+5. **Personne ne trouve** dans le temps (15 s) : le tas **reste au milieu** et
    s'ajoute à la mise suivante (**cagnotte**).
-5. **Mauvaise réponse** : petit temps d'attente (1,5 s) avant de réessayer, sans
+6. **Mauvaise réponse** : petit temps d'attente (1,5 s) avant de réessayer, sans
    perdre de pièce.
 
 Cas particulier : si plus personne n'a de pièce (tout est dans la cagnotte), la
@@ -56,9 +58,11 @@ remplir la place libre ; un joueur éliminé garde sa place, grisé (💀).
 
 Cinématiques :
 - **mise** : une pièce vole de la bourse de chacun vers le tas ;
+- **tirage de la lettre** : grande roue à rayons au milieu de l'écran, puis la
+  lettre file dans son badge ;
 - **défilement** : les rouleaux font défiler des catégories au hasard, s'arrêtent
-  l'un après l'autre sur la même, tampon « MATCH ! » ; la lettre tourne dans son
-  badge et s'arrête en même temps ; puis le panneau de réponse ;
+  l'un après l'autre sur la même (soi en dernier), tampon « MATCH ! », puis le
+  panneau de réponse ;
 - **fin de manche** : les pièces du tas volent vers le gagnant (« RAFLÉ ! »,
   confettis, tintement de chaque pièce qui arrive puis « ka-ching ! »), ou tampon « CAGNOTTE ! » ; « MISE ×2 » quand la mise monte.
 

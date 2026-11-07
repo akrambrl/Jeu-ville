@@ -1606,10 +1606,7 @@ button.danger {
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* La lettre tourne dans son badge pendant le défilement. */
-.letter-badge.rolling .letter {
-  filter: blur(0.5px);
-}
+
 
 /* ---------- Tutoriel : pièces ---------- */
 
@@ -1682,4 +1679,74 @@ button.danger {
 /* Petites tuiles : seulement le médaillon. */
 .tapis.tiny .cat-tile .label {
   display: none;
+}
+
+/* ---------- Tirage de la lettre : roue au milieu de l'écran ---------- */
+
+.cine-letter {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(12, 6, 36, 0.35), rgba(12, 6, 36, 0.75));
+  animation: fade 0.25s ease-out;
+  transition: background 0.4s;
+}
+
+.cine-letter.leaving {
+  background: transparent;
+}
+
+.wheel {
+  position: relative;
+  width: min(54vw, 230px);
+  height: min(54vw, 230px);
+  display: grid;
+  place-items: center;
+  animation: zoom-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.wheel .rays {
+  position: absolute;
+  inset: -45%;
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 201, 60, 0.45) 0 10deg, transparent 10deg 20deg);
+  mask: radial-gradient(circle, #000 25%, transparent 68%);
+  -webkit-mask: radial-gradient(circle, #000 25%, transparent 68%);
+  animation: spin 14s linear infinite;
+}
+
+.wheel.spinning .rays {
+  animation-duration: 0.9s;
+}
+
+.wheel .disc {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #fff, #ffe9b8);
+  border: 6px solid var(--ink);
+  box-shadow:
+    0 0 0 8px var(--gold),
+    0 0 0 12px var(--ink),
+    0 14px 0 10px rgba(0, 0, 0, 0.35);
+}
+
+.wheel .letter {
+  font-size: min(30vw, 130px);
+}
+
+.wheel.spinning .letter {
+  filter: blur(1px);
+}
+
+.wheel.pop .disc {
+  animation: popin 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
 }

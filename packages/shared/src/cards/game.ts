@@ -7,8 +7,8 @@
  * Déroulement d'une manche :
  * 1. chacun pose la mise au milieu (1 pièce, puis 2, 3… : elle monte toutes les
  *    quelques manches ; un joueur qui n'a plus assez pose ce qui lui reste) ;
- * 2. les catégories défilent devant chacun et s'arrêtent sur la même ; une lettre
- *    est tirée (chaque lettre sort une fois avant qu'une lettre ne revienne) ;
+ * 2. une lettre est tirée (chaque lettre sort une fois avant qu'une lettre ne
+ *    revienne), puis les catégories défilent devant chacun et s'arrêtent sur la même ;
  * 3. le premier qui donne un mot valide (lettre + catégorie) rafle tout le tas ;
  *    si personne ne trouve, le tas reste au milieu (cagnotte) ;
  * 4. qui n'a plus de pièce au moment de miser est éliminé ; le dernier qui a
@@ -18,7 +18,7 @@ import { CARD_GAME } from '../config/cards.js';
 import { checkAnswer, wordsStartingWith } from './answers.js';
 import { CATEGORY_IDS, type CategoryId } from './categories.js';
 
-export type GamePhase = 'waiting' | 'ante' | 'spin' | 'duel' | 'result' | 'finished';
+export type GamePhase = 'waiting' | 'ante' | 'letter' | 'spin' | 'duel' | 'result' | 'finished';
 
 export interface TablePlayer {
   id: string;
@@ -48,7 +48,9 @@ export interface RoundResult {
 export type GameEvent =
   /** Début de manche : chacun pose sa mise (`paid` : pièces posées par joueur). */
   | { kind: 'ante'; round: number; ante: number; pot: number; paid: Record<string, number> }
-  /** Les catégories défilent et s'arrêtent sur `category` ; lettre tirée. */
+  /** Tirage de la lettre (au milieu de la table). */
+  | { kind: 'letter'; letter: string; round: number }
+  /** Les catégories défilent et s'arrêtent sur `category` (avec la lettre déjà tirée). */
   | { kind: 'spin'; category: CategoryId; letter: string }
   /** À vous de répondre ! */
   | { kind: 'duel' }
@@ -305,6 +307,8 @@ export class CardGame {
       case 'waiting':
         return this.start(now);
       case 'ante':
+        return this.drawLetter(now);
+      case 'letter':
         return this.spin(now);
       case 'spin':
         return this.openDuel(now);
@@ -353,9 +357,16 @@ export class CardGame {
     return events;
   }
 
-  /** Les catégories défilent : on tire la lettre, puis une catégorie qui a des mots pour cette lettre. */
-  private spin(now: number): GameEvent[] {
+  /** Tirage de la lettre, avant le défilement des catégories. */
+  private drawLetter(now: number): GameEvent[] {
     this.letter = this.draw(this.letterBag, [...CARD_GAME.letters], this.letter || null);
+    this.phase = 'letter';
+    this.endsAt = now + CARD_GAME.timing.letterMs;
+    return [{ kind: 'letter', letter: this.letter, round: this.round }];
+  }
+
+  /** Les catégories défilent et s'arrêtent sur une catégorie qui a des mots pour la lettre. */
+  private spin(now: number): GameEvent[] {
     const playable = (c: CategoryId) => wordsStartingWith(c, this.letter).length >= CARD_GAME.minWordsPerRound;
     this.category = this.draw(this.categoryBag, CATEGORY_IDS, this.lastCategory, playable);
     this.lastCategory = this.category;

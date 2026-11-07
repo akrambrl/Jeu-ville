@@ -47,7 +47,7 @@ const STEPS: Step[] = [
   },
   {
     title: 'Ça tourne… MATCH !',
-    text: 'Les catégories défilent devant chaque joueur et s’arrêtent sur la même. Une lettre est tirée en même temps.',
+    text: 'Une lettre est tirée au milieu de la table. Puis les catégories défilent devant chaque joueur et s’arrêtent sur la même.',
     visual: () => el('div', { class: 'tuto-visual' }, [categoryTile('sport', 'landed'), el('div', { class: 'letter-badge tuto-letter' }, [el('span', { class: 'letter-label', text: 'Lettre' }), el('span', { class: 'letter', text: 'T' })]), categoryTile('sport', 'landed')]),
   },
   {

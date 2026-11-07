@@ -5,7 +5,9 @@ import { CATEGORY_IDS } from './categories.js';
 import { CardGame, type GameEvent, type TablePlayer } from './game.js';
 import { WORDS } from './words.js';
 
-const { anteMs, spinMs, duelMs, resultMs } = CARD_GAME.timing;
+const { anteMs, letterMs, spinMs, duelMs, resultMs } = CARD_GAME.timing;
+/** Mise + lettre + défilement : après, on peut répondre. */
+const untilDuel = anteMs + letterMs + spinMs;
 
 function seeded(seed = 42): () => number {
   let s = seed;
@@ -25,7 +27,7 @@ function twoPlayersAtDuel() {
   game.addPlayer('a', 'Alice', false);
   game.addPlayer('b', 'Bilel', false);
   const first = game.start(0);
-  const t = anteMs + spinMs;
+  const t = untilDuel;
   const events = [...first, ...run(game, 0, t)];
   return { game, a: game.players[0]!, b: game.players[1]!, t, events };
 }
@@ -123,12 +125,14 @@ describe('réponses', () => {
 });
 
 describe('partie', () => {
-  it('chacun reçoit ses pièces, pose la mise au milieu, puis les catégories s’arrêtent sur une seule', () => {
+  it('chacun reçoit ses pièces, pose la mise au milieu, puis lettre tirée et catégories qui s’arrêtent sur une seule', () => {
     const { game, a, b, events } = twoPlayersAtDuel();
     const start = CARD_GAME.coins.start;
     expect(events[0]).toEqual({ kind: 'ante', round: 1, ante: 1, pot: 2, paid: { a: 1, b: 1 } });
     expect([a.coins, b.coins, game.pot]).toEqual([start - 1, start - 1, 2]);
+    expect(events).toContainEqual({ kind: 'letter', letter: game.letter, round: 1 });
     expect(events).toContainEqual({ kind: 'spin', category: game.category, letter: game.letter });
+    expect(events.findIndex((e) => e.kind === 'letter')).toBeLessThan(events.findIndex((e) => e.kind === 'spin'));
     expect(events.at(-1)).toEqual({ kind: 'duel' });
     expect(game.phase).toBe('duel');
     // Toujours des mots possibles pour la catégorie et la lettre tirées.
@@ -141,8 +145,10 @@ describe('partie', () => {
     game.addPlayer('b', 'Bilel', false);
     game.start(0);
     run(game, 0, anteMs + 100);
+    expect(game.phase).toBe('letter');
+    run(game, anteMs + 100, anteMs + letterMs + 100);
     expect(game.phase).toBe('spin');
-    expect(game.answer('a', null, goodWord(game), anteMs + 200).error).toMatch(/catégories/);
+    expect(game.answer('a', null, goodWord(game), anteMs + letterMs + 200).error).toMatch(/catégories/);
   });
 
   it('le premier qui répond juste rafle tout le tas', () => {
@@ -186,13 +192,13 @@ describe('partie', () => {
     for (const id of ['a', 'b', 'c']) game.addPlayer(id, id.toUpperCase(), false);
     game.start(0);
     const [a, b, c] = game.players as [TablePlayer, TablePlayer, TablePlayer];
-    let t = anteMs + spinMs;
+    let t = untilDuel;
     run(game, 0, t);
     // Manche 1 : a est à sec, c gagne.
     a.coins = 0;
     game.answer('c', null, goodWord(game), t + 100);
-    let events = run(game, t + 100, t + 100 + resultMs + anteMs + spinMs);
-    t += 100 + resultMs + anteMs + spinMs;
+    let events = run(game, t + 100, t + 100 + resultMs + untilDuel);
+    t += 100 + resultMs + untilDuel;
     expect(events).toContainEqual({ kind: 'eliminated', ids: ['a'] });
     expect(events).toContainEqual(expect.objectContaining({ kind: 'ante', round: 2, paid: { b: 1, c: 1 } }));
     expect(game.answer('a', null, goodWord(game), t + 100).error).toMatch(/éliminé/);
@@ -245,7 +251,7 @@ describe('partie', () => {
     game.addPlayer('me', 'Moi', false);
     game.addPlayer('bot', 'Bot', true);
     game.start(0);
-    const t = anteMs + spinMs;
+    const t = untilDuel;
     const early = run(game, 0, t + CARD_GAME.bots.answerDelayMs[0] - 100);
     expect(early.some((e) => e.kind === 'won')).toBe(false);
   });

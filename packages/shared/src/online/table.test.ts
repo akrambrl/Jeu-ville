@@ -69,7 +69,7 @@ describe('table en ligne (sans serveur)', () => {
     const net = new MemoryTransport();
     const sched = new ManualScheduler();
     const { a, b } = await openBoth(net, sched);
-    sched.advance(CARD_GAME.timing.lobbyMs + CARD_GAME.timing.anteMs + 500);
+    sched.advance(CARD_GAME.timing.lobbyMs + CARD_GAME.timing.anteMs + CARD_GAME.timing.letterMs + 500);
     const round = b.last().round;
     const coins = b.last().players.map((p) => p.coins);
     a.transport.cut(true);

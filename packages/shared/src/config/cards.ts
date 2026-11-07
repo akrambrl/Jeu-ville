@@ -29,6 +29,8 @@ export const CARD_GAME = {
     lobbyMs: 10_000,
     /** Chacun pose sa mise au milieu (les pièces volent vers le tas). */
     anteMs: 1_400,
+    /** Tirage de la lettre : une roue tourne au milieu de la table, puis la lettre file dans son badge. */
+    letterMs: 2_500,
     /** Les catégories défilent devant chacun, puis s'arrêtent sur la même : ne compte pas dans le temps de réponse. */
     spinMs: 3_200,
     /** Temps pour répondre (après le défilement). */
