@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { CARD_GAME } from '../config/cards.js';
 import { PSEUDO_RULES } from '../config/players.js';
+import { containsBannedWord } from '../formulas/moderation.js';
 import { CATEGORY_IDS, type CategoryId } from '../cards/categories.js';
 
 // Messages de validation en français.
@@ -18,7 +19,8 @@ export const createSessionSchema = z.object({
     .trim()
     .min(PSEUDO_RULES.minLength, `Ton pseudo doit faire au moins ${PSEUDO_RULES.minLength} caractères.`)
     .max(PSEUDO_RULES.maxLength, `Ton pseudo doit faire au plus ${PSEUDO_RULES.maxLength} caractères.`)
-    .regex(PSEUDO_RULES.pattern, 'Lettres, chiffres, - et _ uniquement'),
+    .regex(PSEUDO_RULES.pattern, 'Lettres, chiffres, - et _ uniquement')
+    .refine((p) => !containsBannedWord(p), 'Ce pseudo n’est pas autorisé : choisis-en un autre.'),
 });
 export type CreateSessionRequest = z.infer<typeof createSessionSchema>;
 
@@ -37,11 +39,24 @@ export interface ApiError {
   error: string;
 }
 
+/** Plantage signalé par un joueur (message et pile d'appels, sans donnée personnelle). */
+export const clientErrorSchema = z.object({
+  message: z.string().max(500),
+  stack: z.string().max(4000).optional(),
+  where: z.string().max(200).optional(),
+  version: z.string().max(40).optional(),
+});
+export type ClientErrorReport = z.infer<typeof clientErrorSchema>;
+
 // ---------- Temps réel : une room = une table ----------
 
 export const ROOM_CARDS = 'cards';
 
-export const cardsJoinSchema = z.object({ token: z.string().min(1) });
+export const cardsJoinSchema = z.object({
+  token: z.string().min(1),
+  /** Créer une table privée (on y entre avec son code, partagé entre amis). */
+  private: z.boolean().optional(),
+});
 export type CardsJoinOptions = z.infer<typeof cardsJoinSchema>;
 
 export const CardClientMessage = {

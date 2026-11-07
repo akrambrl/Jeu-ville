@@ -1,15 +1,19 @@
 /**
- * Une room = une table de jeu en ligne (2 à 6 vrais joueurs). La partie
+ * Une room = une table de jeu en ligne (2 à 6 vrais joueurs) : table publique
+ * (partie rapide) ou table privée, dont l'identifiant est un code court à
+ * partager entre amis. Un joueur qui perd le réseau garde sa place quelques
+ * secondes le temps de se reconnecter. La partie
  * (CardGame, dans shared) fait autorité ; la room relaie les réponses validées
  * et diffuse la table. Les paquets restent secrets : seule la vue publique
  * (nombre de cartes, carte du dessus de chaque pile) est envoyée.
  */
-import { Room, type Client } from '@colyseus/core';
+import { Room, matchMaker, type Client } from '@colyseus/core';
 import {
   CARD_GAME,
   CardClientMessage,
   CardGame,
   CardServerMessage,
+  ONLINE,
   answerSchema,
   cardsJoinSchema,
   type GameEvent,
@@ -33,7 +37,13 @@ export class CardRoom extends Room {
   /** Compte (playerId) de chaque session. */
   private readonly accounts = new Map<string, string>();
 
-  override onCreate(): void {
+  override async onCreate(rawOptions: unknown): Promise<void> {
+    const options = cardsJoinSchema.partial().safeParse(rawOptions);
+    if (options.success && options.data.private) {
+      // Table privée : son code sert d'identifiant (client.joinById(code)), hors partie rapide.
+      this.roomId = await uniqueTableCode();
+      await this.setPrivate(true);
+    }
     this.onMessage(CardClientMessage.answer, (client, raw) => {
       const parsed = answerSchema.safeParse(raw);
       if (!parsed.success) return;
@@ -63,7 +73,17 @@ export class CardRoom extends Room {
     this.publish([], true);
   }
 
-  override onLeave(client: Client): void {
+  override async onLeave(client: Client, consented: boolean): Promise<void> {
+    if (!consented) {
+      // Réseau perdu (tunnel, appli en arrière-plan…) : on lui garde sa place un moment.
+      try {
+        await this.allowReconnection(client, ONLINE.reconnectSeconds);
+        this.publish([], true);
+        return;
+      } catch {
+        /* pas revenu à temps : il quitte la table */
+      }
+    }
     this.accounts.delete(client.sessionId);
     this.game.removePlayer(client.sessionId);
     this.game.scheduleStart(Date.now());
@@ -90,3 +110,11 @@ export class CardRoom extends Room {
 
 /** Rafraîchissement de la vue sans événement (minuteurs), ms. */
 const VIEW_REFRESH_MS = 1_000;
+
+/** Code de table privée libre (lettres et chiffres faciles à dicter). */
+async function uniqueTableCode(): Promise<string> {
+  for (;;) {
+    const code = Array.from({ length: ONLINE.codeLength }, () => ONLINE.codeAlphabet[Math.floor(Math.random() * ONLINE.codeAlphabet.length)]).join('');
+    if ((await matchMaker.query({ roomId: code })).length === 0) return code;
+  }
+}

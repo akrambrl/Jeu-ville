@@ -5,6 +5,7 @@
  * tirage de la lettre en plein écran, cartes qui volent, face-à-face « VS ».
  */
 import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
+import { SERVER_URL } from '../net/api.js';
 import type { TableLink } from '../net/tableLink.js';
 import { cardBack, cardFace, cardSlot, tintCategory } from './cardView.js';
 import { el, showToast } from './dom.js';
@@ -259,11 +260,14 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       const left = Math.ceil(Math.max(0, deadline - Date.now()) / 1000);
       overlay.replaceChildren(
         el('div', { class: 'panel' }, [
-          el('h2', { class: 'title', text: 'Table en ligne' }),
+          el('h2', { class: 'title', text: link.tableCode ? 'Table entre amis' : 'Table en ligne' }),
+          ...(link.tableCode ? [inviteBlock(link.tableCode)] : []),
           el('p', {
             text:
               view.players.length < CARD_GAME.players.min
-                ? 'En attente d’autres joueurs… Invite tes amis : ils choisissent « Jouer en ligne ».'
+                ? link.tableCode
+                  ? 'Envoie le code (ou le lien) à tes amis. La partie démarre dès que vous êtes 2.'
+                  : 'En attente d’autres joueurs…'
                 : `La partie commence dans ${left} s`,
           }),
           el('ul', { class: 'names' }, view.players.map((p) => el('li', {}, [avatarOf(p), el('span', { text: `${p.name}${p.id === link.myId ? ' (toi)' : ''}` })]))),
@@ -302,6 +306,29 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       overlay.hidden = true;
     }
   };
+
+  /** Code de la table privée, en gros, et bouton pour inviter (partage ou copie du lien). */
+  const inviteBlock = (code: string) => {
+    if (invite?.dataset.code === code) return invite;
+    const share = el('button', { class: 'primary', text: '📨 Inviter des amis' });
+    const url = `${SERVER_URL}/?table=${code}`;
+    share.addEventListener('click', async () => {
+      const text = `Viens jouer à Bac Bataille avec moi ! Table ${code} : ${url}`;
+      try {
+        if (navigator.share) await navigator.share({ title: 'Bac Bataille', text, url });
+        else {
+          await navigator.clipboard.writeText(text);
+          showToast(screen, 'Lien copié ! Colle-le à tes amis.', 'win');
+        }
+      } catch {
+        /* partage annulé */
+      }
+    });
+    invite = el('div', { class: 'invite' }, [el('div', { class: 'muted', text: 'Code de la table' }), el('div', { class: 'table-code', text: code }), share]);
+    invite.dataset.code = code;
+    return invite;
+  };
+  let invite: HTMLElement | null = null;
 
   const tickTimer = () => {
     const left = Math.max(0, deadline - Date.now());
@@ -539,6 +566,14 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
       void duelPanel.offsetWidth;
       duelPanel.classList.add('shake');
     } else showToast(screen, n.text, n.level);
+  });
+
+  link.onConnection((state) => {
+    if (state === 'reconnecting') showToast(screen, '📶 Connexion perdue… reconnexion', 'error', 60_000);
+    else {
+      screen.querySelector('.toast')?.remove();
+      showToast(screen, '✅ Reconnecté !', 'win');
+    }
   });
 
   link.onDisconnected(() => {

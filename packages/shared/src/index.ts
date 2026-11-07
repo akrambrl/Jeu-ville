@@ -1,5 +1,7 @@
 export * from './config/cards.js';
 export * from './config/players.js';
+export * from './config/moderation.js';
+export * from './formulas/moderation.js';
 export * from './cards/categories.js';
 export * from './cards/words.js';
 export * from './cards/answers.js';

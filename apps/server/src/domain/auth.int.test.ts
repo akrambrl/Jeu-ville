@@ -23,6 +23,14 @@ describe.skipIf(!hasDb)('sessions (base réelle)', () => {
     expect(await mod.playerFromToken(mod.db, 'faux')).toBeNull();
   });
 
+  it('supprime le compte : le jeton ne marche plus et le pseudo redevient libre', async () => {
+    const pseudo = `d_${randomUUID().slice(0, 8)}`;
+    const s = await mod.createSession(mod.db, pseudo);
+    await mod.deletePlayer(mod.db, s.playerId);
+    expect(await mod.playerFromToken(mod.db, s.token)).toBeNull();
+    await expect(mod.createSession(mod.db, pseudo)).resolves.toMatchObject({ pseudo });
+  });
+
   it('refuse un pseudo déjà pris, sans tenir compte des majuscules', async () => {
     const pseudo = `P_${randomUUID().slice(0, 8)}`;
     await mod.createSession(mod.db, pseudo);

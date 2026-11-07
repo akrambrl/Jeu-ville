@@ -1,11 +1,15 @@
 /** Écran d'accueil : pseudo, jouer en ligne ou contre des bots. */
-import { CARD_GAME, PSEUDO_RULES, type Card } from '@jeu-ville/shared';
+import { CARD_GAME, ONLINE, PSEUDO_RULES, containsBannedWord, type Card } from '@jeu-ville/shared';
+import { showSettings } from './settings.js';
 import { cardFace } from './cardView.js';
 import { muteButton, play } from './fx.js';
 import { el } from './dom.js';
 import { showRules } from './rules.js';
 
-export type HomeChoice = { mode: 'online'; pseudo: string } | { mode: 'solo'; pseudo: string; bots: number };
+/** Table en ligne : partie rapide, nouvelle table privée, ou table d'un ami (code). */
+export type OnlineTable = { kind: 'quick' } | { kind: 'create' } | { kind: 'join'; code: string };
+
+export type HomeChoice = { mode: 'online'; pseudo: string; table: OnlineTable } | { mode: 'solo'; pseudo: string; bots: number };
 
 const NAME_KEY = 'bac-bataille.pseudo';
 const BOTS_KEY = 'bac-bataille.bots';
@@ -29,7 +33,14 @@ const store = (key: string, value: string) => {
  * Affiche l'accueil. `start` lance la partie choisie ; s'il échoue (pseudo pris,
  * serveur injoignable), son message s'affiche et l'on reste sur l'accueil.
  */
-export function showHome(root: HTMLElement, options: { online: boolean; error?: string }, start: (choice: HomeChoice) => Promise<void>): void {
+export interface HomeOptions {
+  online: boolean;
+  error?: string;
+  /** Code reçu dans un lien d'invitation (?table=CODE). */
+  inviteCode?: string | null;
+}
+
+export function showHome(root: HTMLElement, options: HomeOptions, start: (choice: HomeChoice) => Promise<void>): void {
   const input = el('input', { type: 'text', maxlength: String(PSEUDO_RULES.maxLength), autocomplete: 'nickname', placeholder: 'Ton pseudo', id: 'pseudo' });
   input.value = stored(NAME_KEY) ?? '';
   const error = el('div', { class: 'error', text: options.error ?? '' });
@@ -52,6 +63,8 @@ export function showHome(root: HTMLElement, options: { online: boolean; error?: 
   const onlineButton = el('button', { class: 'big online' }, [el('span', { class: 'b-icon', text: '🌍' }), el('span', { class: 'b-text' }, [el('strong', { text: 'Jouer en ligne' }), el('small', { text: 'contre de vrais joueurs' })])]);
   const soloButton = el('button', { class: 'big solo' }, [el('span', { class: 'b-icon', text: '🤖' }), el('span', { class: 'b-text' }, [el('strong', { text: 'Contre des bots' }), el('small', { text: 'entraîne-toi en solo' })])]);
   const rulesButton = el('button', { class: 'link', text: '📖 Comment on joue ?' });
+  const settingsButton = el('button', { class: 'icon-button', text: '⚙️', title: 'Réglages' });
+  settingsButton.addEventListener('click', () => showSettings(root, { online: options.online }));
   if (!options.online) {
     onlineButton.disabled = true;
     onlineButton.title = 'Le jeu en ligne n’est pas disponible ici';
@@ -59,7 +72,7 @@ export function showHome(root: HTMLElement, options: { online: boolean; error?: 
 
   const screen = el('div', { class: 'home' }, [
     floatingLetters(),
-    muteButton('icon-button home-mute'),
+    el('div', { class: 'home-tools' }, [muteButton('icon-button'), settingsButton]),
     el('div', { class: 'logo' }, [
       el('div', { class: 'logo-cards' }, LOGO_CARDS.map((c) => cardFace(c))),
       el('h1', {}, [el('span', { class: 'word-bac', text: 'Bac' }), el('span', { class: 'word-bataille', text: 'Bataille' })]),
@@ -77,12 +90,22 @@ export function showHome(root: HTMLElement, options: { online: boolean; error?: 
   ]);
   root.append(screen);
 
-  const go = async (mode: 'online' | 'solo') => {
+  const pseudoOk = () => {
     const pseudo = input.value.trim();
     if (pseudo.length < PSEUDO_RULES.minLength || !PSEUDO_RULES.pattern.test(pseudo)) {
       error.textContent = `Choisis un pseudo d’au moins ${PSEUDO_RULES.minLength} caractères (lettres, chiffres, - et _).`;
-      return;
+      return false;
     }
+    if (containsBannedWord(pseudo)) {
+      error.textContent = 'Ce pseudo n’est pas autorisé : choisis-en un autre.';
+      return false;
+    }
+    return true;
+  };
+
+  const go = async (mode: 'online' | 'solo', table: OnlineTable = { kind: 'quick' }) => {
+    const pseudo = input.value.trim();
+    if (!pseudoOk()) return;
     play('letter');
     store(NAME_KEY, pseudo);
     store(BOTS_KEY, String(bots));
@@ -90,12 +113,21 @@ export function showHome(root: HTMLElement, options: { online: boolean; error?: 
     onlineButton.disabled = soloButton.disabled = true;
     try {
       screen.remove();
-      await start(mode === 'online' ? { mode, pseudo } : { mode, pseudo, bots });
+      await start(mode === 'online' ? { mode, pseudo, table } : { mode, pseudo, bots });
     } catch (err) {
       showHome(root, { ...options, error: (err as Error).message }, start);
     }
   };
-  onlineButton.addEventListener('click', () => void go('online'));
+
+  onlineButton.addEventListener('click', () => {
+    if (!pseudoOk()) return;
+    play('tap');
+    showOnlineMenu(root, options.inviteCode ?? null, (table) => void go('online', table));
+  });
+  if (options.inviteCode && options.online) {
+    error.textContent = '';
+    onlineButton.querySelector('small')!.textContent = `invitation à la table ${options.inviteCode}`;
+  }
   soloButton.addEventListener('click', () => void go('solo'));
   rulesButton.addEventListener('click', () => showRules(root));
 }
@@ -120,4 +152,43 @@ function floatingLetters(): HTMLElement {
     layer.append(span);
   }
   return layer;
+}
+
+/** Choix du mode en ligne : partie rapide, créer une table privée, rejoindre avec un code. */
+function showOnlineMenu(root: HTMLElement, inviteCode: string | null, pick: (table: OnlineTable) => void): void {
+  const quick = el('button', { class: 'big online' }, [el('span', { class: 'b-icon', text: '⚡' }), el('span', { class: 'b-text' }, [el('strong', { text: 'Partie rapide' }), el('small', { text: 'avec des joueurs au hasard' })])]);
+  const create = el('button', { class: 'big private' }, [el('span', { class: 'b-icon', text: '🔒' }), el('span', { class: 'b-text' }, [el('strong', { text: 'Table entre amis' }), el('small', { text: 'crée une table et partage son code' })])]);
+  const code = el('input', { type: 'text', maxlength: String(ONLINE.codeLength), placeholder: 'CODE', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', class: 'code-input' });
+  code.value = inviteCode ?? '';
+  const join = el('button', { class: 'primary', text: 'Rejoindre' });
+  const close = el('button', { class: 'link', text: 'Annuler' });
+  const overlay = el('div', { class: 'overlay' }, [
+    el('div', { class: 'panel' }, [
+      el('h2', { class: 'title', text: 'Jouer en ligne' }),
+      quick,
+      create,
+      el('label', { text: 'Tu as un code ?', for: 'table-code' }),
+      el('div', { class: 'answer-row' }, [code, join]),
+      close,
+    ]),
+  ]);
+  code.id = 'table-code';
+  const done = (table: OnlineTable) => {
+    overlay.remove();
+    pick(table);
+  };
+  quick.addEventListener('click', () => done({ kind: 'quick' }));
+  create.addEventListener('click', () => done({ kind: 'create' }));
+  const submit = () => {
+    const value = code.value.trim().toUpperCase();
+    if (value.length === ONLINE.codeLength) done({ kind: 'join', code: value });
+    else code.focus();
+  };
+  join.addEventListener('click', submit);
+  code.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+  });
+  close.addEventListener('click', () => overlay.remove());
+  root.append(overlay);
+  if (inviteCode) join.focus();
 }

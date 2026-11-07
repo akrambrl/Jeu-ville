@@ -2,12 +2,13 @@
  * Lien entre l'écran de la table et la partie : le serveur (Colyseus) en ligne,
  * ou une partie simulée dans la page contre des bots (mode solo).
  */
-import type { Room } from 'colyseus.js';
+import type { Client, Room } from 'colyseus.js';
 import {
   CARD_GAME,
   CardClientMessage,
   CardGame,
   CardServerMessage,
+  ONLINE,
   type AnswerMessage,
   type CategoryId,
   type GameEvent,
@@ -15,29 +16,76 @@ import {
   type Notice,
 } from '@jeu-ville/shared';
 
+export type ConnectionState = 'reconnecting' | 'reconnected';
+
 export interface TableLink {
   /** Identifiant de ce joueur à la table. */
   readonly myId: string;
   readonly mode: 'online' | 'solo';
+  /** Code de la table privée à partager (null : partie rapide ou solo). */
+  readonly tableCode: string | null;
   /** `category` null : le mot vaut dans n'importe quelle catégorie commune du duel. */
   answer(category: CategoryId | null, text: string): void;
   onView(cb: (view: GameView) => void): void;
   onEvent(cb: (event: GameEvent) => void): void;
   onNotice(cb: (notice: Notice) => void): void;
   onDisconnected(cb: () => void): void;
+  /** Réseau coupé puis rétabli (en ligne). */
+  onConnection(cb: (state: ConnectionState) => void): void;
   /** Solo : nouvelle partie avec les mêmes adversaires. */
   restart(): void;
   leave(): void;
 }
 
-/** Table en ligne : le serveur fait autorité. */
+/** Table en ligne : le serveur fait autorité. Se reconnecte tout seul si le réseau saute. */
 export class OnlineTableLink implements TableLink {
   readonly mode = 'online';
+  private room: Room;
+  private leaving = false;
+  private readonly viewCbs: ((v: GameView) => void)[] = [];
+  private readonly eventCbs: ((e: GameEvent) => void)[] = [];
+  private readonly noticeCbs: ((n: Notice) => void)[] = [];
+  private readonly disconnectCbs: (() => void)[] = [];
+  private readonly connectionCbs: ((state: ConnectionState) => void)[] = [];
 
-  constructor(private readonly room: Room) {}
+  constructor(
+    private readonly client: Client,
+    room: Room,
+    /** Code de la table privée (à partager), ou null pour une partie rapide. */
+    readonly tableCode: string | null,
+  ) {
+    this.room = room;
+    this.attach(room);
+  }
 
   get myId(): string {
     return this.room.sessionId;
+  }
+
+  /** Branche les messages de la room (à refaire après une reconnexion). */
+  private attach(room: Room): void {
+    room.onMessage(CardServerMessage.view, (v: GameView) => this.viewCbs.forEach((cb) => cb(v)));
+    room.onMessage(CardServerMessage.event, (e: GameEvent) => this.eventCbs.forEach((cb) => cb(e)));
+    room.onMessage(CardServerMessage.notice, (n: Notice) => this.noticeCbs.forEach((cb) => cb(n)));
+    room.onLeave(() => {
+      if (!this.leaving) void this.reconnect(room.reconnectionToken);
+    });
+  }
+
+  private async reconnect(token: string): Promise<void> {
+    this.connectionCbs.forEach((cb) => cb('reconnecting'));
+    for (let k = 0; k < ONLINE.reconnectAttempts && !this.leaving; k++) {
+      await new Promise((r) => window.setTimeout(r, ONLINE.reconnectDelayMs));
+      try {
+        this.room = await this.client.reconnect(token);
+        this.attach(this.room);
+        this.connectionCbs.forEach((cb) => cb('reconnected'));
+        return;
+      } catch {
+        /* réseau toujours coupé : on réessaie */
+      }
+    }
+    if (!this.leaving) this.disconnectCbs.forEach((cb) => cb());
   }
 
   answer(category: CategoryId | null, text: string): void {
@@ -45,21 +93,23 @@ export class OnlineTableLink implements TableLink {
   }
 
   onView(cb: (view: GameView) => void): void {
-    this.room.onMessage(CardServerMessage.view, cb);
+    this.viewCbs.push(cb);
   }
 
   onEvent(cb: (event: GameEvent) => void): void {
-    this.room.onMessage(CardServerMessage.event, cb);
+    this.eventCbs.push(cb);
   }
 
   onNotice(cb: (notice: Notice) => void): void {
-    this.room.onMessage(CardServerMessage.notice, cb);
+    this.noticeCbs.push(cb);
   }
 
   onDisconnected(cb: () => void): void {
-    this.room.onLeave((code) => {
-      if (code !== 1000) cb();
-    });
+    this.disconnectCbs.push(cb);
+  }
+
+  onConnection(cb: (state: ConnectionState) => void): void {
+    this.connectionCbs.push(cb);
   }
 
   restart(): void {
@@ -67,6 +117,7 @@ export class OnlineTableLink implements TableLink {
   }
 
   leave(): void {
+    this.leaving = true;
     void this.room.leave(true);
   }
 }
@@ -79,6 +130,7 @@ const SOLO_TICK_MS = 100;
 export class SoloTableLink implements TableLink {
   readonly mode = 'solo';
   readonly myId = SOLO_ID;
+  readonly tableCode = null;
   private game: CardGame;
   private readonly viewCbs: ((v: GameView) => void)[] = [];
   private readonly eventCbs: ((e: GameEvent) => void)[] = [];
@@ -128,6 +180,10 @@ export class SoloTableLink implements TableLink {
 
   onDisconnected(): void {
     /* tout se passe dans la page */
+  }
+
+  onConnection(): void {
+    /* pas de réseau en solo */
   }
 
   restart(): void {

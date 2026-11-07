@@ -24,6 +24,11 @@ export async function createSession(db: Db, pseudo: string): Promise<SessionResp
   return { token, playerId: row.id, pseudo: row.pseudo };
 }
 
+/** Supprime le compte et toutes ses données (RGPD, exigé par les stores). */
+export async function deletePlayer(db: Db, playerId: string): Promise<void> {
+  await db.delete(players).where(eq(players.id, playerId));
+}
+
 export interface AuthenticatedPlayer {
   id: string;
   pseudo: string;

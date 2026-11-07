@@ -65,6 +65,18 @@ export const CARD_GAME = {
   maxRounds: 250,
 } as const;
 
+/** Jeu en ligne : reconnexion et tables privées entre amis. */
+export const ONLINE = {
+  /** Un joueur qui perd le réseau garde sa place tant de secondes (sinon un bot le remplace). */
+  reconnectSeconds: 30,
+  /** Côté client : tentatives de reconnexion, et pause entre deux (ms). */
+  reconnectAttempts: 8,
+  reconnectDelayMs: 2_000,
+  /** Code d'une table privée : longueur et lettres utilisées (sans 0/O ni 1/I, qui se confondent). */
+  codeLength: 5,
+  codeAlphabet: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+} as const;
+
 /** Couleurs des cartes (décoratives : seules les catégories comptent pour les duels). */
 export const CARD_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
 export type CardColor = (typeof CARD_COLORS)[number];
