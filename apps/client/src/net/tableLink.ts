@@ -1,15 +1,14 @@
 /**
- * Lien entre l'écran de la table et la partie : le serveur (Colyseus) en ligne,
- * ou une partie simulée dans la page contre des bots (mode solo).
+ * Lien entre l'écran de la table et la partie : une table en ligne (arbitrée
+ * par le téléphone de l'hôte), ou une partie simulée dans la page contre des
+ * bots (mode solo).
  */
-import type { Client, Room } from 'colyseus.js';
 import {
   CARD_GAME,
-  CardClientMessage,
   CardGame,
-  CardServerMessage,
-  ONLINE,
-  type AnswerMessage,
+  OnlineTable,
+  realScheduler,
+  type Transport,
   type CategoryId,
   type GameEvent,
   type GameView,
@@ -37,59 +36,37 @@ export interface TableLink {
   leave(): void;
 }
 
-/** Table en ligne : le serveur fait autorité. Se reconnecte tout seul si le réseau saute. */
+/**
+ * Table en ligne, sans serveur à nous (voir OnlineTable dans shared) : le
+ * téléphone de l'hôte arbitre ; si l'hôte part, un autre joueur reprend.
+ */
 export class OnlineTableLink implements TableLink {
   readonly mode = 'online';
-  private room: Room;
-  private leaving = false;
   private readonly viewCbs: ((v: GameView) => void)[] = [];
   private readonly eventCbs: ((e: GameEvent) => void)[] = [];
   private readonly noticeCbs: ((n: Notice) => void)[] = [];
-  private readonly disconnectCbs: (() => void)[] = [];
-  private readonly connectionCbs: ((state: ConnectionState) => void)[] = [];
+  readonly table: OnlineTable;
 
   constructor(
-    private readonly client: Client,
-    room: Room,
-    /** Code de la table privée (à partager), ou null pour une partie rapide. */
-    readonly tableCode: string | null,
+    transport: Transport,
+    code: string,
+    readonly myId: string,
+    name: string,
+    isPublic: boolean,
   ) {
-    this.room = room;
-    this.attach(room);
-  }
-
-  get myId(): string {
-    return this.room.sessionId;
-  }
-
-  /** Branche les messages de la room (à refaire après une reconnexion). */
-  private attach(room: Room): void {
-    room.onMessage(CardServerMessage.view, (v: GameView) => this.viewCbs.forEach((cb) => cb(v)));
-    room.onMessage(CardServerMessage.event, (e: GameEvent) => this.eventCbs.forEach((cb) => cb(e)));
-    room.onMessage(CardServerMessage.notice, (n: Notice) => this.noticeCbs.forEach((cb) => cb(n)));
-    room.onLeave(() => {
-      if (!this.leaving) void this.reconnect(room.reconnectionToken);
+    this.table = new OnlineTable(transport, realScheduler, code, { id: myId, name }, isPublic, {
+      view: (v) => this.viewCbs.forEach((cb) => cb(v)),
+      event: (e) => this.eventCbs.forEach((cb) => cb(e)),
+      notice: (n) => this.noticeCbs.forEach((cb) => cb(n)),
     });
+    this.tableCode = isPublic ? null : code;
   }
 
-  private async reconnect(token: string): Promise<void> {
-    this.connectionCbs.forEach((cb) => cb('reconnecting'));
-    for (let k = 0; k < ONLINE.reconnectAttempts && !this.leaving; k++) {
-      await new Promise((r) => window.setTimeout(r, ONLINE.reconnectDelayMs));
-      try {
-        this.room = await this.client.reconnect(token);
-        this.attach(this.room);
-        this.connectionCbs.forEach((cb) => cb('reconnected'));
-        return;
-      } catch {
-        /* réseau toujours coupé : on réessaie */
-      }
-    }
-    if (!this.leaving) this.disconnectCbs.forEach((cb) => cb());
-  }
+  /** Code de la table entre amis (null : partie rapide). */
+  readonly tableCode: string | null;
 
   answer(category: CategoryId | null, text: string): void {
-    this.room.send(CardClientMessage.answer, { category, text } satisfies AnswerMessage);
+    this.table.answer(category, text);
   }
 
   onView(cb: (view: GameView) => void): void {
@@ -104,12 +81,12 @@ export class OnlineTableLink implements TableLink {
     this.noticeCbs.push(cb);
   }
 
-  onDisconnected(cb: () => void): void {
-    this.disconnectCbs.push(cb);
+  onDisconnected(): void {
+    /* le transport se reconnecte tout seul ; l'hôte garde notre place un moment */
   }
 
-  onConnection(cb: (state: ConnectionState) => void): void {
-    this.connectionCbs.push(cb);
+  onConnection(): void {
+    /* idem */
   }
 
   restart(): void {
@@ -117,8 +94,7 @@ export class OnlineTableLink implements TableLink {
   }
 
   leave(): void {
-    this.leaving = true;
-    void this.room.leave(true);
+    this.table.leave();
   }
 }
 

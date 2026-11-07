@@ -7,3 +7,5 @@ export * from './cards/words.js';
 export * from './cards/answers.js';
 export * from './cards/game.js';
 export * from './protocol/index.js';
+export * from './online/transport.js';
+export * from './online/table.js';

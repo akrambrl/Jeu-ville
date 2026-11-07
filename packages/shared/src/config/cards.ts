@@ -65,13 +65,23 @@ export const CARD_GAME = {
   maxRounds: 250,
 } as const;
 
-/** Jeu en ligne : reconnexion et tables privées entre amis. */
+/**
+ * Jeu en ligne, sans serveur à nous (Supabase Realtime) : le téléphone de
+ * l'hôte arbitre la table ; si l'hôte part, un autre joueur reprend la partie.
+ */
 export const ONLINE = {
   /** Un joueur qui perd le réseau garde sa place tant de secondes (sinon un bot le remplace). */
   reconnectSeconds: 30,
-  /** Côté client : tentatives de reconnexion, et pause entre deux (ms). */
-  reconnectAttempts: 8,
-  reconnectDelayMs: 2_000,
+  /** L'hôte envoie la table (et la partie complète, pour la reprise) à ce rythme (ms). */
+  syncMs: 1_000,
+  /** Sans nouvelles de l'hôte depuis tant de ms, un autre joueur reprend la partie. */
+  hostTimeoutMs: 6_000,
+  /** Rejoindre une table : sans réponse de l'hôte au bout de tant de ms, elle n'existe pas. */
+  joinTimeoutMs: 5_000,
+  /** Partie rapide : temps passé à écouter le salon avant de choisir (ou créer) une table. */
+  lobbyScanMs: 1_500,
+  /** Boucle de jeu de l'hôte (ms). */
+  tickMs: 100,
   /** Code d'une table privée : longueur et lettres utilisées (sans 0/O ni 1/I, qui se confondent). */
   codeLength: 5,
   codeAlphabet: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',

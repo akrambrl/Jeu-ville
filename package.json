@@ -7,14 +7,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @jeu-ville/server --filter @jeu-ville/client dev",
-    "dev:server": "pnpm --filter @jeu-ville/server dev",
-    "dev:client": "pnpm --filter @jeu-ville/client dev",
+    "dev": "pnpm --filter @jeu-ville/client dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "db:migrate": "pnpm --filter @jeu-ville/server db:migrate",
-    "db:generate": "pnpm --filter @jeu-ville/server db:generate"
+    "test": "pnpm -r test"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

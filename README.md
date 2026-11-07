@@ -7,37 +7,28 @@ Règles du projet : [`CLAUDE.md`](CLAUDE.md).
 
 ## Lancer le jeu en local
 
-Prérequis : Node.js 22+, pnpm 10, Docker (ou un PostgreSQL 16).
+Prérequis : Node.js 22+, pnpm 10. Pas de serveur ni de base de données.
 
 ```bash
 pnpm install
-docker compose up -d
-cp .env.example .env
 pnpm dev
 ```
 
-Puis ouvrir http://localhost:5173. Sur un téléphone du même réseau :
-`http://<ip-de-ton-pc>:5173`.
+Puis ouvrir http://localhost:5173 (sur un téléphone du même réseau :
+`http://<ip-de-ton-pc>:5173`). Pour essayer le jeu en ligne sans Supabase,
+ouvrir plusieurs onglets sur http://localhost:5173/?online=local.
 
-## Jouer en ligne (Render)
+## Jouer en ligne (gratuit)
 
-Le fichier `render.yaml` décrit tout : un service web (le jeu et le serveur
-temps réel sur **une seule adresse**) et une base PostgreSQL, en Europe.
-
-1. Créer un compte sur https://render.com (connexion avec GitHub).
-2. **New → Blueprint**, choisir ce dépôt et la branche qui contient `render.yaml`.
-3. Valider : Render compile le jeu, crée la base, applique les migrations et
-   démarre. L'adresse du jeu s'affiche (ex. `https://jeu-ville-93.onrender.com`).
-4. Partager cette adresse : chacun choisit son pseudo et clique sur « Jouer en ligne ».
-
-Offre gratuite : le serveur s'endort après 15 min sans visite (le premier
-chargement prend alors environ une minute) et la base gratuite expire au bout de
-30 jours. Pour un usage durable, passer le service et la base en offre payante.
+Le jeu en ligne passe par **Supabase Realtime** (offre gratuite) : le téléphone
+de l'hôte arbitre chaque table, et si l'hôte part, un autre joueur reprend la
+partie. Le jeu web est publié gratuitement sur **GitHub Pages**. Mise en place
+(5 minutes) : voir [`docs/STORES.md`](docs/STORES.md), sections 2.2 et 2.3.
 
 ## Version solo autonome
 
 `pnpm --filter @jeu-ville/client build:demo` produit une seule page HTML
-(`apps/client/dist-demo/bac-bataille.html`) jouable sans serveur, contre des bots.
+(`apps/client/dist-demo/bac-bataille.html`) jouable sans connexion, contre des bots.
 
 ## Applis mobiles (Android et iOS)
 
@@ -48,7 +39,7 @@ captures d'écran — est dans [`docs/STORES.md`](docs/STORES.md).
 
 ```bash
 cd apps/client
-VITE_SERVER_URL=https://<ton-serveur> pnpm build:app   # compile le jeu et le copie dans les projets natifs
+pnpm build:app          # compile le jeu (clés Supabase dans .env.local) et le copie dans les projets natifs
 npx cap open android                                   # ou : npx cap open ios (sur Mac)
 ```
 

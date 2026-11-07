@@ -96,6 +96,23 @@ export interface GameView {
   ranking: RankingLine[];
 }
 
+/**
+ * Partie complète, sérialisable (JSON), pour qu'un autre joueur reprenne la
+ * table si l'hôte s'en va. Les instants sont stockés en temps restant (ms) :
+ * les horloges des téléphones ne sont pas synchronisées.
+ */
+export interface GameSnapshot {
+  phase: GamePhase;
+  endsInMs: number;
+  round: number;
+  letter: string;
+  duels: Duel[];
+  ranking: RankingLine[];
+  nextCardId: number;
+  nextDuelId: number;
+  players: (Omit<TablePlayer, 'lockedUntil' | 'botAnswerAt'> & { lockedInMs: number; botAnswerInMs: number | null })[];
+}
+
 export interface AnswerResult {
   /** null si accepté ; sinon le message à montrer au joueur. */
   error: string | null;
@@ -116,6 +133,45 @@ export class CardGame {
 
   constructor(private readonly rand: () => number = Math.random) {}
 
+  // ---------- Sauvegarde (reprise par un autre joueur) ----------
+
+  snapshot(now: number): GameSnapshot {
+    const left = (t: number) => Math.max(0, t - now);
+    return structuredClone({
+      phase: this.phase,
+      endsInMs: this.endsAt > 0 ? left(this.endsAt) : 0,
+      round: this.round,
+      letter: this.letter,
+      duels: this.duels,
+      ranking: this.ranking,
+      nextCardId: this.nextCardId,
+      nextDuelId: this.nextDuelId,
+      players: this.players.map(({ lockedUntil, botAnswerAt, ...p }) => ({
+        ...p,
+        lockedInMs: left(lockedUntil),
+        botAnswerInMs: botAnswerAt === null ? null : left(botAnswerAt),
+      })),
+    });
+  }
+
+  /** Reprend une partie sauvegardée par un autre téléphone. */
+  static restore(snap: GameSnapshot, now: number, rand: () => number = Math.random): CardGame {
+    const game = new CardGame(rand);
+    const s = structuredClone(snap);
+    game.phase = s.phase;
+    game.endsAt = s.phase === 'waiting' && s.endsInMs === 0 ? 0 : now + s.endsInMs;
+    game.round = s.round;
+    game.letter = s.letter;
+    game.duels = s.duels;
+    game.ranking = s.ranking;
+    game.nextCardId = s.nextCardId;
+    game.nextDuelId = s.nextDuelId;
+    for (const { lockedInMs, botAnswerInMs, ...p } of s.players) {
+      game.players.push({ ...p, lockedUntil: now + lockedInMs, botAnswerAt: botAnswerInMs === null ? null : now + botAnswerInMs });
+    }
+    return game;
+  }
+
   // ---------- Table ----------
 
   /** Un joueur s'assoit (avant le début seulement). */
@@ -125,6 +181,14 @@ export class CardGame {
     if (this.players.some((p) => p.id === id)) return null;
     this.players.push({ id, name, bot, left: false, deck: [], pile: [], rank: null, lockedUntil: 0, botAnswerAt: null });
     return null;
+  }
+
+  /** Un joueur parti revient (réseau rétabli) : il reprend sa place à la place du bot. */
+  rejoin(id: string): boolean {
+    const p = this.players.find((x) => x.id === id);
+    if (!p?.left) return false;
+    Object.assign(p, { bot: false, left: false, botAnswerAt: null });
+    return true;
   }
 
   /** Un vrai joueur s'en va : avant la partie il quitte la table, pendant elle un bot joue à sa place. */

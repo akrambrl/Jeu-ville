@@ -64,7 +64,7 @@ export function showHome(root: HTMLElement, options: HomeOptions, start: (choice
   const soloButton = el('button', { class: 'big solo' }, [el('span', { class: 'b-icon', text: '🤖' }), el('span', { class: 'b-text' }, [el('strong', { text: 'Contre des bots' }), el('small', { text: 'entraîne-toi en solo' })])]);
   const rulesButton = el('button', { class: 'link', text: '📖 Comment on joue ?' });
   const settingsButton = el('button', { class: 'icon-button', text: '⚙️', title: 'Réglages' });
-  settingsButton.addEventListener('click', () => showSettings(root, { online: options.online }));
+  settingsButton.addEventListener('click', () => showSettings(root));
   if (!options.online) {
     onlineButton.disabled = true;
     onlineButton.title = 'Le jeu en ligne n’est pas disponible ici';

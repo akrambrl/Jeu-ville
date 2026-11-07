@@ -1,14 +1,14 @@
 /**
- * Réglages : son, revoir le tutoriel, textes légaux, et suppression du compte
- * en ligne et des données de l'appareil (exigé par les stores et le RGPD).
+ * Réglages : son, revoir le tutoriel, textes légaux, et effacement des données
+ * de l'appareil. Il n'y a pas de compte : rien n'est stocké ailleurs que sur
+ * le téléphone (le pseudo ne fait que passer par le canal de la table).
  */
 import { LEGAL_DOCS, type LegalDoc } from '../legal/texts.js';
-import { api, tokenStore } from '../net/api.js';
 import { el, showToast } from './dom.js';
 import { isMuted, setMuted } from './fx.js';
 import { showTutorial } from './tutorial.js';
 
-export function showSettings(root: HTMLElement, options: { online: boolean }): void {
+export function showSettings(root: HTMLElement): void {
   const sound = el('button', { text: isMuted() ? '🔇 Son coupé' : '🔊 Son activé' });
   sound.addEventListener('click', () => {
     setMuted(!isMuted());
@@ -20,8 +20,7 @@ export function showSettings(root: HTMLElement, options: { online: boolean }): v
     b.addEventListener('click', () => showLegal(root, doc));
     return b;
   });
-  const deleteAccount = el('button', { class: 'danger', text: '🗑️ Supprimer mon compte en ligne' });
-  const clearDevice = el('button', { class: 'link', text: 'Effacer les données de cet appareil' });
+  const clearDevice = el('button', { class: 'danger', text: '🗑️ Effacer mes données de cet appareil' });
   const close = el('button', { class: 'primary', text: 'Fermer' });
   const overlay = el('div', { class: 'overlay' }, [
     el('div', { class: 'panel settings' }, [
@@ -30,7 +29,7 @@ export function showSettings(root: HTMLElement, options: { online: boolean }): v
       el('h3', { text: 'Infos' }),
       el('div', { class: 'legal-links' }, legal),
       el('h3', { text: 'Mes données' }),
-      ...(options.online ? [deleteAccount] : []),
+      el('p', { class: 'muted', text: 'Pas de compte : ton pseudo et tes réglages restent sur ce téléphone. En ligne, ton pseudo n’est montré qu’aux joueurs de ta table et n’est enregistré nulle part.' }),
       clearDevice,
       close,
     ]),
@@ -41,20 +40,8 @@ export function showSettings(root: HTMLElement, options: { online: boolean }): v
   });
   close.addEventListener('click', () => overlay.remove());
 
-  deleteAccount.addEventListener('click', () =>
-    confirmBox(root, 'Supprimer ton compte ?', 'Ton pseudo et ton compte en ligne seront définitivement effacés de nos serveurs. Tu pourras toujours jouer, avec un nouveau pseudo.', async () => {
-      if (!tokenStore.get()) return showToast(root, 'Aucun compte en ligne sur cet appareil.', 'info');
-      try {
-        await api.deleteMe();
-        tokenStore.clear();
-        showToast(root, 'Compte supprimé.', 'win');
-      } catch (err) {
-        showToast(root, (err as Error).message, 'error');
-      }
-    }),
-  );
   clearDevice.addEventListener('click', () =>
-    confirmBox(root, 'Effacer cet appareil ?', 'Le pseudo, les réglages et la connexion enregistrés sur cet appareil seront effacés (ton compte en ligne, lui, n’est pas supprimé).', () => {
+    confirmBox(root, 'Effacer cet appareil ?', 'Ton pseudo, tes réglages et ton identifiant de joueur enregistrés sur cet appareil seront effacés.', () => {
       try {
         localStorage.clear();
       } catch {

@@ -5,7 +5,7 @@
  * tirage de la lettre en plein écran, cartes qui volent, face-à-face « VS ».
  */
 import { CARD_GAME, CATEGORIES, type CategoryId, type Duel, type GameEvent, type GameView, type PlayerView } from '@jeu-ville/shared';
-import { SERVER_URL } from '../net/api.js';
+import { isNative } from '../native.js';
 import type { TableLink } from '../net/tableLink.js';
 import { cardBack, cardFace, cardSlot, tintCategory } from './cardView.js';
 import { el, showToast } from './dom.js';
@@ -293,11 +293,13 @@ export function showTable(root: HTMLElement, link: TableLink, onExit: () => void
   const inviteBlock = (code: string) => {
     if (invite?.dataset.code === code) return invite;
     const share = el('button', { class: 'primary', text: '📨 Inviter des amis' });
-    const url = `${SERVER_URL}/?table=${code}`;
+    // Lien vers le jeu web (dans l'appli : l'adresse publique, si elle est configurée).
+    const base = import.meta.env.VITE_PUBLIC_URL ?? (isNative() ? '' : `${location.origin}${location.pathname}`);
+    const url = base ? `${base}?table=${code}` : '';
     share.addEventListener('click', async () => {
-      const text = `Viens jouer à Bac Bataille avec moi ! Table ${code} : ${url}`;
+      const text = url ? `Viens jouer à Bac Bataille avec moi ! Table ${code} : ${url}` : `Viens jouer à Bac Bataille avec moi ! Code de la table : ${code}`;
       try {
-        if (navigator.share) await navigator.share({ title: 'Bac Bataille', text, url });
+        if (navigator.share) await navigator.share({ title: 'Bac Bataille', text, ...(url ? { url } : {}) });
         else {
           await navigator.clipboard.writeText(text);
           showToast(screen, 'Lien copié ! Colle-le à tes amis.', 'win');

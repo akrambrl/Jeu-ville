@@ -141,6 +141,17 @@ describe('partie', () => {
     expect(next && next.kind === 'letter' && next.letter).not.toBe(first);
   });
 
+  it('une partie sauvegardée se reprend sur un autre téléphone, avec une autre horloge', () => {
+    const { game, a, b, t } = twoPlayersAtReveal();
+    run(game, 0, t);
+    const snap = JSON.parse(JSON.stringify(game.snapshot(t + 300)));
+    // Le nouvel hôte a une horloge décalée de 50 s.
+    const copy = CardGame.restore(snap, 50_000);
+    expect(copy.view(50_000)).toEqual(game.view(t + 300));
+    expect(copy.players.map((p) => p.deck)).toEqual([a.deck, b.deck]);
+    expect(copy.endsAt - 50_000).toBe(game.endsAt - (t + 300));
+  });
+
   it('tout le monde retourne sa carte en même temps', () => {
     const { game, t } = twoPlayersAtReveal();
     run(game, 0, t);

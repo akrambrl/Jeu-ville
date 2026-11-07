@@ -2,6 +2,8 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  // Hébergement dans un sous-dossier (GitHub Pages : /Jeu-ville/) ; « / » pour l'appli native.
+  base: process.env.BASE_PATH ?? '/',
   server: { port: 5173, host: true },
   build: {
     target: 'es2022',

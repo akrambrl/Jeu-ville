@@ -108,15 +108,19 @@ Tout est dans `apps/client/src/ui/styles.css` (variables en tête de fichier) et
 
 ## Modes
 
-- **En ligne** : on choisit un pseudo, puis
-  - **Partie rapide** : on rejoint une table publique qui attend des joueurs ;
+- **En ligne** (gratuit, sans serveur à nous : Supabase Realtime) : on choisit
+  un pseudo, puis
+  - **Partie rapide** : on rejoint une table publique qui attend des joueurs
+    (annoncée dans un salon commun), sinon on en ouvre une ;
   - **Table entre amis** : on crée une table privée et on partage son **code**
-    (5 caractères) ou un lien d'invitation (`?table=CODE`) ; les amis tapent le
-    code dans « Tu as un code ? ».
+    (5 caractères) ou un lien d'invitation (`?table=CODE`).
+  Le téléphone de **l'hôte** (celui qui a ouvert la table) arbitre la partie.
   La partie démarre seule 10 s après l'arrivée du deuxième joueur (tout de suite
-  à 6). Un joueur qui perd le réseau **garde sa place 30 s** le temps que l'appli
-  se reconnecte ; s'il ne revient pas (ou quitte), un bot le remplace. Après le
-  classement, la table repart pour une nouvelle partie.
+  à 6) ; qui arrive en cours de partie la regarde et joue à la suivante. Un
+  joueur qui perd le réseau **garde sa place 30 s** ; s'il ne revient pas (ou
+  quitte), un bot le remplace. **Si l'hôte part, un autre joueur reprend la
+  partie** là où elle en était, en quelques secondes. Après le classement, la
+  table repart pour une nouvelle partie.
 - **Solo** : contre 1 à 5 bots, sans serveur. Les bots répondent entre 6 et
   13 s après la cinématique « VS » (qui ne compte pas dans les 15 s de réponse),
   et sèchent environ une fois sur trois.
@@ -134,7 +138,8 @@ Tous les réglages (cartes par joueur, durées, lettres, bots) sont dans
 
 ## Applis mobiles et stores
 
-Le jeu sort aussi en appli Android et iOS (Capacitor). Réglages ⚙️ : son, tuto,
-textes légaux, **suppression du compte en ligne** et des données de l'appareil.
-Pseudos filtrés (insultes, haine). Publication : voir `docs/STORES.md`.
+Le jeu sort aussi en appli Android et iOS (Capacitor). Pas de compte : rien
+n'est stocké ailleurs que sur le téléphone. Réglages ⚙️ : son, tuto, textes
+légaux, effacement des données de l'appareil. Pseudos filtrés (insultes, haine).
+Publication et hébergement gratuit : voir `docs/STORES.md`.
 
